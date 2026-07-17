@@ -102,25 +102,49 @@ async def node_infer(state: EFState) -> dict:
 
 
 async def node_interpret(state: EFState) -> dict:
-    """STUB: interpretación de Sistemas (Bloque 6)."""
+    """INTERPRET: genera systems_interpretation (determinístico)."""
+    from ai.agents.ef.interpret import interpret
+
     return {
-        "systems_interpretation": {
-            "what_process_requests": "(pendiente)",
-            "scope_for_systems": [],
-            "apparent_out_of_scope": [],
-            "interpretation_assumptions": [],
-        }
+        "systems_interpretation": interpret(
+            state.get("consolidated_model") or {},
+            state.get("inferred_model") or {},
+            summary=state.get("summary"),
+        )
     }
 
 
-async def node_critique(state: EFState) -> dict:
-    """STUB: crítica (Bloque 6)."""
-    return {"critique": {}}
+async def node_critique(state: EFState, config: RunnableConfig) -> dict:
+    """CRITIQUE: refs huérfanas (determinístico) + pase LLM opcional."""
+    from ai.agents.ef.critique import critique
+
+    llm = (config or {}).get("configurable", {}).get("critique_llm")
+    result = await critique(
+        state.get("consolidated_model") or {},
+        state.get("inferred_model") or {},
+        llm=llm,
+    )
+    return {"critique": result}
 
 
 async def node_question_gen(state: EFState) -> dict:
-    """STUB: generación de preguntas (Bloque 6)."""
-    return {"questions": []}
+    """QUESTION_GEN: dudas de Sistemas hacia Procesos; técnicas -> observaciones."""
+    from ai.agents.ef.question_gen import generate_questions
+
+    critique_result = dict(state.get("critique") or {})
+    questions, obs_extra = generate_questions(
+        critique_result, state.get("consolidated_model") or {}
+    )
+
+    # Las observaciones extra (refs huérfanas) se anexan al análisis crítico.
+    observations = list(critique_result.get("observations") or [])
+    start = len(observations)
+    for i, obs in enumerate(obs_extra, start=start + 1):
+        obs["id"] = f"OBS-{i:03d}"
+        observations.append(obs)
+    critique_result["observations"] = observations
+
+    return {"questions": questions, "critique": critique_result}
 
 
 async def node_assemble(state: EFState) -> dict:
