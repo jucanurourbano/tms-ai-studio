@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # En desarrollo y tests SIEMPRE se usan mocks; la clave se deja vacía a
     # propósito (ver REGLA DE PRESUPUESTO en CLAUDE.md).
     ANTHROPIC_API_KEY: str = ""
-    CLAUDE_MODEL: str = "claude-sonnet-4-6"
+    CLAUDE_MODEL: str = "claude-sonnet-5"
     CLAUDE_TIMEOUT: int = 180
     CLAUDE_PRICE_INPUT_PER_MTOK: float = 3
     CLAUDE_PRICE_OUTPUT_PER_MTOK: float = 15

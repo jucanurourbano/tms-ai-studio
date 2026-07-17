@@ -91,6 +91,9 @@ INGEST → PARSE → SEGMENT → EXTRACT → CONSOLIDATE → INFER → INTERPRET
 
 ## 6. Reglas de proceso
 
+- **Modelo Claude por defecto:** `claude-sonnet-5` (`CLAUDE_MODEL` en `.env`).
+  Tarifas para cálculo de costos: **$3 / MTok input**, **$15 / MTok output**
+  (`CLAUDE_PRICE_INPUT/OUTPUT_PER_MTOK`). Timeout **180s** (`CLAUDE_TIMEOUT`).
 - **REGLA DE PRESUPUESTO:** nunca ejecutar análisis contra la **API real de
   Anthropic** sin autorización explícita del usuario. Desarrollo y tests
   **siempre con mocks**.
