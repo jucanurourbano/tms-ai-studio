@@ -31,6 +31,8 @@ tenacity
 pytest
 pytest-asyncio
 httpx
+aiosqlite   # BD async en tests (sin depender de contenedor Postgres)
+fakeredis   # Redis en memoria para tests del checkpointer
 
 # === Formato / linting ===
 black
