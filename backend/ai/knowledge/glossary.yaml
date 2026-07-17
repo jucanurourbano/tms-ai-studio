@@ -1,0 +1,11 @@
+# Glosario logístico del dominio (inyectado en EXTRACT / INTERPRET / CRITIQUE).
+# Fuente de verdad: CLAUDE.md.
+terms:
+  checkpoint: "estado (de un envío/siniestro), NO un punto de control físico"
+  guía: "documento de envío"
+  shipper: "cliente"
+  siniestro: "evento logístico (no es un evento de seguros)"
+  papeleta: "descuento aplicado a personal"
+  recupero: "recuperación económica"
+  ubigeo: "departamento-provincia-distrito (código de ubicación geográfica)"
+  DEO: "depuración operativa"

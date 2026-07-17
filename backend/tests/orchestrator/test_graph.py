@@ -3,6 +3,7 @@
 from ai.orchestrator import build_ef_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
 from app.config.settings import settings
+from tests.mocks import DimAwareLLM
 
 TEXTO = (
     "# Proceso de Siniestros\n\n"
@@ -20,7 +21,7 @@ async def test_grafo_end_to_end_con_stubs(monkeypatch, tmp_path):
         "filename": "siniestros.txt",
         "content": TEXTO.encode("utf-8"),
     }
-    config = {"configurable": {"thread_id": "J-1"}}
+    config = {"configurable": {"thread_id": "J-1", "llm": DimAwareLLM()}}
 
     result = await graph.ainvoke(state, config)
 
@@ -39,7 +40,7 @@ async def test_grafo_end_to_end_con_stubs(monkeypatch, tmp_path):
 async def test_checkpointer_persiste_estado(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path))
     graph = build_ef_graph(build_memory_checkpointer())
-    config = {"configurable": {"thread_id": "J-2"}}
+    config = {"configurable": {"thread_id": "J-2", "llm": DimAwareLLM()}}
     await graph.ainvoke(
         {"job_id": "J-2", "filename": "s.txt", "content": TEXTO.encode("utf-8")},
         config,

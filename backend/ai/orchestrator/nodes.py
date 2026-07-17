@@ -5,6 +5,8 @@ que se completan en los Bloques 5-7, pero ya producen estructuras válidas para
 que el grafo corra de extremo a extremo.
 """
 
+from langchain_core.runnables import RunnableConfig
+
 from ai.tools.chunker import chunk_cir
 from ai.tools.cir import CIR
 from ai.tools.ingest import LocalStorage, ingest
@@ -62,22 +64,41 @@ async def node_segment(state: EFState) -> dict:
     return {"chunks": result.model_dump(), "metrics": metrics}
 
 
-# --- Stubs (Bloques 5-7) ----------------------------------------------------
+# --- EXTRACT / CONSOLIDATE / INFER (Bloque 5) -------------------------------
 
 
-async def node_extract(state: EFState) -> dict:
-    """STUB: extracción por dimensiones (Bloque 5)."""
-    return {"raw_extractions": []}
+async def node_extract(state: EFState, config: RunnableConfig) -> dict:
+    """EXTRACT: map por dimensiones sobre los chunks (LLM inyectable por config)."""
+    from ai.agents.ef.extract import ClaudeLLMClient, run_extract
+
+    llm = (config or {}).get("configurable", {}).get("llm")
+    if llm is None:
+        llm = ClaudeLLMClient()
+
+    chunks = (state.get("chunks") or {}).get("chunks", [])
+    results, skipped = await run_extract(
+        llm, chunks, concurrency=settings.EXTRACT_CONCURRENCY
+    )
+
+    metrics = dict(state.get("metrics") or {})
+    acc_skipped = list(metrics.get("skipped") or []) + skipped
+    metrics["skipped"] = acc_skipped
+    metrics["chunks_skipped"] = len(acc_skipped)
+    return {"raw_extractions": results, "metrics": metrics}
 
 
 async def node_consolidate(state: EFState) -> dict:
-    """STUB: consolidación (Bloque 5)."""
-    return {"consolidated_model": {}}
+    """CONSOLIDATE: dedupe + renumeración estable."""
+    from ai.agents.ef.consolidate import consolidate
+
+    return {"consolidated_model": consolidate(state.get("raw_extractions") or [])}
 
 
 async def node_infer(state: EFState) -> dict:
-    """STUB: inferencia del modelo de datos (Bloque 5)."""
-    return {"inferred_model": {}}
+    """INFER: deriva entities/fields/relationships/CRUD/APIs."""
+    from ai.agents.ef.infer import infer
+
+    return {"inferred_model": infer(state.get("consolidated_model") or {})}
 
 
 async def node_interpret(state: EFState) -> dict:
