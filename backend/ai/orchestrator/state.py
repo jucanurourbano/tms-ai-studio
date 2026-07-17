@@ -16,6 +16,7 @@ class EFState(TypedDict, total=False):
     text: Optional[str]  # texto libre (entrada alternativa)
     summary: Optional[str]
     started_at: float
+    authoritative_context: Optional[str]
 
     source: dict  # IngestResult
     cir: dict  # CIR

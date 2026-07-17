@@ -23,7 +23,13 @@ def _storage() -> LocalStorage:
 
 
 async def node_ingest(state: EFState) -> dict:
-    """Valida, calcula hash y almacena la fuente (real)."""
+    """Valida, calcula hash y almacena la fuente (real).
+
+    Si el servicio ya ingestó (``source`` presente), no reingesta.
+    """
+    if state.get("source"):
+        return {"status": "RUNNING", "started_at": time.time()}
+
     filename = state["filename"]
     content = state.get("content")
     if content is None and state.get("text") is not None:
@@ -80,7 +86,10 @@ async def node_extract(state: EFState, config: RunnableConfig) -> dict:
 
     chunks = (state.get("chunks") or {}).get("chunks", [])
     results, skipped, tokens = await run_extract(
-        llm, chunks, concurrency=settings.EXTRACT_CONCURRENCY
+        llm,
+        chunks,
+        concurrency=settings.EXTRACT_CONCURRENCY,
+        authoritative_context=state.get("authoritative_context"),
     )
 
     metrics = dict(state.get("metrics") or {})

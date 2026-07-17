@@ -93,12 +93,19 @@ async def run_extract(
     concurrency: int = 3,
     max_repairs: int = 2,
     dimensions: Optional[list[Dimension]] = None,
+    authoritative_context: Optional[str] = None,
 ) -> tuple[list[dict], list[dict], dict]:
     """Ejecuta EXTRACT como map (chunk × dimensión) con concurrencia limitada.
 
+    ``authoritative_context`` (ciclo de afinamiento) se antepone al glosario.
     Devuelve (results, skipped, token_stats).
     """
     glossary_ctx = glossary_ctx if glossary_ctx is not None else glossary_block()
+    if authoritative_context:
+        glossary_ctx = (
+            "CONTEXTO AUTORITATIVO (respuestas del analista, tienen prioridad):\n"
+            f"{authoritative_context}\n\n" + glossary_ctx
+        )
     dimensions = dimensions or DIMENSIONS
 
     results: list[dict] = []
