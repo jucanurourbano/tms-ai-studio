@@ -1,0 +1,37 @@
+# === Web / API ===
+fastapi
+uvicorn[standard]
+pydantic-settings
+
+# === Base de datos (async) ===
+sqlalchemy[asyncio]
+asyncpg
+alembic
+
+# === Cache / checkpointing ===
+redis
+
+# === IA / Orquestación (LangGraph + Anthropic) ===
+langchain
+langgraph
+langgraph-checkpoint-redis
+langchain-anthropic
+anthropic
+
+# === Parsers de documentos ===
+# v1 SIN OCR: se usa pypdf (ligero, sin dependencias pesadas). Se descartó docling
+# porque arrastra torch y modelos de layout/OCR innecesarios para el alcance v1.
+python-docx
+pypdf
+
+# === Resiliencia (backoff / reintentos) ===
+tenacity
+
+# === Testing ===
+pytest
+pytest-asyncio
+httpx
+
+# === Formato / linting ===
+black
+isort

@@ -1,0 +1,48 @@
+name: tms-ai-studio
+
+# Infraestructura de desarrollo de TMS AI Studio.
+# Levantar:   docker compose up -d
+# Estado:     docker compose ps
+# Logs:       docker compose logs -f
+# Detener:    docker compose down   (los datos persisten en los volúmenes con nombre)
+
+services:
+  postgres:
+    # Imagen oficial de pgvector sobre PostgreSQL 16 (incluye la extensión vector).
+    image: pgvector/pgvector:pg16
+    container_name: tms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tms_ai_studio
+      POSTGRES_USER: tms
+      POSTGRES_PASSWORD: tms_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - tms_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tms -d tms_ai_studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: tms_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - tms_redis_data:/data
+    # appendonly=yes -> persistencia de datos en el volumen tms_redis_data.
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Volúmenes con nombre: los datos NO se pierden al hacer `docker compose down`.
+volumes:
+  tms_pg_data:
+  tms_redis_data:

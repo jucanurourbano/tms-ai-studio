@@ -1,0 +1,31 @@
+# === Entorno / secretos ===
+.env
+*.env
+!.env.example
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+backend/.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# === Node / Frontend ===
+node_modules/
+.next/
+dist/
+build/
+
+# === Editores / SO ===
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# === Logs ===
+*.log
