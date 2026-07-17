@@ -5,6 +5,8 @@ que se completan en los Bloques 5-7, pero ya producen estructuras válidas para
 que el grafo corra de extremo a extremo.
 """
 
+import time
+
 from langchain_core.runnables import RunnableConfig
 
 from ai.tools.chunker import chunk_cir
@@ -37,6 +39,7 @@ async def node_ingest(state: EFState) -> dict:
         "status": "RUNNING",
         "metrics": {},
         "errors": [],
+        "started_at": time.time(),
     }
 
 
@@ -76,7 +79,7 @@ async def node_extract(state: EFState, config: RunnableConfig) -> dict:
         llm = ClaudeLLMClient()
 
     chunks = (state.get("chunks") or {}).get("chunks", [])
-    results, skipped = await run_extract(
+    results, skipped, tokens = await run_extract(
         llm, chunks, concurrency=settings.EXTRACT_CONCURRENCY
     )
 
@@ -84,6 +87,9 @@ async def node_extract(state: EFState, config: RunnableConfig) -> dict:
     acc_skipped = list(metrics.get("skipped") or []) + skipped
     metrics["skipped"] = acc_skipped
     metrics["chunks_skipped"] = len(acc_skipped)
+    metrics["tokens"] = tokens
+    attempts = len(results) + len(skipped)
+    metrics["coverage"] = round(len(results) / attempts, 4) if attempts else 1.0
     return {"raw_extractions": results, "metrics": metrics}
 
 
@@ -148,25 +154,40 @@ async def node_question_gen(state: EFState) -> dict:
 
 
 async def node_assemble(state: EFState) -> dict:
-    """STUB: ensambla un EFArtifact mínimo válido (Bloque 7 lo completa)."""
-    from ai.agents.ef.schemas import EFArtifact
+    """ASSEMBLE + VALIDATE: construye el EFArtifact y calcula métricas reales."""
+    from ai.agents.ef.assemble import assemble_artifact, validate_artifact
 
-    source = state["source"]
-    artifact = EFArtifact(
-        source={
-            "type": source["source_type"],
-            "hash": source["content_hash"],
-            "fidelity": (state.get("cir") or {}).get("fidelity") or "full",
-            "filename": source.get("filename"),
-        },
-        summary="(pendiente de análisis)",
-        systems_interpretation=state.get("systems_interpretation")
-        or {"what_process_requests": "(pendiente)"},
-        metrics=state.get("metrics") or {},
-    )
-    return {"artifact": artifact.model_dump(mode="json")}
+    artifact, _ = assemble_artifact(state)
+    dumped = artifact.model_dump(mode="json")
+    validate_artifact(dumped)  # VALIDATE contra el esquema v1.2.0
+    return {"artifact": dumped}
 
 
-async def node_persist(state: EFState) -> dict:
-    """STUB: marca el job como completado (persistencia real en Bloques 7-8)."""
-    return {"status": "COMPLETED"}
+async def node_persist(state: EFState, config: RunnableConfig) -> dict:
+    """PERSIST: guarda el artefacto y marca el job COMPLETED[_WITH_WARNINGS].
+
+    La persistencia es inyectable por config (tests sin Postgres); si no se
+    inyecta, usa la BD real vía session_scope.
+    """
+    artifact = state["artifact"]
+    metrics = artifact.get("metrics") or {}
+    has_warnings = bool(metrics.get("skipped"))
+    status = "COMPLETED_WITH_WARNINGS" if has_warnings else "COMPLETED"
+
+    persist = (config or {}).get("configurable", {}).get("persist")
+    if persist is not None:
+        await persist(state["job_id"], artifact, status, metrics)
+    else:  # pragma: no cover - ruta runtime con Postgres real
+        from app.dependencies.database import session_scope
+        from app.models.ef import JobStatus
+        from app.repositories.ef_repository import EFRepository
+
+        async with session_scope() as session:
+            repo = EFRepository(session)
+            await repo.save_artifact(
+                state["job_id"], artifact, artifact["schema_version"]
+            )
+            await repo.update_job_metrics(state["job_id"], metrics)
+            await repo.update_job_status(state["job_id"], JobStatus[status])
+
+    return {"status": status}

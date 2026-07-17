@@ -14,6 +14,7 @@ from typing import Optional, Protocol
 from pydantic import BaseModel, ValidationError
 
 from ai.knowledge import glossary_block
+from ai.tools.chunker import estimate_tokens
 
 from .prompts import build_system, build_user
 from .schemas.extraction import (
@@ -92,16 +93,22 @@ async def run_extract(
     concurrency: int = 3,
     max_repairs: int = 2,
     dimensions: Optional[list[Dimension]] = None,
-) -> tuple[list[dict], list[dict]]:
-    """Ejecuta EXTRACT como map (chunk × dimensión) con concurrencia limitada."""
+) -> tuple[list[dict], list[dict], dict]:
+    """Ejecuta EXTRACT como map (chunk × dimensión) con concurrencia limitada.
+
+    Devuelve (results, skipped, token_stats).
+    """
     glossary_ctx = glossary_ctx if glossary_ctx is not None else glossary_block()
     dimensions = dimensions or DIMENSIONS
 
     results: list[dict] = []
     skipped: list[dict] = []
+    tokens = {"input": 0, "output": 0}
     semaphore = asyncio.Semaphore(concurrency)
 
     async def worker(chunk: dict, dimension: Dimension) -> None:
+        system = build_system(dimension.prompt_file, glossary_ctx)
+        user = build_user(chunk.get("context", ""), chunk.get("text", ""))
         async with semaphore:
             validated = await extract_dimension(
                 llm,
@@ -111,6 +118,8 @@ async def run_extract(
                 glossary_ctx,
                 max_repairs=max_repairs,
             )
+        # Estimación de tokens (real vía usage no disponible con mocks; ver CLAUDE.md).
+        tokens["input"] += estimate_tokens(system + user)
         if validated is None:
             skipped.append(
                 {
@@ -120,11 +129,13 @@ async def run_extract(
                 }
             )
         else:
+            dumped = validated.model_dump(mode="json")
+            tokens["output"] += estimate_tokens(json.dumps(dumped, ensure_ascii=False))
             results.append(
                 {
                     "chunk_id": chunk["chunk_id"],
                     "dimension": dimension.name,
-                    "data": validated.model_dump(mode="json"),
+                    "data": dumped,
                 }
             )
 
@@ -135,7 +146,8 @@ async def run_extract(
     # Orden estable para consolidación/renumeración determinística.
     results.sort(key=lambda r: (r["chunk_id"], r["dimension"]))
     skipped.sort(key=lambda s: s["ref"])
-    return results, skipped
+    tokens["total"] = tokens["input"] + tokens["output"]
+    return results, skipped, tokens
 
 
 class ClaudeLLMClient:

@@ -52,8 +52,9 @@ async def test_extract_dimension_irreparable():
 
 async def test_run_extract_todas_las_dimensiones():
     chunk = {"chunk_id": "chunk-0000", "context": "Doc", "text": "..."}
-    results, skipped = await run_extract(DimAwareLLM(), [chunk], concurrency=3)
+    results, skipped, tokens = await run_extract(DimAwareLLM(), [chunk], concurrency=3)
     assert skipped == []
+    assert tokens["total"] > 0
     dims = {r["dimension"] for r in results}
     assert dims == {d.name for d in DIMENSIONS}
 
@@ -61,7 +62,7 @@ async def test_run_extract_todas_las_dimensiones():
 async def test_run_extract_cuarentena_no_tumba_job():
     chunk = {"chunk_id": "chunk-0000", "context": "Doc", "text": "..."}
     # 'CAMPOS' siempre inválido -> se pone en cuarentena, el resto continúa
-    results, skipped = await run_extract(
+    results, skipped, _tokens = await run_extract(
         DimAwareLLM(invalid_for="CAMPOS"), [chunk], concurrency=2, max_repairs=1
     )
     assert len(skipped) == 1

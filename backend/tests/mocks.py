@@ -76,7 +76,7 @@ _RESPONSES: dict[str, dict] = {
             }
         ]
     },
-    "REGLAS": {
+    "REGLAS DE NEGOCIO": {
         "business_rules": [
             {
                 "statement": "Un siniestro sin guía asociada no puede registrarse.",
@@ -160,3 +160,25 @@ class DimAwareLLM:
                     return "{ esto no es json válido"
                 return json.dumps(payload, ensure_ascii=False)
         return "{}"
+
+
+class CritiqueLLM:
+    """Mock del pase LLM de crítica: planta una contradicción semántica."""
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        return json.dumps(
+            {
+                "ambiguities": [],
+                "missing_info": [],
+                "inconsistencies": [
+                    {
+                        "description": (
+                            "Una regla exige guía para registrar y otra permite "
+                            "registrar sin guía."
+                        ),
+                        "conflicting_refs": ["BR-001"],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )

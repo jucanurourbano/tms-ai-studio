@@ -14,6 +14,8 @@ class EFState(TypedDict, total=False):
     filename: str
     content: bytes  # bytes crudos de la fuente (entrada)
     text: Optional[str]  # texto libre (entrada alternativa)
+    summary: Optional[str]
+    started_at: float
 
     source: dict  # IngestResult
     cir: dict  # CIR

@@ -12,6 +12,11 @@ TEXTO = (
 )
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """Persistencia no-op para tests del grafo sin BD."""
+    return None
+
+
 async def test_grafo_end_to_end_con_stubs(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path))
     graph = build_ef_graph(build_memory_checkpointer())
@@ -21,7 +26,13 @@ async def test_grafo_end_to_end_con_stubs(monkeypatch, tmp_path):
         "filename": "siniestros.txt",
         "content": TEXTO.encode("utf-8"),
     }
-    config = {"configurable": {"thread_id": "J-1", "llm": DimAwareLLM()}}
+    config = {
+        "configurable": {
+            "thread_id": "J-1",
+            "llm": DimAwareLLM(),
+            "persist": _noop_persist,
+        }
+    }
 
     result = await graph.ainvoke(state, config)
 
@@ -40,7 +51,13 @@ async def test_grafo_end_to_end_con_stubs(monkeypatch, tmp_path):
 async def test_checkpointer_persiste_estado(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path))
     graph = build_ef_graph(build_memory_checkpointer())
-    config = {"configurable": {"thread_id": "J-2", "llm": DimAwareLLM()}}
+    config = {
+        "configurable": {
+            "thread_id": "J-2",
+            "llm": DimAwareLLM(),
+            "persist": _noop_persist,
+        }
+    }
     await graph.ainvoke(
         {"job_id": "J-2", "filename": "s.txt", "content": TEXTO.encode("utf-8")},
         config,
