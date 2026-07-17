@@ -27,5 +27,9 @@ build/
 *.swp
 .DS_Store
 
+# === Almacenamiento local de fuentes ===
+backend/storage/
+storage/
+
 # === Logs ===
 *.log

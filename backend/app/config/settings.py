@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     )
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # --- Pipeline del Agente EF ---
+    MAX_UPLOAD_MB: int = 10
+    STORAGE_DIR: str = str(BASE_DIR / "storage")
+    SINGLE_SHOT_TOKEN_THRESHOLD: int = 4096
+    EXTRACT_CONCURRENCY: int = 3
+
     # --- CORS (desarrollo: abierto) ---
     CORS_ORIGINS: list[str] = ["*"]
 
