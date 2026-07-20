@@ -12,11 +12,13 @@ Tablas:
     agent_validations — validaciones del ciclo de afinamiento (NO mutan el artefacto).
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import DateTime
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, IdMixin, JSONVariant, TimestampMixin
@@ -129,6 +131,17 @@ class AgentJob(Base, IdMixin, TimestampMixin):
     )
     source_doc_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("ef_source_docs.id"), nullable=True
+    )
+    # Metadatos de historial (usabilidad del listado). ``title`` y ``source_type``
+    # se desnormalizan al crear el job para evitar joins/N+1 en el listado y
+    # generalizar a todos los agentes; se rellenan por la migración 0004.
+    title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    source_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metrics: Mapped[Optional[dict]] = mapped_column(JSONVariant, nullable=True)

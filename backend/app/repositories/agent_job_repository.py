@@ -5,6 +5,7 @@ por ``agent_type`` (D1 del diseño). Recibe/devuelve ``dict`` para el artefacto 
 las métricas, respetando el flujo api -> services -> repositories.
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -24,6 +25,12 @@ from app.models.agent import (
 )
 
 _COMPLETED = (JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS)
+# Estados terminales: al alcanzarlos se sella ``completed_at`` (fecha de finalización).
+_TERMINAL = (
+    JobStatus.COMPLETED,
+    JobStatus.COMPLETED_WITH_WARNINGS,
+    JobStatus.FAILED,
+)
 
 
 class AgentJobRepository:
@@ -66,13 +73,23 @@ class AgentJobRepository:
         source_doc_id: Optional[str] = None,
         parent_job_id: Optional[str] = None,
         input_job_id: Optional[str] = None,
+        title: Optional[str] = None,
+        source_type: Optional[str] = None,
+        version: int = 1,
     ) -> AgentJob:
-        """Crea un job en estado PENDING para el agente indicado."""
+        """Crea un job en estado PENDING para el agente indicado.
+
+        ``title``/``source_type`` se desnormalizan aquí (historial) y ``version``
+        numera la cadena de afinamiento (v1 original, v2+ refinado).
+        """
         job = AgentJob(
             agent_type=agent_type,
             source_doc_id=source_doc_id,
             parent_job_id=parent_job_id,
             input_job_id=input_job_id,
+            title=title,
+            source_type=source_type,
+            version=version,
             status=JobStatus.PENDING,
         )
         self.session.add(job)
@@ -111,6 +128,10 @@ class AgentJobRepository:
         job.status = status
         if error is not None:
             job.error = error
+        # Sella la fecha de finalización la primera vez que se alcanza un estado
+        # terminal (idempotente ante reintentos con checkpointing).
+        if status in _TERMINAL and job.completed_at is None:
+            job.completed_at = datetime.now(timezone.utc)
         await self.session.flush()
         return job
 
@@ -141,8 +162,12 @@ class AgentJobRepository:
             count_stmt = count_stmt.where(AgentJob.agent_type == agent_type)
 
         total = await self.session.scalar(count_stmt) or 0
+        # ``id`` (ULID, ordenable por tiempo) desempata cuando dos jobs comparten
+        # ``created_at`` (resolución baja del reloj), garantizando orden estable.
         rows = await self.session.scalars(
-            base.order_by(AgentJob.created_at.desc()).limit(limit).offset(offset)
+            base.order_by(AgentJob.created_at.desc(), AgentJob.id.desc())
+            .limit(limit)
+            .offset(offset)
         )
         return list(rows), int(total)
 

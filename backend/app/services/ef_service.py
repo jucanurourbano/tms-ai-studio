@@ -24,6 +24,20 @@ from app.repositories.ef_repository import EFRepository
 _MIN_TEXT = 100
 
 
+def _derive_title(filename: Optional[str], source_type: str) -> Optional[str]:
+    """Título legible para el historial.
+
+    Para texto libre el filename es ``<título>.txt`` (ver la ruta ``/analyze``);
+    se recupera el título quitando el sufijo. Para documentos se usa el filename tal
+    cual (con su extensión).
+    """
+    if not filename:
+        return None
+    if source_type == "text" and filename.endswith(".txt"):
+        return filename[: -len(".txt")] or filename
+    return filename
+
+
 async def run_ef_pipeline(
     job_id: str, source: dict, authoritative_context: Optional[str] = None
 ) -> None:  # pragma: no cover - ruta runtime con Redis/Postgres reales
@@ -91,7 +105,11 @@ class EFAnalysisService:
             filename=result.filename,
             doc_metadata=result.model_dump(),
         )
-        job = await self.repo.create_job(source_doc_id=doc.id)
+        job = await self.repo.create_job(
+            source_doc_id=doc.id,
+            title=_derive_title(result.filename, result.source_type),
+            source_type=result.source_type,
+        )
         await self.session.commit()
 
         if background_tasks is not None:
@@ -165,7 +183,11 @@ class EFAnalysisService:
             )
 
         child = await self.repo.create_job(
-            source_doc_id=parent.source_doc_id, parent_job_id=parent_job_id
+            source_doc_id=parent.source_doc_id,
+            parent_job_id=parent_job_id,
+            title=parent.title,
+            source_type=parent.source_type,
+            version=parent.version + 1,
         )
         await self.session.commit()
 

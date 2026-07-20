@@ -103,7 +103,13 @@ class ScrumPlanningService:
             )
 
         capacity = capacity_points or settings.SCRUM_SPRINT_CAPACITY
-        job = await self.repo.create_job(AgentType.SCRUM, input_job_id=ef_job_id)
+        # El título/fuente del plan Scrum se heredan del EF de origen (historial).
+        job = await self.repo.create_job(
+            AgentType.SCRUM,
+            input_job_id=ef_job_id,
+            title=ef_job.title,
+            source_type=ef_job.source_type,
+        )
         await self.session.commit()
 
         if background_tasks is not None:
@@ -269,7 +275,12 @@ class ScrumPlanningService:
             raise GateError("No se pudo recuperar el EFArtifact de origen del refine.")
 
         child = await self.repo.create_job(
-            AgentType.SCRUM, parent_job_id=parent_job_id, input_job_id=ef_job_id
+            AgentType.SCRUM,
+            parent_job_id=parent_job_id,
+            input_job_id=ef_job_id,
+            title=parent.title,
+            source_type=parent.source_type,
+            version=parent.version + 1,
         )
         await self.session.commit()
 

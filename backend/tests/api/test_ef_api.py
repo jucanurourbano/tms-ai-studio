@@ -100,11 +100,37 @@ async def test_content_type_no_soportado_400(client):
 
 
 async def test_listado_paginado(client):
-    await client.post("/api/v1/ef/analyze", json={"content": TEXTO_LARGO, "title": "A"})
+    await client.post(
+        "/api/v1/ef/analyze", json={"content": TEXTO_LARGO, "title": "Siniestros"}
+    )
     r = await client.get("/api/v1/ef/jobs?limit=10&offset=0")
     data = r.json()["data"]
     assert data["total"] >= 1
     assert "items" in data
+
+    item = data["items"][0]
+    # El listado expone los metadatos de historial (usabilidad).
+    assert item["title"] == "Siniestros"  # texto: se recupera sin el sufijo .txt
+    assert item["source_type"] == "text"
+    assert item["version"] == 1
+    assert item["parent_job_id"] is None
+    assert item["created_at"] is not None
+    # El pipeline (mockeado) completó el job, así que hay fecha de finalización.
+    assert item["completed_at"] is not None
+
+
+async def test_listado_ordenado_mas_reciente_primero(client):
+    """El listado va del más nuevo al más viejo (created_at DESC)."""
+    await client.post(
+        "/api/v1/ef/analyze", json={"content": TEXTO_LARGO, "title": "Primero"}
+    )
+    await client.post(
+        "/api/v1/ef/analyze",
+        json={"content": TEXTO_LARGO + " variante", "title": "Segundo"},
+    )
+    items = (await client.get("/api/v1/ef/jobs")).json()["data"]["items"]
+    titles = [i["title"] for i in items]
+    assert titles.index("Segundo") < titles.index("Primero")
 
 
 async def test_ciclo_validacion_ready_for_next_stage(client):

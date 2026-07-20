@@ -15,11 +15,22 @@ class EFRepository(AgentJobRepository):
     """Operaciones de persistencia del Agente EF (``agent_type`` fijo = ef)."""
 
     async def create_job(
-        self, source_doc_id: str, parent_job_id: Optional[str] = None
+        self,
+        source_doc_id: str,
+        parent_job_id: Optional[str] = None,
+        *,
+        title: Optional[str] = None,
+        source_type: Optional[str] = None,
+        version: int = 1,
     ) -> AgentJob:
         """Crea un job EF en estado PENDING."""
         return await super().create_job(
-            AgentType.EF, source_doc_id=source_doc_id, parent_job_id=parent_job_id
+            AgentType.EF,
+            source_doc_id=source_doc_id,
+            parent_job_id=parent_job_id,
+            title=title,
+            source_type=source_type,
+            version=version,
         )
 
     async def find_completed_job_by_hash(

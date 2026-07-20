@@ -227,8 +227,13 @@ export interface JobDetail {
 
 export interface JobListItem {
   job_id: string;
+  title?: string | null;
+  source_type?: SourceType | null;
   status: JobStatus;
+  version?: number | null;
   parent_job_id?: string | null;
+  created_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface JobList {

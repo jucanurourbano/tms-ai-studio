@@ -1,7 +1,12 @@
 // Tipos del contrato ScrumArtifact v1.0.0 (espejo de los esquemas Pydantic).
 // Claves en inglés (contrato); campos opcionales para tolerar variaciones.
 
-import type { JobStatus, Origin, QuestionStatus } from "@/lib/types/ef";
+import type {
+  JobStatus,
+  Origin,
+  QuestionStatus,
+  SourceType,
+} from "@/lib/types/ef";
 
 export type Audience = "negocio" | "tecnico";
 export type MoscowPriority = "must" | "should" | "could" | "wont";
@@ -155,9 +160,14 @@ export interface ScrumJobDetail {
 
 export interface ScrumJobListItem {
   job_id: string;
+  title?: string | null;
+  source_type?: SourceType | null;
   status: JobStatus;
+  version?: number | null;
   parent_job_id?: string | null;
   input_job_id?: string | null;
+  created_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface ScrumJobList {

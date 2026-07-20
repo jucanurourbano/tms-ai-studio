@@ -111,8 +111,15 @@ async def list_jobs(
             "items": [
                 {
                     "job_id": j.id,
+                    "title": j.title,
+                    "source_type": j.source_type,
                     "status": j.status.value,
+                    "version": j.version,
                     "parent_job_id": j.parent_job_id,
+                    "created_at": j.created_at.isoformat() if j.created_at else None,
+                    "completed_at": (
+                        j.completed_at.isoformat() if j.completed_at else None
+                    ),
                 }
                 for j in jobs
             ],

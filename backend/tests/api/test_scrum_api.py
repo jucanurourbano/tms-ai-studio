@@ -28,7 +28,7 @@ async def ctx(engine, monkeypatch):
     async with factory() as session:
         repo = EFRepository(session)
         doc = await repo.get_or_create_source_doc("ef-hash", EFSourceDocType.TEXT)
-        ef_job = await repo.create_job(doc.id)
+        ef_job = await repo.create_job(doc.id, title="Siniestros", source_type="text")
         art = ef_example().model_dump(mode="json")
         await repo.save_artifact(ef_job.id, art, art["schema_version"])
         await repo.update_job_metrics(ef_job.id, art["metrics"])
@@ -137,6 +137,15 @@ async def test_listado_scrum_jobs_y_available_ef(ctx):
 
     jobs = (await client.get("/api/v1/scrum/jobs")).json()["data"]
     assert jobs["total"] >= 1
+
+    item = jobs["items"][0]
+    # El plan Scrum hereda el título/fuente del EF de origen (historial).
+    assert item["title"] == "Siniestros"
+    assert item["source_type"] == "text"
+    assert item["version"] == 1
+    assert item["input_job_id"] == ef_job_id
+    assert item["created_at"] is not None
+    assert item["completed_at"] is not None
 
     ef_jobs = (await client.get("/api/v1/scrum/available-ef-jobs")).json()["data"]
     item = next(i for i in ef_jobs["items"] if i["job_id"] == ef_job_id)

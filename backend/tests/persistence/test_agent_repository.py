@@ -45,6 +45,41 @@ async def test_list_jobs_filtra_por_agent_type(session):
     assert total_all == 3
 
 
+async def test_create_job_persiste_metadatos_de_historial(session):
+    repo = AgentJobRepository(session)
+    doc = await repo.get_or_create_source_doc("h-meta", EFSourceDocType.DOCUMENT)
+    job = await repo.create_job(
+        AgentType.EF,
+        source_doc_id=doc.id,
+        title="EF de compras.docx",
+        source_type="document",
+        version=1,
+    )
+    assert job.title == "EF de compras.docx"
+    assert job.source_type == "document"
+    assert job.version == 1
+    # Un job PENDING aún no tiene fecha de finalización.
+    assert job.completed_at is None
+
+
+async def test_update_status_sella_completed_at_en_terminal(session):
+    repo = AgentJobRepository(session)
+    job = await repo.create_job(AgentType.SCRUM)
+
+    # Un estado no terminal no sella la fecha de finalización.
+    await repo.update_job_status(job.id, JobStatus.RUNNING)
+    assert job.completed_at is None
+
+    # El primer estado terminal la sella…
+    await repo.update_job_status(job.id, JobStatus.COMPLETED)
+    sellada = job.completed_at
+    assert sellada is not None
+
+    # …y es idempotente ante reintentos (no se sobreescribe).
+    await repo.update_job_status(job.id, JobStatus.COMPLETED)
+    assert job.completed_at == sellada
+
+
 async def test_find_completed_por_hash_respeta_agent_type(session):
     repo = AgentJobRepository(session)
     doc = await repo.get_or_create_source_doc("h-comp", EFSourceDocType.TEXT)
@@ -100,3 +135,18 @@ def test_migracion_0002_importa():
     spec.loader.exec_module(mod)
     assert mod.revision == "0002_generalizar_agentes"
     assert mod.down_revision == "0001_initial"
+
+
+def test_migracion_0004_importa():
+    """La migración de metadatos de historial encadena con la de external links."""
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "alembic"
+        / "versions"
+        / "0004_job_history_metadata.py"
+    )
+    spec = importlib.util.spec_from_file_location("mig_0004", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.revision == "0004_job_history_metadata"
+    assert mod.down_revision == "0003_agent_external_links"

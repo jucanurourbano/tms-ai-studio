@@ -3,16 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { JobStatusBadge, Mono } from "@/components/ef/badges";
+import { JobsHistoryTable } from "@/components/history/jobs-history-table";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ApiError } from "@/lib/api/client";
 import { efApi } from "@/lib/api/ef";
 import type { JobList } from "@/lib/types/ef";
@@ -58,7 +50,7 @@ export default function JobsHistoryPage() {
   const to = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 max-w-full">
       <header className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-heading font-semibold">Historial</h1>
@@ -77,61 +69,12 @@ export default function JobsHistoryPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-md border">
-        <Table>
-          <TableHeader className="bg-muted/60">
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Job</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Versión / Padre</TableHead>
-              <TableHead className="text-right">Acción</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-sm text-muted-foreground">
-                  Cargando…
-                </TableCell>
-              </TableRow>
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-sm text-muted-foreground">
-                  No hay análisis todavía.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((job) => (
-                <TableRow key={job.job_id}>
-                  <TableCell>
-                    <Mono>{job.job_id}</Mono>
-                  </TableCell>
-                  <TableCell>
-                    <JobStatusBadge status={job.status} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {job.parent_job_id ? (
-                      <span>
-                        afinamiento de <Mono>{job.parent_job_id}</Mono>
-                      </span>
-                    ) : (
-                      "original"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link
-                      href={`/agents/ef/jobs/${job.job_id}`}
-                      className="text-sm underline underline-offset-4"
-                    >
-                      Abrir
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <JobsHistoryTable
+        rows={items}
+        basePath="/agents/ef/jobs"
+        loading={loading}
+        emptyLabel="No hay análisis todavía."
+      />
 
       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
         <span>
@@ -158,8 +101,7 @@ export default function JobsHistoryPage() {
       </div>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Nota: el endpoint de listado expone id, estado y job padre. El título y
-        la fecha se muestran al abrir cada análisis.
+        El buscador filtra por título dentro de la página actual.
       </p>
     </div>
   );
