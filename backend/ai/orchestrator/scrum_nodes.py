@@ -14,10 +14,12 @@ from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.scrum.assemble import assemble_artifact, validate_artifact
 from ai.agents.scrum.common import merge_metrics
 from ai.agents.scrum.criteria import run_criteria
+from ai.agents.scrum.critique import critique as run_critique
 from ai.agents.scrum.epics import run_epics
 from ai.agents.scrum.estimate import run_estimate
 from ai.agents.scrum.load_ef import assert_ef_ready, extract_ef_context
 from ai.agents.scrum.prioritize import build_backlog, run_prioritize
+from ai.agents.scrum.question_gen import generate_questions
 from ai.agents.scrum.sprint_plan import annotate_goals, plan_sprints
 from ai.agents.scrum.state import ScrumState
 from ai.agents.scrum.stories import run_stories
@@ -134,13 +136,25 @@ async def node_sprint_plan(state: ScrumState) -> dict:
 
 
 async def node_critique(state: ScrumState, config: RunnableConfig) -> dict:
-    """CRITIQUE (stub B2): sin hallazgos todavía."""
-    return {"critique": dict(state.get("critique") or {})}
+    """CRITIQUE: cobertura + refs huérfanas + ciclos + capacidad + riesgos (LLM)."""
+    critique_llm = (config or {}).get("configurable", {}).get("critique_llm")
+    critique_dict, tokens = await run_critique(
+        state.get("stories") or [],
+        state.get("epics") or [],
+        state.get("ef_context") or {},
+        state.get("unassigned_story_ids") or [],
+        llm=critique_llm,
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {"critique": critique_dict, "metrics": merge_metrics(state, tokens, [])}
 
 
 async def node_question_gen(state: ScrumState) -> dict:
-    """QUESTION_GEN (stub B2): sin preguntas al PO todavía."""
-    return {"questions": list(state.get("questions") or [])}
+    """QUESTION_GEN: preguntas al PO (RF sin cobertura, ciclos, baja confianza)."""
+    questions = generate_questions(
+        state.get("critique") or {}, state.get("stories") or []
+    )
+    return {"questions": questions}
 
 
 # --- ASSEMBLE / PERSIST -----------------------------------------------------

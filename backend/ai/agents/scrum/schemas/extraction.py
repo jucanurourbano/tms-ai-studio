@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .enums import AcceptanceFormat, MoscowPriority, StoryPoints
+from .enums import AcceptanceFormat, MoscowPriority, RiskSeverity, StoryPoints
 
 
 class EpicExtract(BaseModel):
@@ -87,3 +87,17 @@ class PrioritizeExtract(BaseModel):
     value: int = Field(ge=1, le=5)
     effort: int = Field(ge=1, le=5)
     rationale: Optional[str] = None
+
+
+class RiskExtract(BaseModel):
+    """Un riesgo propuesto por el pase LLM de crítica."""
+
+    description: str
+    severity: RiskSeverity = RiskSeverity.MEDIA
+    source_ref: Optional[str] = None
+
+
+class CritiqueExtract(BaseModel):
+    """Salida del pase LLM de CRITIQUE (solo riesgos; no propone soluciones)."""
+
+    risks: list[RiskExtract] = Field(default_factory=list)

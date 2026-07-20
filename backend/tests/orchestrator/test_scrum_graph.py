@@ -76,6 +76,11 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["sprints"] and art["sprints"][0]["story_ids"] == ["US-001"]
     assert art["metrics"]["points_total"] == 5
     assert art["metrics"]["sprints_total"] == 1
+    # CRITIQUE: cobertura reportada (REQ-F-001 cubierto por US-001).
+    cov = art["analysis"]["coverage"]
+    assert cov["requirements_total"] == 1
+    assert cov["uncovered_requirement_refs"] == []
+    assert art["metrics"]["coverage"] == 1.0
 
 
 async def test_checkpointer_conserva_estado():
