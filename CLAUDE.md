@@ -166,6 +166,13 @@ estructuralmente:
   `BackgroundTasks`.
 - Los **descartes del assembler NUNCA son silenciosos** — siempre generan una
   `Observation`.
+- **Redis Stack requerido (no Redis plano).** El checkpointer
+  `langgraph-checkpoint-redis` usa comandos de **RedisJSON** (`JSON.SET` /
+  `JSON.GET`); Redis plano (`redis:7`) falla con `unknown command 'JSON.SET'`.
+  El servicio `redis` de `docker-compose.yml` usa **`redis/redis-stack-server:latest`**
+  (carga el módulo `ReJSON` por defecto), mismo puerto `6379` y volumen
+  `tms_redis_data`. Verificar con `docker exec tms_redis redis-cli MODULE LIST`
+  (debe listar `ReJSON`).
 - **Glosario logístico** en `backend/ai/knowledge/`, inyectado en
   `EXTRACT` / `INTERPRET` / `CRITIQUE` (y en EPICS/STORIES/CRITERIA del Scrum):
   - `checkpoint` = estado

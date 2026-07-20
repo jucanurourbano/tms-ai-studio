@@ -58,6 +58,13 @@ Volúmenes persistentes (los datos sobreviven a `docker compose down`):
 
 > Estas credenciales son de desarrollo local. **No usar en producción.**
 
+> **⚠️ Redis Stack requerido (no Redis plano).** El checkpointer
+> `langgraph-checkpoint-redis` usa comandos de **RedisJSON** (`JSON.SET` / `JSON.GET`).
+> Redis plano (`redis:7`) **no** trae ese módulo y falla con
+> `unknown command 'JSON.SET'`. Por eso el servicio usa la imagen
+> **`redis/redis-stack-server:latest`**, que carga RedisJSON (`ReJSON`) por
+> defecto. Mismo puerto `6379` y mismo volumen `tms_redis_data`.
+
 ---
 
 ## 3. Comandos de cada sesión de trabajo
@@ -83,7 +90,20 @@ docker exec -it tms_postgres psql -U tms -d tms_ai_studio -c "\conninfo"
 
 # Redis: ping
 docker exec -it tms_redis redis-cli ping     # -> PONG
+
+# Redis: verificar que el módulo RedisJSON está cargado (requerido por el
+# checkpointer de LangGraph). Debe listar "ReJSON".
+docker exec -it tms_redis redis-cli MODULE LIST
+
+# Redis: smoke test de JSON.SET/JSON.GET (debe devolver OK y el JSON).
+docker exec -it tms_redis redis-cli JSON.SET tms:smoke '$' '{"ok":true}'
+docker exec -it tms_redis redis-cli JSON.GET tms:smoke
+docker exec -it tms_redis redis-cli DEL tms:smoke
 ```
+
+> Si `MODULE LIST` **no** muestra `ReJSON`, el contenedor está usando una imagen
+> de Redis plano. Recrea el servicio con la imagen correcta:
+> `docker compose up -d --force-recreate redis` (ver la nota de Redis Stack arriba).
 
 ### Backend (FastAPI)
 

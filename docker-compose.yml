@@ -27,7 +27,10 @@ services:
       retries: 5
 
   redis:
-    image: redis:7
+    # Redis Stack: incluye el módulo RedisJSON (JSON.SET/JSON.GET), REQUERIDO por
+    # el checkpointer de langgraph-checkpoint-redis. Redis plano (redis:7) NO trae
+    # RedisJSON y falla con "unknown command 'JSON.SET'".
+    image: redis/redis-stack-server:latest
     container_name: tms_redis
     restart: unless-stopped
     ports:
@@ -35,7 +38,8 @@ services:
     volumes:
       - tms_redis_data:/data
     # appendonly=yes -> persistencia de datos en el volumen tms_redis_data.
-    command: ["redis-server", "--appendonly", "yes"]
+    # (redis-stack-server carga los módulos, incl. RedisJSON, por defecto.)
+    command: ["redis-stack-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
