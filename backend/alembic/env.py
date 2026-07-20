@@ -11,7 +11,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import app.models.ef  # noqa: F401  (registra las tablas en Base.metadata)
+import app.models.agent  # noqa: F401  (registra las tablas en Base.metadata)
 from alembic import context
 from app.config.settings import settings
 from app.models import Base

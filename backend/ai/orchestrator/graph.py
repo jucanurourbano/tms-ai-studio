@@ -5,7 +5,7 @@ Pipeline lineal:
     -> CRITIQUE -> QUESTION_GEN -> ASSEMBLE -> PERSIST
 """
 
-from langgraph.graph import END, START, StateGraph
+from ai.agents.base.graph import build_linear_graph
 
 from . import nodes
 from .state import EFState
@@ -26,19 +26,5 @@ _NODES = [
 
 
 def build_ef_graph(checkpointer=None):
-    """Compila el grafo EF. Si no se pasa checkpointer, usa uno en memoria."""
-    if checkpointer is None:
-        from .checkpointer import build_memory_checkpointer
-
-        checkpointer = build_memory_checkpointer()
-
-    graph = StateGraph(EFState)
-    for name, fn in _NODES:
-        graph.add_node(name, fn)
-
-    graph.add_edge(START, _NODES[0][0])
-    for (prev, _), (nxt, _) in zip(_NODES, _NODES[1:]):
-        graph.add_edge(prev, nxt)
-    graph.add_edge(_NODES[-1][0], END)
-
-    return graph.compile(checkpointer=checkpointer)
+    """Compila el grafo EF lineal (usa el helper compartido de la base)."""
+    return build_linear_graph(EFState, _NODES, checkpointer)

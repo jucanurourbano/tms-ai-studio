@@ -9,10 +9,11 @@
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Optional
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
+from ai.agents.base.structured import ClaudeLLMClient, LLMClient, complete_structured
 from ai.knowledge import glossary_block
 from ai.tools.chunker import estimate_tokens
 
@@ -26,11 +27,16 @@ from .schemas.extraction import (
     RulesValidationsExtract,
 )
 
-
-class LLMClient(Protocol):
-    """Cliente LLM: recibe system+user y devuelve texto JSON crudo."""
-
-    async def complete_json(self, *, system: str, user: str) -> str: ...
+# ``LLMClient`` y ``ClaudeLLMClient`` viven ahora en la base compartida
+# (``ai/agents/base/structured.py``); se re-exportan para no romper imports.
+__all__ = [
+    "ClaudeLLMClient",
+    "DIMENSIONS",
+    "Dimension",
+    "LLMClient",
+    "extract_dimension",
+    "run_extract",
+]
 
 
 @dataclass(frozen=True)
@@ -52,14 +58,6 @@ DIMENSIONS: list[Dimension] = [
 ]
 
 
-def _repair_hint(error: str) -> str:
-    return (
-        "\n\nEl intento anterior falló la validación del esquema:\n"
-        f"{error}\n"
-        "Corrige el JSON y responde SOLO con JSON válido."
-    )
-
-
 async def extract_dimension(
     llm: LLMClient,
     dimension: Dimension,
@@ -68,21 +66,21 @@ async def extract_dimension(
     glossary_ctx: str,
     max_repairs: int = 2,
 ) -> Optional[BaseModel]:
-    """Extrae una dimensión de un fragmento, reparando si el schema falla."""
+    """Extrae una dimensión de un fragmento, reparando si el schema falla.
+
+    Delega el loop de reparación en la base compartida (``complete_structured``);
+    el ``None`` indica cuarentena (irreparable).
+    """
     system = build_system(dimension.prompt_file, glossary_ctx)
     user = build_user(context, text)
-    last_error = ""
-
-    for attempt in range(max_repairs + 1):
-        prompt = user if attempt == 0 else user + _repair_hint(last_error)
-        raw = await llm.complete_json(system=system, user=prompt)
-        try:
-            data = json.loads(raw)
-            return dimension.schema.model_validate(data)
-        except (json.JSONDecodeError, ValidationError) as exc:
-            last_error = str(exc)
-
-    return None  # irreparable -> cuarentena
+    model, _error = await complete_structured(
+        llm,
+        system=system,
+        user=user,
+        schema=dimension.schema,
+        max_repairs=max_repairs,
+    )
+    return model
 
 
 async def run_extract(
@@ -155,24 +153,3 @@ async def run_extract(
     skipped.sort(key=lambda s: s["ref"])
     tokens["total"] = tokens["input"] + tokens["output"]
     return results, skipped, tokens
-
-
-class ClaudeLLMClient:
-    """Implementación real de LLMClient sobre ChatAnthropic (import perezoso).
-
-    No se usa en tests (REGLA DE PRESUPUESTO): allí se inyecta un mock.
-    """
-
-    def __init__(self, client=None) -> None:
-        self._client = client
-
-    async def complete_json(self, *, system: str, user: str) -> str:
-        from app.dependencies.claude import call_with_retry, get_claude_client
-
-        client = self._client or get_claude_client()
-
-        async def _call() -> str:
-            msg = await client.ainvoke([("system", system), ("user", user)])
-            return msg.content if isinstance(msg.content, str) else str(msg.content)
-
-        return await call_with_retry(_call)

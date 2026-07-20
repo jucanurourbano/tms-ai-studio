@@ -8,14 +8,14 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai.errors import IngestError, PipelineError
+from ai.agents.base.refine import build_authoritative_context
+from ai.errors import IngestError
 from ai.tools.ingest import LocalStorage, compute_hash, ingest
 from app.config.settings import settings
 from app.models.ef import (
     EFJob,
     EFSourceDoc,
     EFSourceDocType,
-    JobStatus,
     ValidationStatus,
     ValidationTargetType,
 )
@@ -26,50 +26,30 @@ _MIN_TEXT = 100
 
 async def run_ef_pipeline(
     job_id: str, source: dict, authoritative_context: Optional[str] = None
-) -> None:
+) -> None:  # pragma: no cover - ruta runtime con Redis/Postgres reales
     """Ejecuta el grafo EF en segundo plano y persiste artefacto + métricas reales.
 
-    Ruta de runtime real (Redis + LLM real). En tests se reemplaza por un mock
-    (REGLA DE PRESUPUESTO: nunca API real sin autorización).
+    Delega en el runner genérico compartido (``run_agent_pipeline``). En tests se
+    reemplaza por un mock (REGLA DE PRESUPUESTO: nunca API real sin autorización).
     """
-    from ai.agents.ef.extract import ClaudeLLMClient
+    from ai.agents.base.pipeline import run_agent_pipeline
+    from ai.agents.base.structured import ClaudeLLMClient
     from ai.orchestrator import build_ef_graph
-    from ai.orchestrator.checkpointer import build_redis_checkpointer
-    from app.dependencies.database import session_scope
 
-    async def persist(jid: str, artifact: dict, status: str, metrics: dict) -> None:
-        async with session_scope() as session:
-            repo = EFRepository(session)
-            await repo.save_artifact(jid, artifact, artifact["schema_version"])
-            await repo.update_job_metrics(jid, metrics)
-            await repo.update_job_status(jid, JobStatus[status])
+    state = {
+        "job_id": job_id,
+        "filename": source.get("filename") or "fuente",
+        "source": source,
+    }
+    if authoritative_context:
+        state["authoritative_context"] = authoritative_context
 
-    try:
-        async with session_scope() as session:
-            await EFRepository(session).update_job_status(job_id, JobStatus.RUNNING)
-
-        graph = build_ef_graph(build_redis_checkpointer())
-        config = {
-            "configurable": {
-                "thread_id": job_id,
-                "llm": ClaudeLLMClient(),
-                "persist": persist,
-            }
-        }
-        state = {
-            "job_id": job_id,
-            "filename": source.get("filename") or "fuente",
-            "source": source,
-        }
-        if authoritative_context:
-            state["authoritative_context"] = authoritative_context
-        await graph.ainvoke(state, config)
-    except Exception as exc:  # pragma: no cover - ruta runtime
-        async with session_scope() as session:
-            await EFRepository(session).update_job_status(
-                job_id, JobStatus.FAILED, error=str(exc)[:500]
-            )
-        raise PipelineError(str(exc)) from exc
+    await run_agent_pipeline(
+        job_id=job_id,
+        build_graph=build_ef_graph,
+        llm=ClaudeLLMClient(),
+        initial_state=state,
+    )
 
 
 class EFAnalysisService:
@@ -178,18 +158,11 @@ class EFAnalysisService:
             raise IngestError(f"Job padre no encontrado: {parent_job_id}")
 
         summary = await self.repo.validation_summary(parent_job_id)
-        answered = [
-            v
-            for v in summary["validations"]
-            if v["status"] in ("confirmado", "corregido") and v["respuesta"]
-        ]
-        if not answered:
+        authoritative_context = build_authoritative_context(summary)
+        if authoritative_context is None:
             raise IngestError(
                 "No hay validaciones respondidas para reinyectar en el refine."
             )
-        authoritative_context = "\n".join(
-            f"- {v['target_type']} {v['target_id']}: {v['respuesta']}" for v in answered
-        )
 
         child = await self.repo.create_job(
             source_doc_id=parent.source_doc_id, parent_job_id=parent_job_id
