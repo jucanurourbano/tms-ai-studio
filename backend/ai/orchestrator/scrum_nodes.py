@@ -10,9 +10,21 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
+from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.scrum.assemble import assemble_artifact, validate_artifact
+from ai.agents.scrum.common import merge_metrics
+from ai.agents.scrum.criteria import run_criteria
+from ai.agents.scrum.epics import run_epics
 from ai.agents.scrum.load_ef import assert_ef_ready, extract_ef_context
 from ai.agents.scrum.state import ScrumState
+from ai.agents.scrum.stories import run_stories
+from app.config.settings import settings
+
+
+def _llm(config: RunnableConfig):
+    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    llm = (config or {}).get("configurable", {}).get("llm")
+    return llm if llm is not None else ClaudeLLMClient()
 
 
 async def node_load_ef(state: ScrumState) -> dict:
@@ -34,18 +46,43 @@ async def node_load_ef(state: ScrumState) -> dict:
 
 
 async def node_epics(state: ScrumState, config: RunnableConfig) -> dict:
-    """EPICS (stub B2): sin épicas todavía."""
-    return {"epics": list(state.get("epics") or [])}
+    """EPICS: deriva épicas de módulos+procesos del EF (LLM structured)."""
+    epics, skipped, tokens = await run_epics(
+        _llm(config),
+        state.get("ef_context") or {},
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {"epics": epics, "metrics": merge_metrics(state, tokens, skipped)}
 
 
 async def node_stories(state: ScrumState, config: RunnableConfig) -> dict:
-    """STORIES (stub B2): sin historias todavía."""
-    return {"stories": list(state.get("stories") or [])}
+    """STORIES: map por requisito funcional -> historias trazables."""
+    stories, skipped, tokens = await run_stories(
+        _llm(config),
+        state.get("ef_context") or {},
+        state.get("epics") or [],
+        ef_job_id=state.get("ef_job_id", ""),
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.EXTRACT_CONCURRENCY,
+    )
+    # ``epics`` se muta con story_ids dentro de run_stories.
+    return {
+        "stories": stories,
+        "epics": state.get("epics") or [],
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_criteria(state: ScrumState, config: RunnableConfig) -> dict:
-    """CRITERIA (stub B2): los criterios se adjuntan a cada historia."""
-    return {"stories": list(state.get("stories") or [])}
+    """CRITERIA: map por historia -> criterios de aceptación Gherkin."""
+    stories, skipped, tokens = await run_criteria(
+        _llm(config),
+        state.get("stories") or [],
+        state.get("ef_context") or {},
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.EXTRACT_CONCURRENCY,
+    )
+    return {"stories": stories, "metrics": merge_metrics(state, tokens, skipped)}
 
 
 # --- ESTIMATE / PRIORITIZE / SPRINT_PLAN (Bloque 4) -------------------------

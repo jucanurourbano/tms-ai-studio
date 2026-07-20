@@ -182,3 +182,77 @@ class CritiqueLLM:
             },
             ensure_ascii=False,
         )
+
+
+def _payload_from_user(user: str) -> dict:
+    """Extrae el JSON del mensaje de usuario (formato ``ENCABEZADO:\\n<json>``)."""
+    _, _, body = user.partition("\n")
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return {}
+
+
+class ScrumMapLLM:
+    """LLM mock del Agente Scrum: responde por nodo según el rol del system prompt.
+
+    - EPICS: una épica que cita MOD-001/PRO-001 reales.
+    - STORIES: una historia por requisito funcional, anclada al RF de la pasada;
+      si el RF no es ``REQ-F-001``, depende de ``REQ-F-001`` (prueba dependencias).
+    - CRITERIA: un criterio Gherkin anclado a BR-001.
+    - ESTIMATE / PRIORITIZE / CRITIQUE: se completan en bloques posteriores.
+    """
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Agrupador de épicas" in system:
+            return json.dumps(
+                {
+                    "epics": [
+                        {
+                            "title": "Gestión de Siniestros",
+                            "description": "Registro y seguimiento de siniestros.",
+                            "source_refs": ["MOD-001", "PRO-001"],
+                            "confidence": 0.8,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Redactor de historias" in system:
+            rf = _payload_from_user(user).get("functional_requirement", {})
+            rf_id = rf.get("id", "REQ-F-001")
+            deps = [] if rf_id == "REQ-F-001" else ["REQ-F-001"]
+            return json.dumps(
+                {
+                    "stories": [
+                        {
+                            "role": "operador de siniestros",
+                            "goal": f"gestionar el requisito {rf_id}",
+                            "benefit": "mantener la trazabilidad del proceso",
+                            "requirement_refs": [rf_id],
+                            "process_refs": ["PRO-001"],
+                            "rule_refs": ["BR-001"],
+                            "depends_on_requirements": deps,
+                            "epic_hint": "MOD-001",
+                            "confidence": 0.7,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Analista de criterios" in system:
+            return json.dumps(
+                {
+                    "acceptance_criteria": [
+                        {
+                            "format": "gherkin",
+                            "given": "un siniestro registrado",
+                            "when": "el operador ejecuta la acción",
+                            "then": "el sistema responde según la regla",
+                            "source_refs": ["BR-001"],
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return "{}"

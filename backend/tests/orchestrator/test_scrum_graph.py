@@ -11,6 +11,7 @@ from ai.agents.scrum.load_ef import (
 from ai.errors import GateError
 from ai.orchestrator import build_scrum_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
+from tests.mocks import ScrumMapLLM
 
 
 def _ef_dict():
@@ -25,6 +26,7 @@ def _base_config():
     return {
         "configurable": {
             "thread_id": "S-1",
+            "llm": ScrumMapLLM(),
             "persist": _noop_persist,
         }
     }
@@ -62,6 +64,11 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["source"]["ready_snapshot"] is True
     # ef_context expuesto por LOAD_EF a partir del EFArtifact real.
     assert result["ef_context"]["processes"]
+    # EPICS/STORIES/CRITERIA reales (LLM mockeado).
+    assert art["epics"] and art["epics"][0]["id"] == "EPIC-001"
+    assert art["stories"] and art["stories"][0]["source_refs"]["requirement_refs"]
+    assert art["stories"][0]["acceptance_criteria"]
+    assert art["metrics"]["tokens"]["total"] > 0
 
 
 async def test_checkpointer_conserva_estado():
