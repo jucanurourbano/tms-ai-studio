@@ -45,3 +45,13 @@ class PipelineError(AgentError):
     """Error genérico durante la ejecución del pipeline."""
 
     http_status = 500
+
+
+class GateError(AgentError):
+    """La entrada de un agente no cumple su condición de compuerta (gate).
+
+    P. ej.: el Agente Scrum exige un ``EFArtifact`` listo
+    (``ready_for_next_stage=true``) antes de crear el job.
+    """
+
+    http_status = 409
