@@ -147,6 +147,34 @@ class AgentArtifactRow(Base, IdMixin, TimestampMixin):
     job: Mapped["AgentJob"] = relationship(back_populates="artifact")
 
 
+class AgentExternalLink(Base, IdMixin, TimestampMixin):
+    """Auditoría de artefactos publicados en sistemas externos (p. ej. ClickUp).
+
+    Registra qué historia originó cada tarea creada, cuándo y en qué lista, y
+    permite la creación **idempotente** por ``external_key`` en la fase (b).
+    """
+
+    __tablename__ = "agent_external_links"
+
+    job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="clickup")
+    story_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    external_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    external_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    list_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    __table_args__ = (
+        Index(
+            "ux_agent_external_link_key",
+            "job_id",
+            "provider",
+            "external_key",
+            unique=True,
+        ),
+    )
+
+
 class AgentValidation(Base, IdMixin, TimestampMixin):
     """Validación del ciclo de afinamiento. Persiste aparte, sin mutar el artefacto."""
 

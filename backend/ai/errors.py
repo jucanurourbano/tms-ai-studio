@@ -55,3 +55,13 @@ class GateError(AgentError):
     """
 
     http_status = 409
+
+
+class ClickUpForbiddenError(AgentError):
+    """Destino de escritura ClickUp fuera del espacio autorizado de Sistemas.
+
+    El guard es **fail-closed**: sin allowlist configurada, o si el destino no
+    pertenece al espacio de Sistemas, se rechaza explícitamente.
+    """
+
+    http_status = 403

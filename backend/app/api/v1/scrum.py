@@ -143,6 +143,20 @@ async def get_validation_summary(
     return ApiResponse.ok(data=summary)
 
 
+@router.get("/jobs/{job_id}/export", summary="Export compatible con ClickUp (CSV/JSON)")
+async def export_clickup(
+    job_id: str,
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Fase (a): export CSV/JSON compatible con la importación de ClickUp.
+
+    Solo lectura del artefacto -> archivo (sin token, sin escritura en ClickUp).
+    """
+    payload = await _service(session).export_clickup(job_id, format)
+    return ApiResponse.ok(data=payload, message="Export generado")
+
+
 @router.post("/jobs/{job_id}/refine", summary="Crear job hijo de afinamiento (PO)")
 async def refine(
     job_id: str,

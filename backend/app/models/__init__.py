@@ -2,6 +2,7 @@
 
 from .agent import (
     AgentArtifactRow,
+    AgentExternalLink,
     AgentJob,
     AgentType,
     AgentValidation,
@@ -18,6 +19,7 @@ from .ef import EFArtifactRow, EFJob, EFValidation
 
 __all__ = [
     "AgentArtifactRow",
+    "AgentExternalLink",
     "AgentJob",
     "AgentType",
     "AgentValidation",

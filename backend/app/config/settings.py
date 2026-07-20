@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     SCRUM_SPRINT_CAPACITY: int = 20  # D4: puntos por sprint (configurable)
     SCRUM_COVERAGE_THRESHOLD: float = 1.0  # D5: RF cubiertos por >=1 historia
 
+    # --- Integración ClickUp (cuenta COMPARTIDA: guard fail-closed) ---
+    # Sin allowlist configurada, el módulo NO escribe nada (ver CLAUDE.md).
+    CLICKUP_API_TOKEN: str = ""
+    CLICKUP_WORKSPACE_ID: str = ""  # team
+    CLICKUP_SPACE_ID: str = ""  # espacio de Sistemas (único autorizado)
+    CLICKUP_FOLDER_ID: str = ""  # opcional
+    CLICKUP_ALLOWED_LIST_IDS: list[str] = []  # allowlist explícita de listas
+    CLICKUP_DRY_RUN: bool = True  # fase (b): por defecto no crea nada
+
     # --- CORS (desarrollo: abierto) ---
     CORS_ORIGINS: list[str] = ["*"]
 

@@ -143,6 +143,24 @@ async def test_listado_scrum_jobs_y_available_ef(ctx):
     assert item["ready_for_next_stage"] is True
 
 
+async def test_export_clickup_csv_y_json(ctx):
+    client, ef_job_id = ctx
+    await _make_ef_ready(client, ef_job_id)
+    scrum_job_id = (
+        await client.post("/api/v1/scrum/plans", json={"ef_job_id": ef_job_id})
+    ).json()["data"]["job_id"]
+
+    r = await client.get(f"/api/v1/scrum/jobs/{scrum_job_id}/export?format=csv")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["format"] == "csv"
+    assert "Task Name" in data["content"]
+
+    r = await client.get(f"/api/v1/scrum/jobs/{scrum_job_id}/export?format=json")
+    rows = r.json()["data"]["content"]
+    assert isinstance(rows, list) and rows[0]["list"]
+
+
 async def test_refine_crea_job_hijo(ctx):
     client, ef_job_id = ctx
     await _make_ef_ready(client, ef_job_id)

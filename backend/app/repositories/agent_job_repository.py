@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import (
     AgentArtifactRow,
+    AgentExternalLink,
     AgentJob,
     AgentType,
     AgentValidation,
@@ -210,6 +211,56 @@ class AgentJobRepository:
             select(AgentValidation)
             .where(AgentValidation.job_id == job_id)
             .order_by(AgentValidation.created_at.asc())
+        )
+        return list(rows)
+
+    # --- Auditoría de publicaciones externas (ClickUp, fase b) --------------
+
+    async def record_external_link(
+        self,
+        job_id: str,
+        external_key: str,
+        action: str,
+        *,
+        provider: str = "clickup",
+        story_id: Optional[str] = None,
+        external_id: Optional[str] = None,
+        list_id: Optional[str] = None,
+    ) -> AgentExternalLink:
+        """Registra (idempotente por job+provider+external_key) una publicación."""
+        existing = await self.session.scalar(
+            select(AgentExternalLink).where(
+                AgentExternalLink.job_id == job_id,
+                AgentExternalLink.provider == provider,
+                AgentExternalLink.external_key == external_key,
+            )
+        )
+        if existing is not None:
+            existing.action = action
+            existing.story_id = story_id
+            existing.external_id = external_id
+            existing.list_id = list_id
+            await self.session.flush()
+            return existing
+        link = AgentExternalLink(
+            job_id=job_id,
+            provider=provider,
+            external_key=external_key,
+            action=action,
+            story_id=story_id,
+            external_id=external_id,
+            list_id=list_id,
+        )
+        self.session.add(link)
+        await self.session.flush()
+        return link
+
+    async def list_external_links(self, job_id: str) -> list[AgentExternalLink]:
+        """Todas las publicaciones externas registradas para un job."""
+        rows = await self.session.scalars(
+            select(AgentExternalLink)
+            .where(AgentExternalLink.job_id == job_id)
+            .order_by(AgentExternalLink.created_at.asc())
         )
         return list(rows)
 

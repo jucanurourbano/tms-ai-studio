@@ -130,6 +130,28 @@ class ScrumPlanningService:
             agent_type=AgentType.SCRUM, limit=limit, offset=offset
         )
 
+    # --- Export ClickUp (fase a: sin API, sin riesgo) -----------------------
+
+    async def export_clickup(self, job_id: str, fmt: str = "csv") -> dict:
+        """Genera el export compatible con ClickUp (CSV o JSON) del artefacto."""
+        from ai.integrations.clickup import to_clickup_csv, to_clickup_rows
+
+        artifact = await self.get_artifact(job_id)
+        if artifact is None:
+            raise IngestError(f"El job Scrum {job_id} no tiene artefacto disponible.")
+
+        if fmt == "json":
+            return {
+                "format": "json",
+                "filename": f"scrum_{job_id}_clickup.json",
+                "content": to_clickup_rows(artifact),
+            }
+        return {
+            "format": "csv",
+            "filename": f"scrum_{job_id}_clickup.csv",
+            "content": to_clickup_csv(artifact),
+        }
+
     async def list_ready_ef_jobs(self, limit: int, offset: int) -> list[dict]:
         """Lista jobs EF completados marcando si están listos para planificación."""
         jobs, _ = await self.repo.list_jobs(
