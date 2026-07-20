@@ -69,6 +69,13 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["stories"] and art["stories"][0]["source_refs"]["requirement_refs"]
     assert art["stories"][0]["acceptance_criteria"]
     assert art["metrics"]["tokens"]["total"] > 0
+    # ESTIMATE/PRIORITIZE/SPRINT_PLAN reales.
+    assert art["stories"][0]["story_points"] == 5
+    assert art["stories"][0]["priority"] == "must"
+    assert art["product_backlog"]["ordered_story_ids"] == ["US-001"]
+    assert art["sprints"] and art["sprints"][0]["story_ids"] == ["US-001"]
+    assert art["metrics"]["points_total"] == 5
+    assert art["metrics"]["sprints_total"] == 1
 
 
 async def test_checkpointer_conserva_estado():

@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     SINGLE_SHOT_TOKEN_THRESHOLD: int = 4096
     EXTRACT_CONCURRENCY: int = 3
 
+    # --- Pipeline del Agente Scrum ---
+    SCRUM_SPRINT_CAPACITY: int = 20  # D4: puntos por sprint (configurable)
+    SCRUM_COVERAGE_THRESHOLD: float = 1.0  # D5: RF cubiertos por >=1 historia
+
     # --- CORS (desarrollo: abierto) ---
     CORS_ORIGINS: list[str] = ["*"]
 

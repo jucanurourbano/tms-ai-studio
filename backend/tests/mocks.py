@@ -255,4 +255,23 @@ class ScrumMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Estimador ágil" in system:
+            return json.dumps(
+                {
+                    "story_points": 5,
+                    "rationale": "CRUD con validación de guía y estados.",
+                    "confidence": 0.7,
+                },
+                ensure_ascii=False,
+            )
+        if "Product analyst" in system:
+            return json.dumps(
+                {
+                    "priority": "must",
+                    "value": 4,
+                    "effort": 3,
+                    "rationale": "Requisito central del proceso.",
+                },
+                ensure_ascii=False,
+            )
         return "{}"

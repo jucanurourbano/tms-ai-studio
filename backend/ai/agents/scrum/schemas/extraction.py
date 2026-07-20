@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .enums import AcceptanceFormat
+from .enums import AcceptanceFormat, MoscowPriority, StoryPoints
 
 
 class EpicExtract(BaseModel):
@@ -62,3 +62,28 @@ class CriteriaExtract(BaseModel):
     """Salida del nodo CRITERIA (una pasada por historia)."""
 
     acceptance_criteria: list[CriterionExtract] = Field(default_factory=list)
+
+
+class EstimateExtract(BaseModel):
+    """Salida del nodo ESTIMATE (una pasada por historia).
+
+    ``story_points`` usa el enum Fibonacci cerrado (D9): valores fuera de la escala
+    disparan el loop de reparación y, si no se corrigen, la cuarentena.
+    """
+
+    story_points: StoryPoints
+    rationale: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class PrioritizeExtract(BaseModel):
+    """Salida del nodo PRIORITIZE (una pasada por historia).
+
+    El LLM solo clasifica (MoSCoW + valor/esfuerzo); el orden del backlog lo arma
+    Python de forma determinista.
+    """
+
+    priority: MoscowPriority
+    value: int = Field(ge=1, le=5)
+    effort: int = Field(ge=1, le=5)
+    rationale: Optional[str] = None

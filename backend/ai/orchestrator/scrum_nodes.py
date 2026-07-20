@@ -15,7 +15,10 @@ from ai.agents.scrum.assemble import assemble_artifact, validate_artifact
 from ai.agents.scrum.common import merge_metrics
 from ai.agents.scrum.criteria import run_criteria
 from ai.agents.scrum.epics import run_epics
+from ai.agents.scrum.estimate import run_estimate
 from ai.agents.scrum.load_ef import assert_ef_ready, extract_ef_context
+from ai.agents.scrum.prioritize import build_backlog, run_prioritize
+from ai.agents.scrum.sprint_plan import annotate_goals, plan_sprints
 from ai.agents.scrum.state import ScrumState
 from ai.agents.scrum.stories import run_stories
 from app.config.settings import settings
@@ -89,21 +92,42 @@ async def node_criteria(state: ScrumState, config: RunnableConfig) -> dict:
 
 
 async def node_estimate(state: ScrumState, config: RunnableConfig) -> dict:
-    """ESTIMATE (stub B2)."""
-    return {"stories": list(state.get("stories") or [])}
+    """ESTIMATE: story points Fibonacci por historia (LLM, D9)."""
+    stories, skipped, tokens = await run_estimate(
+        _llm(config),
+        state.get("stories") or [],
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.EXTRACT_CONCURRENCY,
+    )
+    return {"stories": stories, "metrics": merge_metrics(state, tokens, skipped)}
 
 
 async def node_prioritize(state: ScrumState, config: RunnableConfig) -> dict:
-    """PRIORITIZE (stub B2): backlog vacío por defecto."""
-    return {"backlog": dict(state.get("backlog") or {})}
+    """PRIORITIZE: MoSCoW + valor/esfuerzo (LLM) y backlog ordenado (Python)."""
+    stories, skipped, tokens = await run_prioritize(
+        _llm(config),
+        state.get("stories") or [],
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.EXTRACT_CONCURRENCY,
+    )
+    backlog = build_backlog(stories)
+    return {
+        "stories": stories,
+        "backlog": backlog,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_sprint_plan(state: ScrumState) -> dict:
-    """SPRINT_PLAN (stub B2): sin sprints todavía."""
-    return {
-        "sprints": list(state.get("sprints") or []),
-        "unassigned_story_ids": list(state.get("unassigned_story_ids") or []),
-    }
+    """SPRINT_PLAN: bin-packing determinista por capacidad (D4)."""
+    stories = state.get("stories") or []
+    backlog = state.get("backlog") or {}
+    capacity = state.get("capacity_points") or settings.SCRUM_SPRINT_CAPACITY
+    ordered = backlog.get("ordered_story_ids") or [s["id"] for s in stories]
+
+    sprints, unassigned, _obs = plan_sprints(stories, ordered, capacity)
+    annotate_goals(sprints, stories)
+    return {"sprints": sprints, "unassigned_story_ids": unassigned}
 
 
 # --- CRITIQUE / QUESTION_GEN (Bloque 5) -------------------------------------
