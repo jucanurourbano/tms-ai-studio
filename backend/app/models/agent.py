@@ -22,6 +22,19 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, IdMixin, JSONVariant, TimestampMixin
 
 
+def pg_enum(enum_cls, name: str) -> SAEnum:
+    """Construye un ``Enum`` que persiste los VALORES del enum (no los nombres).
+
+    SQLAlchemy, por defecto, guarda el *nombre* del miembro (``TEXT``); las
+    migraciones definen los tipos enum de Postgres a partir de los *valores*
+    (``text``). ``values_callable`` alinea ambos: se persiste siempre el valor,
+    coincidiendo con lo que crean las migraciones y con las claves de la API.
+    """
+    return SAEnum(
+        enum_cls, name=name, values_callable=lambda e: [member.value for member in e]
+    )
+
+
 class AgentType(str, Enum):
     """Agente del ISDF que produce el job (discriminador multi-agente)."""
 
@@ -83,7 +96,7 @@ class EFSourceDoc(Base, IdMixin, TimestampMixin):
     filename: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     type: Mapped[EFSourceDocType] = mapped_column(
-        SAEnum(EFSourceDocType, name="ef_source_doc_type"), nullable=False
+        pg_enum(EFSourceDocType, "ef_source_doc_type"), nullable=False
     )
     doc_metadata: Mapped[Optional[dict]] = mapped_column(JSONVariant, nullable=True)
 
@@ -101,10 +114,10 @@ class AgentJob(Base, IdMixin, TimestampMixin):
     __tablename__ = "agent_jobs"
 
     agent_type: Mapped[AgentType] = mapped_column(
-        SAEnum(AgentType, name="agent_type"), nullable=False
+        pg_enum(AgentType, "agent_type"), nullable=False
     )
     status: Mapped[JobStatus] = mapped_column(
-        SAEnum(JobStatus, name="agent_job_status"),
+        pg_enum(JobStatus, "agent_job_status"),
         nullable=False,
         default=JobStatus.PENDING,
     )
@@ -182,12 +195,12 @@ class AgentValidation(Base, IdMixin, TimestampMixin):
 
     job_id: Mapped[str] = mapped_column(ForeignKey("agent_jobs.id"), nullable=False)
     target_type: Mapped[ValidationTargetType] = mapped_column(
-        SAEnum(ValidationTargetType, name="agent_validation_target_type"),
+        pg_enum(ValidationTargetType, "agent_validation_target_type"),
         nullable=False,
     )
     target_id: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[ValidationStatus] = mapped_column(
-        SAEnum(ValidationStatus, name="agent_validation_status"),
+        pg_enum(ValidationStatus, "agent_validation_status"),
         nullable=False,
         default=ValidationStatus.PENDIENTE,
     )
