@@ -14,8 +14,10 @@ Software Delivery Framework (ISDF)*.
 **Agentes previstos:** EF, Scrum, Arquitectura, BD, API, Backend, Frontend, QA,
 DevOps + un **Orquestador** que coordina el flujo entre ellos.
 
-**Estado:** Agente EF **completo** (backend + frontend). Agente Scrum **diseño
-validado** (ver §4 y `docs/diseno-agente-scrum.md`); implementación pendiente.
+**Estado:** Agente EF **completo** (backend + frontend). Agente Scrum **completo**
+(backend + frontend; bloques B0→B8 implementados, ver §4 y
+`docs/diseno-agente-scrum.md`). Persistencia **generalizada** a tablas `agent_*`
+multi-agente (D1). Siguiente eslabón: **Agente Arquitectura**.
 
 ---
 
