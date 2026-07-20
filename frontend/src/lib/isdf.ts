@@ -40,7 +40,7 @@ export const ISDF_NAV: PhaseNav[] = [
   {
     phase: "Gestionar",
     agents: [
-      { key: "scrum", name: "Scrum", enabled: false },
+      { key: "scrum", name: "Agente Scrum", href: "/agents/scrum", enabled: true },
       { key: "devops", name: "DevOps", enabled: false },
     ],
   },
