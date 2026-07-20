@@ -240,7 +240,7 @@ export function ResultView({ job }: { job: JobDetail }) {
   return (
     <div className="flex flex-col h-full">
       {/* Barra superior de afinamiento */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-4 py-2">
+      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-6 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="font-heading font-semibold">EF v1.2.0</span>
           <Badge variant="outline">
@@ -329,7 +329,7 @@ export function ResultView({ job }: { job: JobDetail }) {
       </div>
 
       {/* Cabecera: estado, fuente y métricas */}
-      <div className="border-b px-4 py-3">
+      <div className="border-b px-6 py-4">
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <JobStatusBadge status={job.status} />
           <span className="text-muted-foreground">
@@ -347,7 +347,7 @@ export function ResultView({ job }: { job: JobDetail }) {
       </div>
 
       {/* Dos columnas: índice + contenido */}
-      <div className="grid grid-cols-[13rem_1fr] gap-6 px-4 py-4">
+      <div className="grid grid-cols-[13rem_1fr] gap-6 px-6 py-5">
         {/* Índice pegajoso */}
         <nav className="sticky top-24 self-start text-sm space-y-3">
           <IndexLink href="#sec-interpretation" label="Interpretación" />
@@ -599,9 +599,13 @@ export function ResultView({ job }: { job: JobDetail }) {
                   {label} <Count n={list.length} />
                 </div>
                 {list.length > 0 ? (
-                  <div className="rounded-md border divide-y">
+                  <div className="rounded-md border divide-y [&>div:nth-child(even)]:bg-muted/20">
                     {list.map((r) => (
-                      <div key={r.id} id={`ref-${r.id}`} className="p-2">
+                      <div
+                        key={r.id}
+                        id={`ref-${r.id}`}
+                        className="p-2 hover:bg-muted/40"
+                      >
                         <button
                           type="button"
                           onClick={() => toggle(r.id)}
@@ -861,7 +865,9 @@ function ModelBlock({
         {title} <Count n={n} />
       </div>
       {n > 0 ? (
-        <div className="rounded-md border divide-y">{children}</div>
+        <div className="rounded-md border divide-y [&>div:nth-child(even)]:bg-muted/20">
+          {children}
+        </div>
       ) : (
         <p className="text-amber-600 text-xs">0 ⚠ vacío</p>
       )}
@@ -879,7 +885,10 @@ function ItemRow({
   children: React.ReactNode;
 }) {
   return (
-    <div id={`ref-${id}`} className="flex items-center gap-2 p-2 text-sm">
+    <div
+      id={`ref-${id}`}
+      className="flex items-center gap-2 p-2 text-sm hover:bg-muted/40"
+    >
       <Mono>{id}</Mono>
       <span className="flex-1 min-w-0">{children}</span>
       {origin === "derived" ? <OriginBadge origin={origin} /> : null}

@@ -77,17 +77,17 @@ export default function JobsHistoryPage() {
         </div>
       )}
 
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="bg-muted/60">
+            <TableRow className="hover:bg-transparent">
               <TableHead>Job</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Versión / Padre</TableHead>
               <TableHead className="text-right">Acción</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
             {loading ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-sm text-muted-foreground">

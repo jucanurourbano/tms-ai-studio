@@ -12,13 +12,15 @@ import { ISDF_NAV } from "@/lib/isdf";
 export default function DashboardPage() {
   return (
     <div className="p-6 max-w-5xl">
-      <header className="mb-6">
-        <h1 className="text-xl font-heading font-semibold">TMS AI Studio</h1>
-        <p className="text-sm text-muted-foreground">
+      <div className="mb-6 overflow-hidden rounded-xl brand-gradient px-6 py-8 text-white shadow-sm">
+        <h1 className="text-2xl font-heading font-semibold tracking-tight">
+          TMS AI Studio
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-white/85">
           Asistencia al ciclo de vida del desarrollo mediante agentes de IA
-          (ISDF).
+          (ISDF) · Urbano TI.
         </p>
-      </header>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ISDF_NAV.map((phase) => (
@@ -37,7 +39,7 @@ export default function DashboardPage() {
                     className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-accent transition-colors"
                   >
                     <span className="font-medium">{agent.name}</span>
-                    <Badge className="bg-emerald-600">activo</Badge>
+                    <Badge className="bg-primary">activo</Badge>
                   </Link>
                 ) : (
                   <div

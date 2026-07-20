@@ -11,17 +11,19 @@ import {
 export default function EFLandingPage() {
   return (
     <div className="p-6 max-w-4xl">
-      <header className="mb-6">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="mb-6 overflow-hidden rounded-xl brand-gradient px-6 py-7 text-white shadow-sm">
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-white/80">
           Especificar
         </div>
-        <h1 className="text-xl font-heading font-semibold">Agente EF</h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
+        <h1 className="text-2xl font-heading font-semibold tracking-tight">
+          Agente EF
+        </h1>
+        <p className="mt-1 text-sm text-white/85 max-w-2xl">
           Traduce un documento de Procesos (o texto libre) al lenguaje de
           Sistemas: interpretación, requisitos, modelo de datos y preguntas de
           afinamiento, con trazabilidad a la evidencia de origen.
         </p>
-      </header>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/agents/ef/new">
