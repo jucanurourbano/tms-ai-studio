@@ -1,9 +1,11 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { JobsHistoryTable } from "@/components/history/jobs-history-table";
+import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
 import { efApi } from "@/lib/api/ef";
@@ -51,17 +53,21 @@ export default function JobsHistoryPage() {
 
   return (
     <div className="p-6 max-w-full">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-heading font-semibold">Historial</h1>
-          <p className="text-sm text-muted-foreground">
-            Análisis realizados por el Agente EF.
-          </p>
-        </div>
-        <Link href="/agents/ef/new" className={buttonVariants({ size: "sm" })}>
-          Nuevo análisis
-        </Link>
-      </header>
+      <PageHeader
+        icon="file-search"
+        eyebrow="Especificar"
+        title="Historial"
+        description="Análisis realizados por el Agente EF."
+        action={
+          <Link
+            href="/agents/ef/new"
+            className={buttonVariants({ size: "sm", className: "gap-1.5" })}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nuevo análisis
+          </Link>
+        }
+      />
 
       {error && (
         <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">

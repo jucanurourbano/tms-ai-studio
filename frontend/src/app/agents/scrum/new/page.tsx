@@ -1,10 +1,12 @@
 "use client";
 
+import { Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, Mono } from "@/components/ef/badges";
+import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -69,13 +71,17 @@ export default function NewPlanPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
-      <header className="mb-5">
-        <h1 className="text-xl font-heading font-semibold">Nuevo plan ágil</h1>
-        <p className="text-sm text-muted-foreground">
-          Elige un análisis EF <b>listo</b> (semáforo en verde) como origen.
-        </p>
-      </header>
+    <div className="mx-auto max-w-3xl p-6">
+      <PageHeader
+        icon="kanban"
+        eyebrow="Gestionar"
+        title="Nuevo plan ágil"
+        description={
+          <>
+            Elige un análisis EF <b>listo</b> (semáforo en verde) como origen.
+          </>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -157,7 +163,16 @@ export default function NewPlanPage() {
             />
           </div>
 
-          <Button onClick={submit} disabled={!efJobId || submitting}>
+          <Button
+            onClick={submit}
+            disabled={!efJobId || submitting}
+            className="gap-1.5"
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
             {submitting ? "Generando…" : "Generar plan"}
           </Button>
         </CardContent>
