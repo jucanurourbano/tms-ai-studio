@@ -121,6 +121,7 @@ async def critique(
     ef_context: dict,
     unassigned_story_ids: list[str],
     *,
+    sprints: Optional[list[dict]] = None,
     llm: Optional[LLMClient] = None,
     authoritative_context: Optional[str] = None,
 ) -> tuple[dict[str, Any], dict]:
@@ -185,7 +186,11 @@ async def critique(
         )
     tokens = {"input": 0, "output": 0, "total": 0}
     if llm is not None:
-        llm_risks, tokens = await _llm_risks(llm, stories, [], authoritative_context)
+        # El pase de riesgos DEBE ver el plan de sprints final; antes recibía []
+        # (RISK "sprints vacío" sobre un plan ya poblado).
+        llm_risks, tokens = await _llm_risks(
+            llm, stories, sprints or [], authoritative_context
+        )
         risks += llm_risks
 
     critique_dict = {

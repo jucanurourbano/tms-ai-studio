@@ -4,7 +4,7 @@ import json
 
 from ai.agents.scrum.criteria import run_criteria
 from ai.agents.scrum.epics import run_epics
-from ai.agents.scrum.stories import run_stories
+from ai.agents.scrum.stories import _resolve_epic_ref, run_stories
 from tests.mocks import ScrumMapLLM
 
 
@@ -122,3 +122,138 @@ async def test_criteria_descarta_sin_ancla():
     assert stories[0]["acceptance_criteria"] == []
     assert len(skipped) == 1
     assert skipped[0]["stage"] == "CRITERIA"
+
+
+# --- #1 dedupe + #2 asignación de épicas -----------------------------------
+
+
+def _ctx_3rf():
+    ctx = _ef_context()
+    ctx["requirements"]["functional"] = [
+        {"id": "REQ-F-001", "text": "Ver saldo."},
+        {"id": "REQ-F-002", "text": "Ver saldo (variante)."},
+        {"id": "REQ-F-003", "text": "Ver saldo antes de enviar."},
+    ]
+    return ctx
+
+
+class _DupStoriesLLM:
+    """STORIES: mismo objetivo para todo RF -> historias redundantes a fusionar."""
+
+    async def complete_json(self, *, system, user):
+        rf = json.loads(user.split("\n", 1)[1])["functional_requirement"]
+        return json.dumps(
+            {
+                "stories": [
+                    {
+                        "role": "Trabajador",
+                        "goal": "ver mi saldo de dias disponibles antes de enviar la solicitud",
+                        "benefit": "decidir cuantos dias solicitar",
+                        "requirement_refs": [rf["id"]],
+                        "process_refs": [],
+                        "rule_refs": [],
+                        "depends_on_requirements": [],
+                        "epic_hint": "EPIC-001",
+                        "confidence": 0.7,
+                    }
+                ]
+            }
+        )
+
+
+async def test_stories_deduplica_redundantes_conservando_refs():
+    """REGRESIÓN (#1): variantes de la misma historia se fusionan en una, con refs
+    a TODOS los RF de origen."""
+    ctx = _ctx_3rf()
+    epics = [
+        {
+            "id": "EPIC-001",
+            "title": "Gestión",
+            "source_refs": ["MOD-001"],
+            "story_ids": [],
+        }
+    ]
+    stories, _skipped, _tokens = await run_stories(
+        _DupStoriesLLM(), ctx, epics, ef_job_id="J"
+    )
+    assert len(stories) == 1
+    assert set(stories[0]["source_refs"]["requirement_refs"]) == {
+        "REQ-F-001",
+        "REQ-F-002",
+        "REQ-F-003",
+    }
+    assert stories[0]["id"] == "US-001"
+    assert stories[0]["external_key"] == "J:US-001"
+
+
+class _MultiEpicStoriesLLM:
+    """STORIES: objetivos distintos por RF y epic_hint hacia épicas distintas."""
+
+    _HINT = {"REQ-F-001": "EPIC-001", "REQ-F-002": "EPIC-002", "REQ-F-003": "EPIC-003"}
+
+    async def complete_json(self, *, system, user):
+        rf = json.loads(user.split("\n", 1)[1])["functional_requirement"]["id"]
+        return json.dumps(
+            {
+                "stories": [
+                    {
+                        "role": "Trabajador",
+                        "goal": f"objetivo distintivo para {rf}",
+                        "benefit": "valor",
+                        "requirement_refs": [rf],
+                        "process_refs": [],
+                        "rule_refs": [],
+                        "depends_on_requirements": [],
+                        "epic_hint": self._HINT.get(rf, "EPIC-001"),
+                        "confidence": 0.8,
+                    }
+                ]
+            }
+        )
+
+
+async def test_stories_distribuye_entre_epicas():
+    """REGRESIÓN (#2): las historias se reparten entre las épicas (no todo EPIC-001)."""
+    ctx = _ctx_3rf()
+    epics = [
+        {
+            "id": "EPIC-001",
+            "title": "Gestión",
+            "source_refs": ["MOD-001", "PRO-001"],
+            "story_ids": [],
+        },
+        {
+            "id": "EPIC-002",
+            "title": "Aprobación",
+            "source_refs": ["MOD-002", "PRO-001"],
+            "story_ids": [],
+        },
+        {
+            "id": "EPIC-003",
+            "title": "RRHH",
+            "source_refs": ["MOD-003", "PRO-001"],
+            "story_ids": [],
+        },
+    ]
+    stories, _s, _t = await run_stories(
+        _MultiEpicStoriesLLM(), ctx, epics, ef_job_id="J"
+    )
+    assert {s["epic_ref"] for s in stories} == {"EPIC-001", "EPIC-002", "EPIC-003"}
+    assert all(len(e["story_ids"]) == 1 for e in epics)
+
+
+def test_resolve_epic_ref_no_colapsa_por_proceso_compartido():
+    """REGRESIÓN (#2): un proceso compartido NO debe mandar todo a la primera épica."""
+    epics = [
+        {"id": "EPIC-001", "title": "Gestión", "source_refs": ["MOD-001", "PRO-001"]},
+        {
+            "id": "EPIC-002",
+            "title": "Aprobación por jefe",
+            "source_refs": ["MOD-002", "PRO-001"],
+        },
+    ]
+    assert _resolve_epic_ref("PRO-001", epics) is None  # compartido -> sin colapso
+    assert _resolve_epic_ref("EPIC-002", epics) == "EPIC-002"  # id exacto
+    assert _resolve_epic_ref("MOD-002", epics) == "EPIC-002"  # módulo único
+    assert _resolve_epic_ref("Aprobación por jefe", epics) == "EPIC-002"  # título
+    assert _resolve_epic_ref(None, epics) is None

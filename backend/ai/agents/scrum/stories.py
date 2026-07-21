@@ -7,6 +7,7 @@ historias se resuelven de forma determinista a partir de los requisitos previos.
 """
 
 import json
+import unicodedata
 from typing import Optional
 
 from ai.agents.base.structured import LLMClient, run_structured_map
@@ -25,14 +26,23 @@ def _all_requirement_ids(ef_context: dict) -> set[str]:
     return ids
 
 
-def build_stories_user(rf: dict, ef_context: dict) -> str:
-    """Compone el mensaje con el requisito funcional y su contexto EF."""
+def build_stories_user(rf: dict, ef_context: dict, epics: list[dict]) -> str:
+    """Compone el mensaje con el requisito funcional, su contexto EF y las épicas
+    disponibles (para que el LLM asigne ``epic_hint`` a una épica real)."""
     payload = {
         "functional_requirement": {
             "id": rf.get("id"),
             "text": rf.get("text"),
             "priority": rf.get("priority"),
         },
+        "epics": [
+            {
+                "id": e.get("id"),
+                "title": e.get("title"),
+                "source_refs": e.get("source_refs", []),
+            }
+            for e in epics
+        ],
         "processes": [
             {"id": p.get("id"), "name": p.get("name"), "steps": p.get("steps")}
             for p in ef_context.get("processes", [])
@@ -50,18 +60,40 @@ def build_stories_user(rf: dict, ef_context: dict) -> str:
 
 
 def _resolve_epic_ref(epic_hint: Optional[str], epics: list[dict]) -> Optional[str]:
-    """Resuelve el ``epic_hint`` del LLM a un id de épica real (o None)."""
+    """Resuelve el ``epic_hint`` del LLM a un id de épica real (o None).
+
+    Prioridad para no colapsar todo en la primera épica cuando comparten una ref
+    (p. ej. el mismo ``PRO-001``): id exacto de épica > módulo (``MOD-…``, único
+    por épica) > título > proceso solo si identifica UNA épica. Con una sola
+    épica, todo cuelga de ella."""
     if not epics:
         return None
+    if len(epics) == 1:
+        return epics[0]["id"]
     if not epic_hint:
-        return epics[0]["id"] if len(epics) == 1 else None
+        return None
+    hint = epic_hint.strip()
+    hint_lower = hint.lower()
+
+    # 1) id exacto de épica.
     for ep in epics:
-        if epic_hint == ep["id"] or epic_hint in ep.get("source_refs", []):
+        if hint == ep["id"]:
             return ep["id"]
+    # 2) referencia de módulo (única por épica).
+    if hint_lower.startswith("mod-"):
+        for ep in epics:
+            if hint in ep.get("source_refs", []):
+                return ep["id"]
+    # 3) título de la épica contenido en el hint (o viceversa).
     for ep in epics:
-        if epic_hint.lower() in (ep.get("title") or "").lower():
+        title = (ep.get("title") or "").lower()
+        if title and (hint_lower in title or title in hint_lower):
             return ep["id"]
-    return epics[0]["id"] if len(epics) == 1 else None
+    # 4) cualquier source_ref (incluye procesos compartidos): solo si es única.
+    matches = [ep["id"] for ep in epics if hint in ep.get("source_refs", [])]
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 async def run_stories(
@@ -85,7 +117,7 @@ async def run_stories(
         llm,
         functional,
         build_system=lambda _rf: build_system("stories.md", glossary_ctx),
-        build_user=lambda rf: build_stories_user(rf, ef_context),
+        build_user=lambda rf: build_stories_user(rf, ef_context, epics),
         schema=StoriesExtract,
         ref_of=lambda rf: rf.get("id", "REQ-?"),
         stage="STORIES",
@@ -130,9 +162,78 @@ async def run_stories(
             stories.append(story)
             counter += 1
 
+    # Consolida historias redundantes de RF distintos (misma petición): fusiona
+    # por similitud y renumera; conserva refs a TODOS los RF de origen.
+    stories = _dedupe_stories(stories, ef_job_id)
     _resolve_dependencies(stories)
     _link_epics(stories, epics)
     return stories, skipped, tokens
+
+
+def _norm(text: str) -> str:
+    """Normaliza para comparar: sin acentos, minúsculas, espacios colapsados."""
+    nfkd = unicodedata.normalize("NFKD", text or "")
+    sin_acentos = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(sin_acentos.lower().split())
+
+
+def _goal_tokens(story: dict) -> set[str]:
+    return set(_norm(story.get("goal", "")).split())
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    union = a | b
+    return len(a & b) / len(union) if union else 0.0
+
+
+def _merge_story(dst: dict, src: dict) -> None:
+    """Fusiona ``src`` en ``dst``: une refs y dependencias, conserva confianza."""
+    for key in ("requirement_refs", "process_refs", "rule_refs"):
+        base = dst["source_refs"][key]
+        for r in src["source_refs"].get(key, []):
+            if r not in base:
+                base.append(r)
+    for r in src.get("_depends_on_requirements", []):
+        if r not in dst["_depends_on_requirements"]:
+            dst["_depends_on_requirements"].append(r)
+    sc = src.get("confidence")
+    if sc is not None:
+        dc = dst.get("confidence")
+        dst["confidence"] = sc if dc is None else max(dc, sc)
+
+
+def _dedupe_stories(
+    stories: list[dict], ef_job_id: str, threshold: float = 0.72
+) -> list[dict]:
+    """Fusiona historias casi duplicadas (mismo rol + objetivo muy similar).
+
+    Solo depende de tokens del ``goal`` (sin embeddings, v1): agrupa variantes de
+    la misma petición (p. ej. "ver saldo antes de enviar" repetida en varios RF),
+    uniendo sus refs de origen. Renumera los ids y recomputa tags/external_key.
+    """
+    kept: list[dict] = []
+    for st in stories:
+        role = _norm(st.get("role", ""))
+        toks = _goal_tokens(st)
+        match = None
+        for k in kept:
+            if k["_role"] == role and _jaccard(k["_toks"], toks) >= threshold:
+                match = k
+                break
+        if match is not None:
+            _merge_story(match["story"], st)
+        else:
+            kept.append({"_role": role, "_toks": toks, "story": st})
+
+    result: list[dict] = []
+    for i, k in enumerate(kept, start=1):
+        st = k["story"]
+        st["id"] = f"US-{i:03d}"
+        req_refs = st["source_refs"]["requirement_refs"]
+        st["tags"] = _tags(ef_job_id, req_refs)
+        st["external_key"] = f"{ef_job_id}:{st['id']}" if ef_job_id else None
+        result.append(st)
+    return result
 
 
 def _tags(ef_job_id: str, requirement_refs: list[str]) -> list[str]:

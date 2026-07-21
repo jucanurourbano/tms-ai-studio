@@ -69,6 +69,39 @@ class CritiqueLLM:
         )
 
 
+class SprintAwareLLM:
+    """Devuelve un riesgo que reporta CUÁNTOS sprints vio en el payload.
+
+    Sirve para verificar que CRITIQUE le pasa el plan de sprints real (antes se
+    le pasaba [] y reportaba 'sprints vacío')."""
+
+    async def complete_json(self, *, system, user):
+        payload = json.loads(user.split("\n", 1)[1])
+        n = len(payload.get("sprints", []))
+        return json.dumps(
+            {"risks": [{"description": f"Analicé {n} sprints.", "severity": "media"}]}
+        )
+
+
+async def test_critique_pasa_sprints_reales_al_llm():
+    """REGRESIÓN (#3): el pase de riesgos ve el plan final, no una lista vacía."""
+    sprints = [
+        {"id": "SPRINT-1", "total_points": 20},
+        {"id": "SPRINT-2", "total_points": 15},
+    ]
+    result, _ = await critique(
+        _stories(), [], _ef_context(), [], sprints=sprints, llm=SprintAwareLLM()
+    )
+    assert any("Analicé 2 sprints" in r["description"] for r in result["risks"])
+
+
+async def test_critique_sin_sprints_reporta_cero():
+    result, _ = await critique(
+        _stories(), [], _ef_context(), [], sprints=[], llm=SprintAwareLLM()
+    )
+    assert any("Analicé 0 sprints" in r["description"] for r in result["risks"])
+
+
 def test_cobertura_reporta_rf_no_cubiertos():
     cov = compute_coverage(_stories(), _ef_context())
     assert cov["requirements_total"] == 3

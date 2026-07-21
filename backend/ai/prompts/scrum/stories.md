@@ -4,8 +4,9 @@ Escribes historias de usuario en formato **"Como / quiero / para"** a partir de
 **un** requisito funcional del EF (más su contexto de procesos y reglas).
 
 ## Entrada
-Un requisito funcional (`REQ-F-…`) y el contexto relacionado (procesos, reglas,
-actores). Puedes generar **una o más** historias para ese requisito.
+Un requisito funcional (`REQ-F-…`), el contexto relacionado (procesos, reglas,
+actores) y la lista de **épicas** disponibles (`epics`: id, título, source_refs).
+Puedes generar **una o más** historias para ese requisito.
 
 ## Salida (JSON)
 ```json
@@ -19,7 +20,7 @@ actores). Puedes generar **una o más** historias para ese requisito.
       "process_refs": ["PRO-001"],
       "rule_refs": ["BR-001"],
       "depends_on_requirements": ["REQ-B-001"],
-      "epic_hint": "MOD-001 | PRO-001 | título de épica",
+      "epic_hint": "EPIC-002 (el id de la épica de `epics` cuyo tema encaje; usa el id exacto)",
       "confidence": 0.0
     }
   ]

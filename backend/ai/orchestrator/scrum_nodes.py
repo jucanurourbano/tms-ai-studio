@@ -143,6 +143,7 @@ async def node_critique(state: ScrumState, config: RunnableConfig) -> dict:
         state.get("epics") or [],
         state.get("ef_context") or {},
         state.get("unassigned_story_ids") or [],
+        sprints=state.get("sprints") or [],
         llm=critique_llm,
         authoritative_context=state.get("authoritative_context"),
     )
