@@ -12,6 +12,11 @@ import {
   Mono,
   OriginBadge,
 } from "@/components/ef/badges";
+import {
+  ArtifactIndex,
+  type IndexSection,
+} from "@/components/artifact/artifact-index";
+import { BackToTop } from "@/components/artifact/back-to-top";
 import { ValidationControls } from "@/components/ef/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -237,6 +242,34 @@ export function ResultView({ job }: { job: JobDetail }) {
   const canRefine = progress.answered >= 1;
   const ready = summary?.ready_for_next_stage ?? false;
 
+  const reqTotal =
+    a.requirements.business.length +
+    a.requirements.functional.length +
+    a.requirements.non_functional.length;
+  const analysisTotal =
+    (analysis.ambiguities?.length ?? 0) +
+    (analysis.missing_info?.length ?? 0) +
+    (analysis.inconsistencies?.length ?? 0) +
+    (analysis.observations?.length ?? 0);
+  const blockingTotal = a.questions_for_analyst.filter((q) => q.blocking).length;
+
+  const indexSections: IndexSection[] = [
+    { id: "sec-interpretation", label: "Interpretación" },
+    {
+      id: "sec-questions",
+      label: "Preguntas",
+      count: a.questions_for_analyst.length,
+      meta: `${blockingTotal} bloq.`,
+    },
+    { id: "sec-requirements", label: "Requisitos", count: reqTotal },
+    {
+      id: "sec-model",
+      label: "Modelo",
+      children: modelCounts.map(([label, n, id]) => ({ id, label, count: n })),
+    },
+    { id: "sec-analysis", label: "Análisis crítico", count: analysisTotal },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Barra superior de afinamiento */}
@@ -348,67 +381,10 @@ export function ResultView({ job }: { job: JobDetail }) {
 
       {/* Dos columnas: índice + contenido */}
       <div className="grid grid-cols-[13rem_1fr] gap-6 px-6 py-5">
-        {/* Índice pegajoso */}
-        <nav className="sticky top-24 self-start text-sm space-y-3">
-          <IndexLink href="#sec-interpretation" label="Interpretación" />
-          <div className="pl-2 text-xs text-muted-foreground space-y-0.5">
-            <div>
-              Alcance <Count n={si.scope_for_systems?.length ?? 0} />
-            </div>
-            <div>
-              Supuestos <Count n={assumptions.length} />
-            </div>
-          </div>
-          <IndexLink
-            href="#sec-questions"
-            label="Preguntas"
-            extra={
-              <span className="text-xs">
-                <Count n={a.questions_for_analyst.length} /> ·{" "}
-                {a.questions_for_analyst.filter((q) => q.blocking).length} bloq.
-              </span>
-            }
-          />
-          <IndexLink
-            href="#sec-requirements"
-            label="Requisitos"
-            extra={
-              <span className="text-xs">
-                <Count
-                  n={
-                    a.requirements.business.length +
-                    a.requirements.functional.length +
-                    a.requirements.non_functional.length
-                  }
-                />
-              </span>
-            }
-          />
-          <IndexLink href="#sec-model" label="Modelo" />
-          <div className="pl-2 text-xs text-muted-foreground grid grid-cols-2 gap-x-2 gap-y-0.5">
-            {modelCounts.map(([label, n]) => (
-              <div key={label}>
-                {label} <Count n={n} />
-              </div>
-            ))}
-          </div>
-          <IndexLink
-            href="#sec-analysis"
-            label="Análisis crítico"
-            extra={
-              <span className="text-xs">
-                <Count
-                  n={
-                    (analysis.ambiguities?.length ?? 0) +
-                    (analysis.missing_info?.length ?? 0) +
-                    (analysis.inconsistencies?.length ?? 0) +
-                    (analysis.observations?.length ?? 0)
-                  }
-                />
-              </span>
-            }
-          />
-        </nav>
+        {/* Índice pegajoso navegable (scrollspy + sub-grupo plegable) */}
+        <div className="sticky top-24 self-start">
+          <ArtifactIndex sections={indexSections} />
+        </div>
 
         {/* Contenido */}
         <div className="space-y-8 min-w-0">
@@ -814,6 +790,8 @@ export function ResultView({ job }: { job: JobDetail }) {
           </section>
         </div>
       </div>
+
+      <BackToTop />
     </div>
   );
 }
@@ -825,26 +803,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h2 className="mb-2 text-sm font-heading font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </h2>
-  );
-}
-
-function IndexLink({
-  href,
-  label,
-  extra,
-}: {
-  href: string;
-  label: string;
-  extra?: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      className="flex items-center justify-between font-medium hover:text-blue-600"
-    >
-      <span>{label}</span>
-      {extra}
-    </a>
   );
 }
 

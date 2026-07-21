@@ -11,6 +11,11 @@ import {
   JobStatusBadge,
   Mono,
 } from "@/components/ef/badges";
+import {
+  ArtifactIndex,
+  type IndexSection,
+} from "@/components/artifact/artifact-index";
+import { BackToTop } from "@/components/artifact/back-to-top";
 import { ScrumValidationControls } from "@/components/scrum/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,6 +227,29 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const cov = a.analysis.coverage;
   const canRefine = answered >= 1;
 
+  const blockingTotal = a.questions_for_po.filter((q) => q.blocking).length;
+  const indexSections: IndexSection[] = [
+    {
+      id: "sec-backlog",
+      label: "Backlog",
+      count: a.product_backlog.ordered_story_ids.length,
+    },
+    { id: "sec-sprints", label: "Sprints", count: a.sprints.length },
+    { id: "sec-stories", label: "Historias", count: a.stories.length },
+    { id: "sec-epics", label: "Épicas", count: a.epics.length },
+    {
+      id: "sec-questions",
+      label: "Preguntas al PO",
+      count: a.questions_for_po.length,
+      meta: `${blockingTotal} bloq.`,
+    },
+    {
+      id: "sec-analysis",
+      label: "Análisis",
+      count: a.analysis.risks.length + a.analysis.observations.length,
+    },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Barra superior de afinamiento + semáforo */}
@@ -345,23 +373,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
 
       {/* Dos columnas: índice + contenido */}
       <div className="grid grid-cols-[13rem_1fr] gap-6 px-6 py-5">
-        <nav className="sticky top-28 self-start text-sm space-y-2">
-          <IndexLink href="#sec-backlog" label="Backlog" extra={<Count n={a.product_backlog.ordered_story_ids.length} />} />
-          <IndexLink href="#sec-sprints" label="Sprints" extra={<Count n={a.sprints.length} />} />
-          <IndexLink href="#sec-stories" label="Historias" extra={<Count n={a.stories.length} />} />
-          <IndexLink href="#sec-epics" label="Épicas" extra={<Count n={a.epics.length} />} />
-          <IndexLink
-            href="#sec-questions"
-            label="Preguntas al PO"
-            extra={
-              <span className="text-xs">
-                <Count n={a.questions_for_po.length} /> ·{" "}
-                {a.questions_for_po.filter((q) => q.blocking).length} bloq.
-              </span>
-            }
-          />
-          <IndexLink href="#sec-analysis" label="Análisis" />
-        </nav>
+        <div className="sticky top-28 self-start">
+          <ArtifactIndex sections={indexSections} />
+        </div>
 
         <div className="space-y-8 min-w-0">
           {/* 1. Backlog */}
@@ -689,6 +703,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           </section>
         </div>
       </div>
+
+      <BackToTop />
     </div>
   );
 }
@@ -700,26 +716,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h2 className="mb-2 text-sm font-heading font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </h2>
-  );
-}
-
-function IndexLink({
-  href,
-  label,
-  extra,
-}: {
-  href: string;
-  label: string;
-  extra?: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      className="flex items-center justify-between font-medium hover:text-blue-600"
-    >
-      <span>{label}</span>
-      {extra}
-    </a>
   );
 }
 

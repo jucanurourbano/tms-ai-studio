@@ -34,7 +34,12 @@ export default function RootLayout({
       <body className="min-h-full">
         <div className="flex h-screen">
           <AppSidebar />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main
+            id="app-scroll"
+            className="relative flex-1 overflow-y-auto scroll-smooth"
+          >
+            {children}
+          </main>
         </div>
         <Toaster position="top-right" />
       </body>
