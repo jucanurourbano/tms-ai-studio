@@ -53,8 +53,49 @@ export function ArtifactIndex({
 
   const isOpen = (id: string, fallback: boolean) => openSubs[id] ?? fallback;
 
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    history.replaceState(null, "", `#${id}`);
+  };
+
   return (
-    <nav aria-label="Índice del artefacto" className="space-y-1 text-sm">
+    <>
+      {/* Móvil: selector de navegación (el índice lateral se oculta) */}
+      <div className="mb-4 md:hidden">
+        <label htmlFor="artifact-nav" className="sr-only">
+          Ir a la sección
+        </label>
+        <select
+          id="artifact-nav"
+          value={active ?? sections[0]?.id ?? ""}
+          onChange={(e) => jumpTo(e.target.value)}
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {sections.map((s) => (
+            <optgroup key={s.id} label={s.label}>
+              <option value={s.id}>
+                {s.label}
+                {s.count !== undefined ? ` (${s.count})` : ""}
+              </option>
+              {s.children?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {"  "}
+                  {c.label}
+                  {c.count !== undefined ? ` (${c.count})` : ""}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      {/* Escritorio: índice lateral navegable con scrollspy */}
+      <nav
+        aria-label="Índice del artefacto"
+        className="hidden space-y-1 text-sm md:block"
+      >
       {sections.map((section) => {
         const childActive = section.children?.some((c) => c.id === active);
         const parentActive = active === section.id || childActive;
@@ -142,6 +183,7 @@ export function ArtifactIndex({
           </div>
         );
       })}
-    </nav>
+      </nav>
+    </>
   );
 }

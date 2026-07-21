@@ -371,9 +371,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         </div>
       </div>
 
-      {/* Dos columnas: índice + contenido */}
-      <div className="grid grid-cols-[13rem_1fr] gap-6 px-6 py-5">
-        <div className="sticky top-28 self-start">
+      {/* Dos columnas: índice + contenido (una columna en móvil) */}
+      <div className="grid grid-cols-1 gap-6 px-4 py-5 md:grid-cols-[13rem_1fr] md:px-6">
+        <div className="md:sticky md:top-28 md:self-start">
           <ArtifactIndex sections={indexSections} />
         </div>
 

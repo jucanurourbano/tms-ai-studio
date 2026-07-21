@@ -379,10 +379,10 @@ export function ResultView({ job }: { job: JobDetail }) {
         <p className="mt-1 text-sm">{a.summary}</p>
       </div>
 
-      {/* Dos columnas: índice + contenido */}
-      <div className="grid grid-cols-[13rem_1fr] gap-6 px-6 py-5">
-        {/* Índice pegajoso navegable (scrollspy + sub-grupo plegable) */}
-        <div className="sticky top-24 self-start">
+      {/* Dos columnas: índice + contenido (una columna en móvil) */}
+      <div className="grid grid-cols-1 gap-6 px-4 py-5 md:grid-cols-[13rem_1fr] md:px-6">
+        {/* Índice navegable (scrollspy + sub-grupo plegable); select en móvil */}
+        <div className="md:sticky md:top-24 md:self-start">
           <ArtifactIndex sections={indexSections} />
         </div>
 

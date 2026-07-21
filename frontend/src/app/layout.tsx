@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppShell } from "@/components/shell/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
@@ -32,15 +32,7 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="flex h-screen">
-          <AppSidebar />
-          <main
-            id="app-scroll"
-            className="relative flex-1 overflow-y-auto scroll-smooth"
-          >
-            {children}
-          </main>
-        </div>
+        <AppShell>{children}</AppShell>
         <Toaster position="top-right" />
       </body>
     </html>

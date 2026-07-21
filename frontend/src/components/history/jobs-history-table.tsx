@@ -113,8 +113,8 @@ export function JobsHistoryTable({
         />
       </div>
 
-      <div className="overflow-hidden rounded-md border">
-        <Table>
+      <div className="overflow-x-auto rounded-md border">
+        <Table className="min-w-[42rem]">
           <TableHeader className="bg-muted/60">
             <TableRow className="hover:bg-transparent">
               <TableHead>Título</TableHead>

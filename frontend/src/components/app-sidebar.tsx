@@ -13,14 +13,17 @@ import { cn } from "@/lib/utils";
 interface AppSidebarProps {
   /** Cierra el drawer en móvil tras navegar (Bloque 4). */
   onNavigate?: () => void;
+  /** En el drawer móvil se muestra siempre expandida (sin toggle de colapso). */
+  forceExpanded?: boolean;
 }
 
-export function AppSidebar({ onNavigate }: AppSidebarProps) {
+export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = usePersistentState<boolean>(
+  const [collapsedPref, setCollapsed] = usePersistentState<boolean>(
     "sidebar:collapsed",
     false,
   );
+  const collapsed = forceExpanded ? false : collapsedPref;
   const [openGroups, setOpenGroups] = usePersistentState<Record<string, boolean>>(
     "sidebar:groups",
     defaultOpenGroups(),
@@ -81,8 +84,8 @@ export function AppSidebar({ onNavigate }: AppSidebarProps) {
         ))}
       </nav>
 
-      {/* Toggle de colapso total */}
-      <div className="border-t p-2">
+      {/* Toggle de colapso total (oculto en el drawer móvil) */}
+      <div className={cn("border-t p-2", forceExpanded && "hidden")}>
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
