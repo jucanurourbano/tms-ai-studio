@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -146,6 +147,15 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const [loading, setLoading] = useState(true);
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [expandedStories, setExpandedStories] = useState<Set<string>>(new Set());
+
+  const toggleStory = (id: string) =>
+    setExpandedStories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -584,27 +594,57 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                   )}
                 </div>
 
-                {/* Criterios de aceptación (Gherkin) */}
+                {/* Criterios de aceptación (Gherkin) — plegados por defecto */}
                 {s.acceptance_criteria.length > 0 ? (
-                  <div className="mt-2 space-y-1">
-                    {s.acceptance_criteria.map((c) => (
-                      <div key={c.id} className="rounded bg-muted/40 p-2 text-xs">
-                        <Mono>{c.id}</Mono>{" "}
-                        {c.format === "gherkin" ? (
-                          <span>
-                            <b>Dado</b> {c.given} <b>cuando</b> {c.when}{" "}
-                            <b>entonces</b> {c.then}
-                          </span>
-                        ) : (
-                          <span>{c.text}</span>
-                        )}{" "}
-                        {c.source_refs.map((r) => (
-                          <span key={r} className="ml-1">
-                            <RefLink refId={r} />
-                          </span>
-                        ))}
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleStory(s.id)}
+                      aria-expanded={expandedStories.has(s.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "h-3.5 w-3.5 transition-transform duration-200",
+                          expandedStories.has(s.id) && "rotate-90",
+                        )}
+                      />
+                      Criterios de aceptación ({s.acceptance_criteria.length})
+                    </button>
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows] duration-200 ease-in-out",
+                        expandedStories.has(s.id)
+                          ? "grid-rows-[1fr]"
+                          : "grid-rows-[0fr]",
+                      )}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="mt-2 space-y-1">
+                          {s.acceptance_criteria.map((c) => (
+                            <div
+                              key={c.id}
+                              className="rounded bg-muted/40 p-2 text-xs"
+                            >
+                              <Mono>{c.id}</Mono>{" "}
+                              {c.format === "gherkin" ? (
+                                <span>
+                                  <b>Dado</b> {c.given} <b>cuando</b> {c.when}{" "}
+                                  <b>entonces</b> {c.then}
+                                </span>
+                              ) : (
+                                <span>{c.text}</span>
+                              )}{" "}
+                              {c.source_refs.map((r) => (
+                                <span key={r} className="ml-1">
+                                  <RefLink refId={r} />
+                                </span>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-2 text-xs text-amber-600">
