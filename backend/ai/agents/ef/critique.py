@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
+from ai.agents.base.structured import loads_json
 from ai.knowledge import glossary_block
 
 from .prompts import build_system
@@ -82,23 +83,38 @@ def _iter_conf_items(consolidated: dict):
             yield item, label
 
 
+def _finding_dump(finding: CFinding, drop: tuple[str, ...]) -> dict:
+    """Serializa un hallazgo del LLM quitando claves no admitidas por su categoría
+    (los modelos del artefacto son estrictos; ver CritiqueExtract vs. Ambiguity)."""
+    data = finding.model_dump(exclude_none=True)
+    for key in drop:
+        data.pop(key, None)
+    return data
+
+
 def _with_ids(items: list[dict], prefix: str) -> list[dict]:
     for i, item in enumerate(items, start=1):
         item["id"] = f"{prefix}-{i:03d}"
     return items
 
 
-async def _llm_pass(llm, consolidated: dict, inferred: dict) -> CritiqueExtract:
-    """Pase LLM (mockeable). Ante fallo de schema, devuelve vacío."""
+async def _llm_pass(
+    llm, consolidated: dict, inferred: dict
+) -> tuple[CritiqueExtract, Optional[str]]:
+    """Pase LLM (mockeable). Devuelve ``(hallazgos, error)``.
+
+    Tolera *fences* markdown (``loads_json``). Si el parseo/validación falla, NO
+    lo silencia: devuelve el error para que ``critique`` deje una observación
+    (regla: los descartes nunca son silenciosos, CLAUDE.md §6)."""
     system = build_system("critique.md", glossary_block())
     user = "MODELO CONSOLIDADO:\n" + json.dumps(
         {"consolidated": consolidated, "inferred": inferred}, ensure_ascii=False
     )
     try:
         raw = await llm.complete_json(system=system, user=user)
-        return CritiqueExtract.model_validate(json.loads(raw))
-    except (json.JSONDecodeError, ValidationError):
-        return CritiqueExtract()
+        return CritiqueExtract.model_validate(loads_json(raw)), None
+    except (json.JSONDecodeError, ValidationError) as exc:
+        return CritiqueExtract(), str(exc)[:200]
 
 
 async def critique(
@@ -158,12 +174,32 @@ async def critique(
 
     # 4) Pase LLM opcional (ambigüedades/inconsistencias semánticas).
     if llm is not None:
-        extra = await _llm_pass(llm, consolidated, inferred)
-        ambiguities += [f.model_dump(exclude_none=True) for f in extra.ambiguities]
-        missing_info += [f.model_dump(exclude_none=True) for f in extra.missing_info]
-        inconsistencies += [
-            f.model_dump(exclude_none=True) for f in extra.inconsistencies
+        extra, error = await _llm_pass(llm, consolidated, inferred)
+        # Cada categoría del artefacto es estricta (extra="forbid"): se emiten SOLO
+        # los campos que su esquema admite. En particular ``conflicting_refs`` solo
+        # aplica a inconsistencias; si se filtrara vacío a una ambigüedad/faltante,
+        # el assembler la descartaría (extra_forbidden).
+        ambiguities += [
+            _finding_dump(f, ("conflicting_refs", "expected_where"))
+            for f in extra.ambiguities
         ]
+        missing_info += [
+            _finding_dump(f, ("conflicting_refs",)) for f in extra.missing_info
+        ]
+        inconsistencies += [
+            _finding_dump(f, ("expected_where",)) for f in extra.inconsistencies
+        ]
+        if error is not None:
+            # El fallo del pase LLM NO es silencioso: queda como observación.
+            observations.append(
+                {
+                    "description": (
+                        "El pase semántico de CRITIQUE no pudo interpretarse "
+                        f"(sin hallazgos LLM): {error}"
+                    ),
+                    "reason": "Respuesta del modelo inválida en CRITIQUE.",
+                }
+            )
 
     return {
         "ambiguities": _with_ids(ambiguities, "AMB"),

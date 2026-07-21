@@ -10,7 +10,7 @@ from ai.orchestrator.checkpointer import build_memory_checkpointer
 from app.config.settings import settings
 from app.models.ef import EFSourceDocType, JobStatus
 from app.repositories.ef_repository import EFRepository
-from tests.mocks import BlockContentChat, CritiqueLLM, DimAwareLLM
+from tests.mocks import BlockContentChat, CritiqueLLM, DimAwareLLM, RichCritiqueLLM
 
 TEXTO = (
     "# Proceso de Siniestros\n\n"
@@ -110,7 +110,7 @@ async def test_pipeline_con_adaptador_real_extrae_contenido(
             "thread_id": job.id,
             # Adaptador REAL envolviendo los mocks en la forma de bloques real.
             "llm": ClaudeLLMClient(client=BlockContentChat(DimAwareLLM())),
-            "critique_llm": ClaudeLLMClient(client=BlockContentChat(CritiqueLLM())),
+            "critique_llm": ClaudeLLMClient(client=BlockContentChat(RichCritiqueLLM())),
             "persist": persist,
         }
     }
@@ -143,5 +143,15 @@ async def test_pipeline_con_adaptador_real_extrae_contenido(
         "no se identificó" not in artifact.systems_interpretation.what_process_requests
     )
     assert artifact.systems_interpretation.scope_for_systems
-    # #3 al menos una pregunta cuando el pase de crítica aporta un hallazgo.
+    # #3 CRITIQUE poblado (ambigüedades + faltantes) y preguntas derivadas.
+    assert artifact.analysis.ambiguities
+    assert artifact.analysis.missing_info
     assert artifact.questions_for_analyst
+    # El faltante (jefe no responde) se volvió una pregunta de negocio bloqueante.
+    plazo = [
+        q
+        for q in artifact.questions_for_analyst
+        if "no responde" in q.question or "escalamiento" in q.question
+    ]
+    assert plazo and plazo[0].blocking is True
+    assert plazo[0].audience.value == "negocio"

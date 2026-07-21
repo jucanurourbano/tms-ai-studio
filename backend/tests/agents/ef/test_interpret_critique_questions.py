@@ -117,6 +117,42 @@ def test_find_orphan_refs():
     assert any(o["ref"] == "MOD-999" for o in orphans)
 
 
+async def test_critique_llm_tolera_fences_markdown():
+    """El pase de crítica no debe perder hallazgos si el modelo envuelve el JSON
+    en ```json ... ``` (antes: json.loads directo -> vacío silencioso)."""
+
+    class FencedLLM:
+        async def complete_json(self, *, system, user):
+            return (
+                "```json\n"
+                '{"ambiguities": [{"description": "Días hábiles o calendario."}],'
+                ' "missing_info": [], "inconsistencies": []}\n'
+                "```"
+            )
+
+    result = await critique(_consolidado(), {"entities": []}, llm=FencedLLM())
+    assert any("hábiles" in a["description"] for a in result["ambiguities"])
+    # Sin observación de error: el parseo tolerante tuvo éxito.
+    assert not any(
+        "no pudo interpretarse" in o["description"] for o in result["observations"]
+    )
+
+
+async def test_critique_llm_fallo_no_es_silencioso():
+    """REGRESIÓN: si el pase LLM devuelve algo inválido, NO se traga en silencio;
+    deja una observación (regla CLAUDE.md §6)."""
+
+    class BrokenLLM:
+        async def complete_json(self, *, system, user):
+            return "esto no es json ni con reparación"
+
+    result = await critique(_consolidado(), {"entities": []}, llm=BrokenLLM())
+    # El pase LLM no aportó nada, pero el fallo quedó como observación (no silencioso).
+    assert any(
+        "no pudo interpretarse" in o["description"] for o in result["observations"]
+    )
+
+
 async def test_critique_llm_missing_info_genera_pregunta():
     """REGRESIÓN (#3): con el pase LLM cableado, los vacíos del texto (p. ej. sin
     plazo de respuesta) se vuelven preguntas al analista. Sin critique_llm el

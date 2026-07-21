@@ -216,6 +216,45 @@ class CritiqueLLM:
         )
 
 
+class RichCritiqueLLM:
+    """Pase de crítica con hallazgos en las TRES categorías (analista escéptico).
+
+    Reproduce los vacíos típicos del dominio vacaciones: sin plazo/escalamiento,
+    definiciones ambiguas y contenidos sin detallar. Sirve al test de humo para
+    verificar que QUESTION_GEN los convierte en preguntas."""
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        return json.dumps(
+            {
+                "ambiguities": [
+                    {
+                        "description": (
+                            "No se especifica si los 15 días son hábiles o "
+                            "calendario."
+                        ),
+                        "source_ref": "BR-001",
+                    }
+                ],
+                "missing_info": [
+                    {
+                        "description": (
+                            "No se define qué ocurre si el jefe no responde "
+                            "(plazo/escalamiento)."
+                        ),
+                        "expected_where": "Flujo de aprobación.",
+                    }
+                ],
+                "inconsistencies": [
+                    {
+                        "description": "El reporte exportable no detalla su contenido.",
+                        "conflicting_refs": ["PRO-001"],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )
+
+
 def _payload_from_user(user: str) -> dict:
     """Extrae el JSON del mensaje de usuario (formato ``ENCABEZADO:\\n<json>``)."""
     _, _, body = user.partition("\n")
