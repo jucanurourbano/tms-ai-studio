@@ -1,4 +1,9 @@
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Audience, JobStatus, Origin } from "@/lib/types/ef";
 import { cn } from "@/lib/utils";
 
@@ -14,20 +19,30 @@ export function Mono({
 }
 
 export function OriginBadge({ origin }: { origin?: Origin | null }) {
-  if (origin === "derived") {
-    return (
-      <Badge
-        variant="outline"
-        className="border-sky-300 bg-sky-50 text-sky-700"
-      >
-        derivado
-      </Badge>
-    );
-  }
+  const derived = origin === "derived";
   return (
-    <Badge variant="outline" className="text-muted-foreground">
-      declarado
-    </Badge>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Badge
+            variant="outline"
+            className={cn(
+              "cursor-help",
+              derived
+                ? "border-sky-300 bg-sky-50 text-sky-700"
+                : "text-muted-foreground",
+            )}
+          >
+            {derived ? "derivado" : "declarado"}
+          </Badge>
+        }
+      />
+      <TooltipContent>
+        {derived
+          ? "Derivado: inferido por el agente a partir de evidencia implícita."
+          : "Declarado: afirmado explícitamente en el documento de origen."}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -43,9 +58,19 @@ export function ConfidenceBadge({ value }: { value?: number | null }) {
         ? "border-amber-300 bg-amber-50 text-amber-700"
         : "border-red-300 bg-red-50 text-red-700";
   return (
-    <Badge variant="outline" className={cn("font-mono", cls)}>
-      {pct}%
-    </Badge>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Badge variant="outline" className={cn("cursor-help font-mono", cls)}>
+            {pct}%
+          </Badge>
+        }
+      />
+      <TooltipContent>
+        Confianza del agente en este ítem ({pct}%). Por debajo de 80% conviene
+        revisarlo.
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

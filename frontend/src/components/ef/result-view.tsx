@@ -1,5 +1,6 @@
 "use client";
 
+import { Kanban } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -16,10 +17,11 @@ import {
   ArtifactIndex,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
 import { BackToTop } from "@/components/artifact/back-to-top";
 import { ValidationControls } from "@/components/ef/validation-controls";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -153,12 +155,38 @@ export function ResultView({ job }: { job: JobDetail }) {
     loadAll();
   }, [loadAll]);
 
-  const reloadSummary = useCallback(() => {
-    efApi
-      .getValidationSummary(job.job_id)
-      .then(setSummary)
-      .catch(() => {});
+  const reloadSummary = useCallback(async (): Promise<ValidationSummary | null> => {
+    try {
+      const s = await efApi.getValidationSummary(job.job_id);
+      setSummary(s);
+      return s;
+    } catch {
+      return null;
+    }
   }, [job.job_id]);
+
+  const scrollToRef = useCallback((id: string) => {
+    const el = document.getElementById(`ref-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ref-highlight");
+    window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
+  }, []);
+
+  // Al responder una pregunta bloqueante, salta a la siguiente pendiente.
+  const handleQuestionAnswered = useCallback(
+    async (answeredId: string) => {
+      const s = await reloadSummary();
+      if (!s || !artifact) return;
+      const statusIn = (id: string) =>
+        s.validations.find((v) => v.target_id === id)?.status ?? "pendiente";
+      const next = artifact.questions_for_analyst.find(
+        (q) => q.blocking && q.id !== answeredId && statusIn(q.id) === "pendiente",
+      );
+      if (next) scrollToRef(next.id);
+    },
+    [reloadSummary, artifact, scrollToRef],
+  );
 
   const statusOf = useCallback(
     (id: string): QuestionStatus => {
@@ -209,7 +237,7 @@ export function ResultView({ job }: { job: JobDetail }) {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Cargando artefacto…</div>;
+    return <ArtifactSkeleton />;
   }
   if (error || !artifact) {
     return (
@@ -252,6 +280,10 @@ export function ResultView({ job }: { job: JobDetail }) {
     (analysis.inconsistencies?.length ?? 0) +
     (analysis.observations?.length ?? 0);
   const blockingTotal = a.questions_for_analyst.filter((q) => q.blocking).length;
+  const blockingRemaining = a.questions_for_analyst.filter(
+    (q) => q.blocking && statusOf(q.id) === "pendiente",
+  ).length;
+  const blockingDone = blockingTotal > 0 && blockingRemaining === 0;
 
   const indexSections: IndexSection[] = [
     { id: "sec-interpretation", label: "Interpretación" },
@@ -388,6 +420,53 @@ export function ResultView({ job }: { job: JobDetail }) {
 
         {/* Contenido */}
         <div className="space-y-8 min-w-0">
+          {/* Banner de éxito al resolver todas las bloqueantes */}
+          {blockingDone && (
+            <div
+              className={cn(
+                "rounded-lg border p-4",
+                ready
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-amber-300 bg-amber-50",
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white",
+                    ready ? "bg-emerald-500" : "bg-amber-500",
+                  )}
+                >
+                  ✓
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading text-sm font-semibold">
+                    {ready
+                      ? "EF lista para planificar"
+                      : "Sin preguntas bloqueantes pendientes"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {ready
+                      ? "El semáforo está en verde. Genera el plan Scrum a partir de esta EF."
+                      : "Faltan otras condiciones del semáforo (cobertura o requisitos)."}
+                  </p>
+                </div>
+                {ready && (
+                  <Link
+                    href="/agents/scrum/new"
+                    className={buttonVariants({
+                      size: "sm",
+                      className: "gap-1.5",
+                    })}
+                  >
+                    <Kanban className="h-3.5 w-3.5" />
+                    Generar plan Scrum
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 1. Interpretación para Sistemas */}
           <section id="sec-interpretation" className="scroll-mt-24">
             <SectionTitle>1. Interpretación para Sistemas</SectionTitle>
@@ -548,7 +627,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                       targetId={q.id}
                       status={statusOf(q.id)}
                       respuesta={respuestaOf(q.id)}
-                      onChanged={reloadSummary}
+                      onChanged={() => void handleQuestionAnswered(q.id)}
                     />
                   </div>
                 ))}
@@ -790,6 +869,15 @@ export function ResultView({ job }: { job: JobDetail }) {
           </section>
         </div>
       </div>
+
+      {/* Contador flotante de bloqueantes restantes */}
+      {blockingRemaining > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur">
+          <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
+          bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
+          {blockingRemaining !== 1 ? "s" : ""}
+        </div>
+      )}
 
       <BackToTop />
     </div>

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { JobStatusBadge, Mono } from "@/components/ef/badges";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -126,11 +127,26 @@ export function JobsHistoryTable({
           </TableHeader>
           <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-sm text-muted-foreground">
-                  Cargando…
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                  <TableCell>
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="mt-1 h-3 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-20" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-10" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="ml-auto h-3 w-16" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-sm text-muted-foreground">

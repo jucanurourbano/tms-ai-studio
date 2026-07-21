@@ -15,10 +15,16 @@ import {
   ArtifactIndex,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
 import { BackToTop } from "@/components/artifact/back-to-top";
 import { ScrumValidationControls } from "@/components/scrum/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -79,12 +85,29 @@ const MOSCOW_STYLE: Record<MoscowPriority, string> = {
   wont: "border-slate-300 bg-slate-50 text-slate-500",
 };
 
+const MOSCOW_TIP: Record<MoscowPriority, string> = {
+  must: "Must — imprescindible para el MVP.",
+  should: "Should — importante, pero no bloqueante.",
+  could: "Could — deseable si hay capacidad.",
+  wont: "Won't — fuera de alcance por ahora.",
+};
+
 function MoscowBadge({ priority }: { priority?: MoscowPriority | null }) {
   if (!priority) return <span className="text-xs text-muted-foreground">—</span>;
   return (
-    <Badge variant="outline" className={MOSCOW_STYLE[priority]}>
-      {priority}
-    </Badge>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Badge
+            variant="outline"
+            className={cn("cursor-help", MOSCOW_STYLE[priority])}
+          >
+            {priority}
+          </Badge>
+        }
+      />
+      <TooltipContent>{MOSCOW_TIP[priority]}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -146,12 +169,37 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
     loadAll();
   }, [loadAll]);
 
-  const reloadSummary = useCallback(() => {
-    scrumApi
-      .getValidationSummary(job.job_id)
-      .then(setSummary)
-      .catch(() => {});
+  const reloadSummary = useCallback(async (): Promise<ScrumValidationSummary | null> => {
+    try {
+      const s = await scrumApi.getValidationSummary(job.job_id);
+      setSummary(s);
+      return s;
+    } catch {
+      return null;
+    }
   }, [job.job_id]);
+
+  const scrollToRef = useCallback((id: string) => {
+    const el = document.getElementById(`ref-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ref-highlight");
+    window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
+  }, []);
+
+  const handlePoAnswered = useCallback(
+    async (answeredId: string) => {
+      const s = await reloadSummary();
+      if (!s || !artifact) return;
+      const statusIn = (id: string) =>
+        s.validations.find((v) => v.target_id === id)?.status ?? "pendiente";
+      const next = artifact.questions_for_po.find(
+        (q) => q.blocking && q.id !== answeredId && statusIn(q.id) === "pendiente",
+      );
+      if (next) scrollToRef(next.id);
+    },
+    [reloadSummary, artifact, scrollToRef],
+  );
 
   const statusOf = useCallback(
     (id: string): QuestionStatus =>
@@ -205,9 +253,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   }
 
   if (loading) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">Cargando plan…</div>
-    );
+    return <ArtifactSkeleton />;
   }
   if (error || !artifact) {
     return (
@@ -228,6 +274,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const canRefine = answered >= 1;
 
   const blockingTotal = a.questions_for_po.filter((q) => q.blocking).length;
+  const blockingRemaining = a.questions_for_po.filter(
+    (q) => q.blocking && statusOf(q.id) === "pendiente",
+  ).length;
+  const blockingDone = blockingTotal > 0 && blockingRemaining === 0;
   const indexSections: IndexSection[] = [
     {
       id: "sec-backlog",
@@ -378,6 +428,41 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         </div>
 
         <div className="space-y-8 min-w-0">
+          {/* Banner de éxito al resolver todas las bloqueantes del PO */}
+          {blockingDone && (
+            <div
+              className={cn(
+                "rounded-lg border p-4",
+                ready
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-amber-300 bg-amber-50",
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white",
+                    ready ? "bg-emerald-500" : "bg-amber-500",
+                  )}
+                >
+                  ✓
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading text-sm font-semibold">
+                    {ready
+                      ? "Plan listo para el Agente Arquitectura"
+                      : "Sin preguntas bloqueantes del PO pendientes"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {ready
+                      ? "El semáforo compuesto está en verde."
+                      : "Aún faltan otras condiciones del semáforo (cobertura, estimaciones o asignación)."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 1. Backlog */}
           <section id="sec-backlog" className="scroll-mt-28">
             <SectionTitle>1. Backlog de producto ({a.product_backlog.method})</SectionTitle>
@@ -624,7 +709,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                       targetId={q.id}
                       status={statusOf(q.id)}
                       respuesta={respuestaOf(q.id)}
-                      onChanged={reloadSummary}
+                      onChanged={() => void handlePoAnswered(q.id)}
                     />
                   </div>
                 ))}
@@ -703,6 +788,15 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           </section>
         </div>
       </div>
+
+      {/* Contador flotante de bloqueantes restantes */}
+      {blockingRemaining > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur">
+          <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
+          bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
+          {blockingRemaining !== 1 ? "s" : ""}
+        </div>
+      )}
 
       <BackToTop />
     </div>
