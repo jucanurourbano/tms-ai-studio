@@ -115,12 +115,14 @@ async def run_extract(
         system = build_system(dimension.prompt_file, glossary_ctx)
         user = build_user(chunk.get("context", ""), chunk.get("text", ""))
         async with semaphore:
-            validated = await extract_dimension(
+            # Se llama a ``complete_structured`` en vez de ``extract_dimension``
+            # para conservar el ERROR real y reportarlo en la cuarentena (antes
+            # se descartaba, dejando "schema inválido" sin detalle en la BD).
+            validated, error = await complete_structured(
                 llm,
-                dimension,
-                chunk.get("context", ""),
-                chunk.get("text", ""),
-                glossary_ctx,
+                system=system,
+                user=user,
+                schema=dimension.schema,
                 max_repairs=max_repairs,
             )
         # Estimación de tokens (real vía usage no disponible con mocks; ver CLAUDE.md).
@@ -130,7 +132,7 @@ async def run_extract(
                 {
                     "ref": f"{chunk['chunk_id']}:{dimension.name}",
                     "stage": "EXTRACT",
-                    "reason": "schema inválido tras reparación",
+                    "reason": f"schema inválido tras reparación: {error[:200]}",
                 }
             )
         else:

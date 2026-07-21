@@ -162,6 +162,38 @@ class DimAwareLLM:
         return "{}"
 
 
+class _FakeAIMessage:
+    """Emula ``AIMessage`` de LangChain: solo expone ``content``."""
+
+    def __init__(self, content) -> None:
+        self.content = content
+
+
+class BlockContentChat:
+    """Fake ``ChatAnthropic`` que reproduce la forma REAL de la respuesta.
+
+    En ``langchain-anthropic`` 1.x + ``claude-sonnet-5`` la respuesta llega como
+    una **lista de bloques** (``thinking`` + ``text``), no como string. Envuelve
+    la salida JSON de cualquier mock (``DimAwareLLM``, ``CritiqueLLM``, ...) en
+    esa forma para ejercitar el adaptador real ``ClaudeLLMClient`` de punta a
+    punta: es exactamente el escenario que rompía la extracción.
+    """
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    async def ainvoke(self, messages):
+        system = next((c for r, c in messages if r == "system"), "")
+        user = next((c for r, c in messages if r == "user"), "")
+        raw = await self._inner.complete_json(system=system, user=user)
+        return _FakeAIMessage(
+            [
+                {"type": "thinking", "thinking": "Razonando sobre el fragmento..."},
+                {"type": "text", "text": raw},
+            ]
+        )
+
+
 class CritiqueLLM:
     """Mock del pase LLM de crítica: planta una contradicción semántica."""
 

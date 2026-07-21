@@ -12,7 +12,8 @@ Extrae el patrón embebido en ``ai/agents/ef/extract.py`` a una base compartida:
 
 import asyncio
 import json
-from typing import Awaitable, Callable, Optional, Protocol, TypeVar
+import re
+from typing import Any, Awaitable, Callable, Optional, Protocol, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -23,6 +24,67 @@ class LLMClient(Protocol):
     """Cliente LLM: recibe system+user y devuelve texto JSON crudo."""
 
     async def complete_json(self, *, system: str, user: str) -> str: ...
+
+
+def message_text(content: Any) -> str:
+    """Extrae el texto de un ``AIMessage.content`` de LangChain.
+
+    En ``langchain-anthropic`` 1.x el contenido de la respuesta es un **string**
+    solo cuando hay un único bloque de texto sin citaciones; en cualquier otro
+    caso (p. ej. respuesta con bloque ``thinking`` + bloque ``text``, que es lo
+    que devuelve ``claude-sonnet-5`` en cada llamada) ``content`` es una **lista
+    de bloques**. Aquí concatenamos el texto de los bloques ``text`` e ignoramos
+    ``thinking``/``tool_use``/firmas.
+
+    Hacer ``str(content)`` sobre esa lista producía un *repr* de Python con
+    comillas simples que ``json.loads`` rechazaba: era la causa de que TODAS las
+    dimensiones cayeran en cuarentena (schema inválido) consumiendo tokens.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return str(content)
+
+
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+
+
+def loads_json(raw: str) -> Any:
+    """``json.loads`` tolerante a *fences* markdown o prosa alrededor del JSON.
+
+    El prompt pide "solo JSON, sin ```", pero los modelos a veces desobedecen.
+    Intenta el parseo directo; si falla, extrae el contenido de un bloque
+    ```json ... ``` y, como último recurso, la subcadena entre el primer ``{``
+    (o ``[``) y su cierre. Propaga ``JSONDecodeError`` si nada es válido.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    fence = _FENCE_RE.search(raw)
+    if fence:
+        return json.loads(fence.group(1))
+
+    text = raw.strip()
+    opens = [i for i in (text.find("{"), text.find("[")) if i != -1]
+    if opens:
+        start = min(opens)
+        close = text.rfind("}") if text[start] == "{" else text.rfind("]")
+        if close > start:
+            return json.loads(text[start : close + 1])
+
+    # Nada válido: re-lanza el error del parseo directo para el loop de reparación.
+    return json.loads(raw)
 
 
 def repair_hint(error: str) -> str:
@@ -52,7 +114,7 @@ async def complete_structured(
         prompt = user if attempt == 0 else user + repair_hint(last_error)
         raw = await llm.complete_json(system=system, user=prompt)
         try:
-            return schema.model_validate(json.loads(raw)), ""
+            return schema.model_validate(loads_json(raw)), ""
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = str(exc)
     return None, last_error
@@ -130,7 +192,9 @@ class ClaudeLLMClient:
 
         async def _call() -> str:
             msg = await client.ainvoke([("system", system), ("user", user)])
-            return msg.content if isinstance(msg.content, str) else str(msg.content)
+            # ``content`` puede ser string o lista de bloques (thinking+text) en
+            # langchain-anthropic 1.x: extraer SIEMPRE el texto, nunca str(lista).
+            return message_text(msg.content)
 
         return await call_with_retry(_call)
 
