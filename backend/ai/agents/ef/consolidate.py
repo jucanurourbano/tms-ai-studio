@@ -65,8 +65,55 @@ def _collect(raw: list[dict], dimension: str, subkey: str) -> list[dict]:
     return acc
 
 
+# Palabras vacías que se ignoran al enlazar field_ref (texto libre) con FLD-IDs.
+_STOPWORDS = {"de", "del", "la", "el", "los", "las", "y", "o", "por", "en", "a"}
+
+
+def _ref_tokens(text: str) -> set[str]:
+    """Tokens significativos de un texto (sin acentos, sin stopwords, sin '/_')."""
+    norm = _norm(text).replace("/", " ").replace("_", " ")
+    return {t for t in norm.split() if t and t not in _STOPWORDS}
+
+
+def _link_field_refs(validations: list[dict], fields: list[dict]) -> None:
+    """Remapea ``validation.field_ref`` (texto libre del LLM) al FLD-ID que mejor
+    coincide, por solapamiento de tokens del NOMBRE del campo.
+
+    El LLM no conoce los FLD-IDs (se asignan aquí, tras extraer), así que enlaza
+    "saldo de días disponibles" -> ``FLD-004`` (name ``saldo_dias_disponibles``).
+    Evita 8 referencias huérfanas espurias. Si nada coincide con suficiente
+    cobertura, deja el ref intacto (se reportará como huérfano legítimo)."""
+    field_ids = {f["id"] for f in fields}
+    field_tokens = [(f["id"], _ref_tokens(f.get("name", ""))) for f in fields]
+
+    for val in validations:
+        ref = val.get("field_ref")
+        if not ref or ref in field_ids:  # vacío o ya es un FLD-ID
+            continue
+        ref_tokens = _ref_tokens(ref)
+        if not ref_tokens:
+            continue
+        best_id, best_score = None, 0.0
+        for fid, ftoks in field_tokens:
+            if not ftoks:
+                continue
+            # cobertura del NOMBRE del campo dentro del ref (nombre ⊆ ref).
+            score = len(ftoks & ref_tokens) / len(ftoks)
+            if score > best_score:
+                best_id, best_score = fid, score
+        if best_id and best_score >= 0.6:
+            val["field_ref"] = best_id
+
+
 def consolidate(raw_extractions: list[dict]) -> dict[str, Any]:
     """Consolida las extracciones crudas en un modelo funcional deduplicado."""
+    fields = _merge(_collect(raw_extractions, "fields", "fields"), "name", "FLD")
+    validations = _merge(
+        _collect(raw_extractions, "rules_validations", "validations"), "rule", "VAL"
+    )
+    # Enlaza el field_ref (texto libre) de cada validación al FLD-ID real.
+    _link_field_refs(validations, fields)
+
     return {
         "requirements": {
             "business": _merge(
@@ -98,10 +145,6 @@ def consolidate(raw_extractions: list[dict]) -> dict[str, Any]:
             "statement",
             "BR",
         ),
-        "validations": _merge(
-            _collect(raw_extractions, "rules_validations", "validations"),
-            "rule",
-            "VAL",
-        ),
-        "fields": _merge(_collect(raw_extractions, "fields", "fields"), "name", "FLD"),
+        "validations": validations,
+        "fields": fields,
     }

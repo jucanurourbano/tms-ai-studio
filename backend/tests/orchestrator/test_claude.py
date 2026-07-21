@@ -31,3 +31,13 @@ def test_get_claude_client_construye():
     client = get_claude_client()
     model = getattr(client, "model", None) or getattr(client, "model_name", None)
     assert model == "claude-sonnet-5"
+
+
+def test_get_claude_client_fija_max_tokens():
+    """El cliente fija max_tokens explícito (no el default 4096) para que la
+    dimensión más grande de EXTRACT no se trunque a mitad del JSON."""
+    from app.config.settings import settings
+
+    client = get_claude_client()
+    assert client.max_tokens == settings.CLAUDE_MAX_TOKENS
+    assert settings.CLAUDE_MAX_TOKENS >= 8192

@@ -63,6 +63,10 @@ async def run_ef_pipeline(
         build_graph=build_ef_graph,
         llm=ClaudeLLMClient(),
         initial_state=state,
+        # CRITIQUE necesita su propio cliente para el pase semántico (ambigüedades
+        # / faltantes). Sin esto QUESTION_GEN se queda en 0 preguntas aunque el
+        # texto tenga vacíos claros (mismo patrón que el Agente Scrum).
+        extra_config={"critique_llm": ClaudeLLMClient()},
     )
 
 
@@ -145,26 +149,46 @@ class EFAnalysisService:
         return val
 
     async def validation_summary(self, job_id: str) -> dict:
-        """Resumen + ready_for_next_stage (sin blocking pendientes)."""
+        """Resumen + ready_for_next_stage (semáforo compuesto, condición Y).
+
+        Verde solo si se cumplen las TRES: sin preguntas blocking pendientes **y**
+        contenido mínimo de RF funcionales **y** cobertura de extracción suficiente.
+        Antes bastaba con no tener blocking, y el semáforo salía verde con 0 RF.
+        """
         summary = await self.repo.validation_summary(job_id)
 
         artifact = await self.get_artifact(job_id)
         blocking_ids = []
+        functional_count = 0
+        coverage = 0.0
         if artifact:
             blocking_ids = [
                 q["id"]
                 for q in artifact.get("questions_for_analyst", [])
                 if q.get("blocking")
             ]
+            functional_count = len(
+                (artifact.get("requirements") or {}).get("functional") or []
+            )
+            coverage = (artifact.get("metrics") or {}).get("coverage", 0.0)
         resolved = {
             v["target_id"]
             for v in summary["validations"]
             if v["status"] in ("confirmado", "corregido")
         }
         pending = [qid for qid in blocking_ids if qid not in resolved]
+
+        checks = {
+            "no_blocking_pending": len(pending) == 0,
+            "min_functional": functional_count >= settings.EF_GATE_MIN_FUNCTIONAL,
+            "coverage": coverage >= settings.EF_GATE_MIN_COVERAGE,
+        }
         summary["blocking_total"] = len(blocking_ids)
         summary["blocking_pending"] = pending
-        summary["ready_for_next_stage"] = len(pending) == 0
+        summary["functional_count"] = functional_count
+        summary["coverage"] = coverage
+        summary["gate_checks"] = checks
+        summary["ready_for_next_stage"] = all(checks.values())
         return summary
 
     async def create_refine(

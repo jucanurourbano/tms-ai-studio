@@ -31,6 +31,9 @@ def get_claude_client(**overrides):
     params: dict = {
         "model": settings.CLAUDE_MODEL,
         "timeout": settings.CLAUDE_TIMEOUT,
+        # Explícito: evita que el default (4096, compartido con los tokens de
+        # razonamiento) trunque la dimensión más grande de EXTRACT.
+        "max_tokens": settings.CLAUDE_MAX_TOKENS,
         "max_retries": 0,  # el backoff lo maneja tenacity (respeta retry-after)
         "api_key": settings.ANTHROPIC_API_KEY or "placeholder-no-usada-en-dev",
     }

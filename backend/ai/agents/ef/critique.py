@@ -37,13 +37,17 @@ def find_orphan_refs(consolidated: dict, inferred: dict) -> list[dict]:
     """Detecta referencias huérfanas (determinístico)."""
     orphans: list[dict] = []
 
-    field_names = {f.get("name") for f in consolidated.get("fields", [])}
+    # Un field_ref válido puede ser el NOMBRE o el FLD-ID del campo (CONSOLIDATE
+    # enlaza el texto libre del LLM al FLD-ID; ver consolidate._link_field_refs).
+    field_refs = {f.get("name") for f in consolidated.get("fields", [])} | {
+        f.get("id") for f in consolidated.get("fields", [])
+    }
     module_names = {m.get("name") for m in consolidated.get("modules", [])}
     entity_ids = {e.get("id") for e in inferred.get("entities", [])}
 
     for val in consolidated.get("validations", []):
         ref = val.get("field_ref")
-        if ref and ref not in field_names:
+        if ref and ref not in field_refs:
             orphans.append(
                 {"ref": ref, "where": f"validation {val.get('id')}.field_ref"}
             )

@@ -37,25 +37,41 @@ def interpret(
     reqs = consolidated.get("requirements", {})
     business = reqs.get("business", [])
     functional = reqs.get("functional", [])
+    processes = consolidated.get("processes", [])
 
-    # what_process_requests: resumen o unión de requisitos de negocio.
+    # what_process_requests: resumen, o unión de requisitos de negocio, o —si no
+    # hay requisitos— los procesos identificados (nunca queda vacío si hay señal).
     if summary:
         what = summary
     elif business:
         what = "Procesos requiere: " + " ".join(r["text"] for r in business[:3])
+    elif processes:
+        what = "Procesos describe: " + " ".join(p["name"] for p in processes[:3])
     else:
         what = "(no se identificó una petición explícita de Procesos)"
 
-    # scope_for_systems: cada requisito funcional (o de negocio) con su ref.
+    # scope_for_systems: cada requisito funcional (o de negocio) con su ref; si no
+    # hay requisitos, se deriva de los procesos (source_ref al PRO-*).
     base_reqs = functional or business
-    scope = [
-        {
-            "id": f"SCOPE-{i:03d}",
-            "description": r["text"],
-            "requirement_refs": [r["id"]],
-        }
-        for i, r in enumerate(base_reqs, start=1)
-    ]
+    if base_reqs:
+        scope = [
+            {
+                "id": f"SCOPE-{i:03d}",
+                "description": r["text"],
+                "requirement_refs": [r["id"]],
+            }
+            for i, r in enumerate(base_reqs, start=1)
+        ]
+    else:
+        scope = [
+            {
+                "id": f"SCOPE-{i:03d}",
+                "description": p.get("name", ""),
+                "requirement_refs": [p["id"]],
+            }
+            for i, p in enumerate(processes, start=1)
+            if p.get("id")
+        ]
 
     # interpretation_assumptions: términos del glosario detectados en el modelo.
     text = _searchable_text(consolidated, summary)

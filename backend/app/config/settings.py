@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     CLAUDE_MODEL: str = "claude-sonnet-5"
     CLAUDE_TIMEOUT: int = 180
+    # max_tokens de salida por llamada. El default de ChatAnthropic (4096) es
+    # COMPARTIDO con los tokens de razonamiento (bloques thinking); la dimensión
+    # más grande (requirements, ~10 RF con evidencia) truncaba su JSON a mitad
+    # (JSONDecodeError) mientras las pequeñas cabían. Se sube para dar holgura.
+    CLAUDE_MAX_TOKENS: int = 8192
     CLAUDE_PRICE_INPUT_PER_MTOK: float = 3
     CLAUDE_PRICE_OUTPUT_PER_MTOK: float = 15
 
@@ -49,6 +54,12 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = str(BASE_DIR / "storage")
     SINGLE_SHOT_TOKEN_THRESHOLD: int = 4096
     EXTRACT_CONCURRENCY: int = 3
+    # Gate del EF hacia el Agente Scrum (semáforo compuesto, condición Y):
+    # sin preguntas blocking pendientes Y contenido mínimo de RF funcionales Y
+    # cobertura de extracción suficiente. Antes bastaba con no tener blocking,
+    # así que el semáforo salía VERDE con 0 requisitos funcionales.
+    EF_GATE_MIN_FUNCTIONAL: int = 1
+    EF_GATE_MIN_COVERAGE: float = 1.0
 
     # --- Pipeline del Agente Scrum ---
     SCRUM_SPRINT_CAPACITY: int = 20  # D4: puntos por sprint (configurable)

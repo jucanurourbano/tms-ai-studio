@@ -134,3 +134,14 @@ async def test_pipeline_con_adaptador_real_extrae_contenido(
     assert artifact.actors
     assert artifact.processes
     assert artifact.modules  # los "menús"/módulos volvieron a salir
+
+    # Dimensiones que quedaban en cero pese al resto correcto:
+    # #1 requirements > 0 (la dimensión más frágil / grande).
+    assert artifact.requirements.functional
+    # #2 INTERPRET no vacío (petición + alcance).
+    assert (
+        "no se identificó" not in artifact.systems_interpretation.what_process_requests
+    )
+    assert artifact.systems_interpretation.scope_for_systems
+    # #3 al menos una pregunta cuando el pase de crítica aporta un hallazgo.
+    assert artifact.questions_for_analyst

@@ -45,6 +45,28 @@ def test_interpret_supuestos_desde_glosario():
     assert si["what_process_requests"]
 
 
+def test_interpret_fallback_a_procesos_sin_requisitos():
+    """REGRESIÓN (#2): sin requisitos pero CON procesos, INTERPRET no queda vacío
+    (antes: 'no se identificó petición', 0 alcance)."""
+    cons = {
+        "requirements": {"business": [], "functional": [], "non_functional": []},
+        "actors": [],
+        "modules": [],
+        "menus": [],
+        "processes": [
+            {"id": "PRO-001", "name": "Solicitud de vacaciones", "steps": []}
+        ],
+        "business_rules": [],
+        "validations": [],
+        "fields": [],
+    }
+    si = interpret(cons, {"entities": []}, summary=None)
+    assert "Solicitud de vacaciones" in si["what_process_requests"]
+    assert "no se identificó" not in si["what_process_requests"]
+    assert si["scope_for_systems"]
+    assert si["scope_for_systems"][0]["requirement_refs"] == ["PRO-001"]
+
+
 # --- CRITIQUE ---------------------------------------------------------------
 
 
@@ -93,6 +115,36 @@ def test_find_orphan_refs():
     cons["menus"] = [{"id": "MEN-001", "module_ref": "MOD-999"}]
     orphans = find_orphan_refs(cons, {"entities": []})
     assert any(o["ref"] == "MOD-999" for o in orphans)
+
+
+async def test_critique_llm_missing_info_genera_pregunta():
+    """REGRESIÓN (#3): con el pase LLM cableado, los vacíos del texto (p. ej. sin
+    plazo de respuesta) se vuelven preguntas al analista. Sin critique_llm el
+    pipeline real generaba 0 preguntas."""
+
+    class VaciosLLM:
+        async def complete_json(self, *, system, user):
+            return json.dumps(
+                {
+                    "ambiguities": [],
+                    "missing_info": [
+                        {
+                            "description": "No se define el plazo de respuesta del jefe.",
+                            "expected_where": "Flujo de aprobación.",
+                        }
+                    ],
+                    "inconsistencies": [],
+                }
+            )
+
+    result = await critique(_consolidado(), {"entities": []}, llm=VaciosLLM())
+    assert any("plazo de respuesta" in m["description"] for m in result["missing_info"])
+
+    questions, _obs = generate_questions(result, _consolidado())
+    plazo_q = [q for q in questions if "plazo de respuesta" in q["question"]]
+    assert len(plazo_q) == 1
+    assert plazo_q[0]["blocking"] is True
+    assert plazo_q[0]["audience"] == "negocio"
 
 
 # --- QUESTION_GEN -----------------------------------------------------------
