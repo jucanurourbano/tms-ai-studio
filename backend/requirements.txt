@@ -15,7 +15,11 @@ redis
 langchain
 langgraph
 langgraph-checkpoint-redis
-langchain-anthropic
+# Pinneados: langchain 1.x cambió el formato de la respuesta (AIMessage.content
+# pasa a ser una LISTA de bloques thinking+text, no string). Un `pip install -U`
+# que subiera de versión rompía el parseo de EXTRACT en silencio. Ver commit 5066e9f.
+langchain-core==1.4.9
+langchain-anthropic==1.4.8
 anthropic
 
 # === Parsers de documentos ===
