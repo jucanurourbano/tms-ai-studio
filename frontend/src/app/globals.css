@@ -223,15 +223,27 @@
 }
 
 /*
- * Impresión / Exportar PDF: se ocultan la navegación y los controles (marcados
- * con `print:hidden`), el contenedor de scroll pasa a alto/overflow automáticos
- * para no recortar el artículo, y la portada `print-cover` se hace visible.
+ * Impresión / Exportar PDF — diseño editorial (informe corporativo).
+ *
+ * Principio anti-huecos: las SECCIONES fluyen y se parten con naturalidad entre
+ * páginas; solo las unidades atómicas pequeñas (`.print-atom`: una fila, una
+ * tarjeta de pregunta/historia, un bloque de stats) se protegen del corte.
+ * Los títulos (`.print-heading`) no quedan huérfanos al pie.
  */
+.print-running-footer {
+  display: none;
+}
+
 @media print {
+  @page {
+    /* Márgenes cómodos; el margen inferior reserva sitio al pie propio. */
+    margin: 2.2cm 2cm 1.8cm 2cm;
+  }
   html,
   body {
     height: auto !important;
     background: #fff !important;
+    color: #111 !important;
   }
   /* Neutraliza el layout de app (flex a pantalla completa) para que fluya. */
   .app-root {
@@ -241,12 +253,54 @@
   #app-scroll {
     overflow: visible !important;
     height: auto !important;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #111;
   }
-  @page {
-    margin: 1.6cm;
+  /* Enlaces sin el azul/subrayado de web. */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
   }
-  /* Evita cortes feos dentro de tarjetas/filas. */
-  .print-avoid-break {
+
+  /* Unidades atómicas: nunca se parten a mitad de página. */
+  .print-atom {
     break-inside: avoid;
+  }
+  /* Títulos de sección: no se quedan solos al final de la página. */
+  .print-heading {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  /* Tablas: cabecera repetida en cada página y filas sin cortar. */
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+  }
+
+  /* Fuerza la impresión de fondos (chips grises, portada) donde se marque. */
+  .print-color,
+  .print-color * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Pie de página PROPIO, repetido en cada hoja (sustituye al del navegador). */
+  .print-running-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 3px;
+    border-top: 1px solid #d4d4d8;
+    background: #fff;
+    font-size: 8pt;
+    color: #6b21a8;
   }
 }

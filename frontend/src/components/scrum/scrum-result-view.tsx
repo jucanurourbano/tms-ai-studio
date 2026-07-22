@@ -29,6 +29,9 @@ import {
   GroupLabel,
   IdTag,
   PrintCover,
+  PrintFooter,
+  PrintToc,
+  PrintValidationState,
   RefChip,
   SectionCard,
   Stat,
@@ -307,9 +310,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   return (
     <div className="flex h-full flex-col">
       <PrintCover
-        kind="Plan Scrum v1.0.0"
+        kind="Plan Scrum"
         title="Plan ágil"
         subtitle="Épicas, historias, criterios de aceptación, estimaciones, backlog priorizado y plan de sprints."
+        version="1.0.0"
         stats={[
           { label: "historias", value: String(a.metrics.stories_total) },
           { label: "puntos", value: String(a.metrics.points_total) },
@@ -317,6 +321,17 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           { label: "cobertura", value: `${Math.round(a.metrics.coverage * 100)}%` },
         ]}
       />
+      <PrintToc
+        items={[
+          "Backlog de producto",
+          "Sprints",
+          "Historias de usuario",
+          "Épicas",
+          "Preguntas al Product Owner",
+          "Análisis",
+        ]}
+      />
+      <PrintFooter title="Plan Scrum" />
 
       {/* Barra superior de afinamiento + semáforo */}
       <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
@@ -590,7 +605,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           >
             <div className="space-y-3">
               {a.sprints.map((sp) => (
-                <div key={sp.id} className="rounded-lg border p-3">
+                <div key={sp.id} className="print-atom rounded-lg border p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <IdTag id={sp.id} />
                     <Badge variant="outline" className="font-mono tabular-nums">
@@ -633,7 +648,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           >
             <div className="space-y-3">
               {a.stories.map((s) => (
-                <div key={s.id} id={`ref-${s.id}`} className="rounded-lg border p-3">
+                <div
+                  key={s.id}
+                  id={`ref-${s.id}`}
+                  className="print-atom rounded-lg border p-3"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <IdTag id={s.id} />
                     <MoscowBadge priority={s.priority} />
@@ -748,7 +767,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           <SectionCard id="sec-epics" index="4" title="Épicas" count={a.epics.length}>
             <div className="space-y-2">
               {a.epics.map((e) => (
-                <div key={e.id} id={`ref-${e.id}`} className="rounded-lg border p-3">
+                <div
+                  key={e.id}
+                  id={`ref-${e.id}`}
+                  className="print-atom rounded-lg border p-3"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <IdTag id={e.id} />
                     <span className="text-sm font-medium">{e.title}</span>
@@ -795,7 +818,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                     key={q.id}
                     id={`ref-${q.id}`}
                     className={cn(
-                      "rounded-lg border p-3",
+                      "print-atom rounded-lg border p-3",
                       q.blocking && "border-red-300 bg-red-50/40",
                     )}
                   >
@@ -820,6 +843,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                         onChanged={() => void handlePoAnswered(q.id)}
                       />
                     </div>
+                    <PrintValidationState
+                      status={statusOf(q.id)}
+                      respuesta={respuestaOf(q.id)}
+                    />
                   </div>
                 ))}
               </div>

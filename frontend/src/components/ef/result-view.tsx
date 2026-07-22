@@ -33,6 +33,9 @@ import {
   GroupLabel,
   IdTag,
   PrintCover,
+  PrintFooter,
+  PrintToc,
+  PrintValidationState,
   RefChip,
   SectionCard,
   Stat,
@@ -298,16 +301,27 @@ export function ResultView({ job }: { job: JobDetail }) {
   return (
     <div className="flex h-full flex-col">
       <PrintCover
-        kind="Especificación Funcional (EF) v1.2.0"
+        kind="Análisis de Especificación Funcional"
         title={a.source.filename || "Análisis EF"}
         subtitle={a.summary}
+        version="1.2.0"
         stats={[
           { label: "requisitos", value: String(reqTotal) },
-          { label: "modelo", value: String(modelTotal) },
           { label: "preguntas", value: String(a.questions_for_analyst.length) },
           { label: "cobertura", value: `${Math.round(a.metrics.coverage * 100)}%` },
+          { label: "costo", value: `$${a.metrics.cost.toFixed(4)}` },
         ]}
       />
+      <PrintToc
+        items={[
+          "Interpretación para Sistemas",
+          "Preguntas al analista",
+          "Requisitos",
+          "Modelo",
+          "Análisis crítico",
+        ]}
+      />
+      <PrintFooter title="Análisis de Especificación Funcional" />
 
       {/* Barra superior de afinamiento */}
       <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
@@ -435,7 +449,7 @@ export function ResultView({ job }: { job: JobDetail }) {
             label="cobertura"
           />
         </StatRow>
-        <p className="mt-3 max-w-3xl text-sm text-muted-foreground">{a.summary}</p>
+        <p className="mt-3 max-w-full text-sm text-muted-foreground">{a.summary}</p>
       </div>
 
       {/* Dos columnas: índice (plegable) + contenido */}
@@ -567,7 +581,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                       <div
                         key={s.id}
                         id={`ref-${s.id}`}
-                        className="rounded-lg border p-3"
+                        className="print-atom rounded-lg border p-3"
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <IdTag id={s.id} />
@@ -590,6 +604,10 @@ export function ResultView({ job }: { job: JobDetail }) {
                             onChanged={reloadSummary}
                           />
                         </div>
+                        <PrintValidationState
+                          status={statusOf(s.id)}
+                          respuesta={respuestaOf(s.id)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -620,7 +638,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                     key={q.id}
                     id={`ref-${q.id}`}
                     className={cn(
-                      "rounded-lg border p-3",
+                      "print-atom rounded-lg border p-3",
                       q.blocking && "border-red-300 bg-red-50/40",
                     )}
                   >
@@ -650,6 +668,10 @@ export function ResultView({ job }: { job: JobDetail }) {
                         onChanged={() => void handleQuestionAnswered(q.id)}
                       />
                     </div>
+                    <PrintValidationState
+                      status={statusOf(q.id)}
+                      respuesta={respuestaOf(q.id)}
+                    />
                   </div>
                 ))}
               </div>
@@ -680,7 +702,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                   {list.length > 0 ? (
                     <DataList>
                       {list.map((r, i) => (
-                        <div key={r.id} id={`ref-${r.id}`}>
+                        <div key={r.id} id={`ref-${r.id}`} className="print-atom">
                           <button
                             type="button"
                             onClick={() => toggle(r.id)}

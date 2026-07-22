@@ -5,6 +5,8 @@
 // mini-stats, pills de estado) en vez de "texto tipo Wikipedia".
 
 import { Check, Minus } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -39,7 +41,7 @@ export function RefChip({
       type="button"
       onClick={() => jumpToRef(refId)}
       className={cn(
-        "inline-flex items-center rounded-md border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-foreground/75 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+        "print-color inline-flex items-center rounded-md border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-foreground/75 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
         className,
       )}
     >
@@ -59,7 +61,7 @@ export function IdTag({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground",
+        "print-color inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground",
         className,
       )}
     >
@@ -75,10 +77,8 @@ export function CountChip({ n }: { n?: number }) {
   return (
     <span
       className={cn(
-        "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-        empty
-          ? "bg-amber-100 text-amber-700"
-          : "bg-primary/10 text-primary",
+        "print-color inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums print:bg-transparent print:text-neutral-500",
+        empty ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary",
       )}
     >
       {empty ? "0 ⚠" : n}
@@ -111,25 +111,27 @@ export function SectionCard({
     <section
       id={id}
       className={cn(
-        "scroll-mt-28 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 print-avoid-break",
+        "scroll-mt-28 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 print:overflow-visible print:rounded-none print:ring-0",
         className,
       )}
     >
-      <header className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5">
+      <header className="print-heading flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5 print:border-b-2 print:border-violet-800/70 print:bg-transparent print:px-0">
         {index && (
-          <span className="font-heading text-xs font-semibold tabular-nums text-muted-foreground">
+          <span className="font-heading text-xs font-semibold tabular-nums text-muted-foreground print:text-violet-800">
             {index}
           </span>
         )}
-        <h2 className="font-heading text-sm font-semibold tracking-tight">
+        <h2 className="font-heading text-sm font-semibold tracking-tight print:text-base print:text-violet-800">
           {title}
         </h2>
         {count !== undefined && <CountChip n={count} />}
         {actions && (
-          <div className="ml-auto flex items-center gap-1.5">{actions}</div>
+          <div className="ml-auto flex items-center gap-1.5 print:hidden">
+            {actions}
+          </div>
         )}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="p-4 print:px-0 print:py-3">{children}</div>
     </section>
   );
 }
@@ -191,7 +193,7 @@ export function DataRow({
     <div
       id={id ? `ref-${id}` : undefined}
       className={cn(
-        "flex items-start gap-3 px-3 py-2 transition-colors hover:bg-primary/[0.04]",
+        "print-atom flex items-start gap-3 px-3 py-2 transition-colors hover:bg-primary/[0.04]",
         className,
       )}
     >
@@ -258,7 +260,9 @@ export function Stat({
 
 export function StatRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">{children}</div>
+    <div className="print-atom flex flex-wrap items-center gap-x-6 gap-y-3">
+      {children}
+    </div>
   );
 }
 
@@ -291,48 +295,170 @@ export function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 }
 
 /**
- * Portada de la vista imprimible (Exportar PDF). Solo visible al imprimir; salta
- * de página tras la portada.
+ * Portada de la vista imprimible (Exportar PDF): logo, tipo de documento,
+ * título, versión + fecha y una ficha de métricas clave. Solo visible al
+ * imprimir; salta de página tras la portada. La fecha se calcula en el cliente
+ * (tras montar) para no provocar desajustes de hidratación.
  */
 export function PrintCover({
   kind,
   title,
   subtitle,
+  version,
   stats,
 }: {
   kind: string;
   title: string;
   subtitle?: string;
+  version?: string;
   stats?: { label: string; value: string }[];
 }) {
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    // Fuera del cuerpo síncrono del efecto (evita el warning de cascada) y sin
+    // desajuste de hidratación: la fecha se calcula tras montar en el cliente.
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setDate(
+        new Date().toLocaleDateString("es-PE", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
-    <div className="hidden break-after-page print:block">
-      <div className="flex min-h-[78vh] flex-col justify-between py-6 text-neutral-900">
-        <div>
+    <div className="print-color hidden break-after-page print:block">
+      <div className="flex min-h-[86vh] flex-col text-neutral-900">
+        {/* Cabecera de marca */}
+        <div className="flex items-center gap-3 border-b border-neutral-200 pb-4">
+          <Image
+            src="/logo-urbano.png"
+            alt="Urbano"
+            width={40}
+            height={40}
+            className="rounded-lg"
+          />
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-700">
             TMS AI Studio · ISDF · Urbano TI
           </div>
-          <div className="mt-28">
-            <div className="text-sm font-semibold text-neutral-500">{kind}</div>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">{title}</h1>
-            {subtitle && (
-              <p className="mt-3 max-w-xl text-sm text-neutral-600">{subtitle}</p>
+        </div>
+
+        {/* Título del documento */}
+        <div className="mt-28">
+          <div className="text-sm font-semibold text-neutral-500">{kind}</div>
+          <h1 className="mt-2 text-4xl font-bold leading-tight tracking-tight">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-neutral-600">
+              {subtitle}
+            </p>
+          )}
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 text-xs text-neutral-500">
+            {version && (
+              <span>
+                <span className="font-semibold text-neutral-700">Versión:</span>{" "}
+                {version}
+              </span>
+            )}
+            {date && (
+              <span>
+                <span className="font-semibold text-neutral-700">Fecha:</span>{" "}
+                {date}
+              </span>
             )}
           </div>
         </div>
+
+        {/* Ficha de métricas clave */}
         {stats && stats.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 border-t border-neutral-200 pt-6 sm:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label}>
-                <div className="text-xl font-semibold tabular-nums">
-                  {s.value}
+          <div className="mt-auto overflow-hidden rounded-xl border border-neutral-300">
+            <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              Métricas clave
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4">
+              {stats.map((s, i) => (
+                <div
+                  key={s.label}
+                  className={cn(
+                    "px-4 py-3",
+                    i > 0 && "border-l border-neutral-200",
+                  )}
+                >
+                  <div className="text-2xl font-bold tabular-nums text-neutral-900">
+                    {s.value}
+                  </div>
+                  <div className="text-xs text-neutral-500">{s.label}</div>
                 </div>
-                <div className="text-xs text-neutral-500">{s.label}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Índice del documento imprimible (lista numerada de secciones). */
+export function PrintToc({ items }: { items: string[] }) {
+  return (
+    <div className="hidden break-after-page print:block">
+      <h2 className="border-b-2 border-violet-800/70 pb-2 font-heading text-lg font-bold text-violet-800">
+        Contenido
+      </h2>
+      <ol className="mt-5 space-y-3 text-sm text-neutral-800">
+        {items.map((label, i) => (
+          <li key={label} className="flex gap-3">
+            <span className="w-5 shrink-0 text-right font-mono text-neutral-400">
+              {i + 1}
+            </span>
+            <span>{label}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** Pie de página propio, repetido en cada hoja impresa (marca + título). */
+export function PrintFooter({ title }: { title: string }) {
+  return (
+    <div className="print-running-footer print-color" aria-hidden>
+      <span>TMS AI Studio · Urbano TI</span>
+      <span>{title}</span>
+    </div>
+  );
+}
+
+/** Estado de validación en la impresión (las preguntas conservan su estado). */
+export function PrintValidationState({
+  status,
+  respuesta,
+}: {
+  status: string;
+  respuesta?: string | null;
+}) {
+  const label =
+    status === "confirmado"
+      ? "Confirmada"
+      : status === "corregido"
+        ? "Corregida"
+        : "Pendiente";
+  return (
+    <div className="mt-2 hidden border-t border-neutral-200 pt-1.5 text-xs print:block">
+      <span className="font-semibold">Estado:</span> {label}
+      {respuesta ? (
+        <div className="mt-0.5 text-neutral-700">
+          <span className="font-semibold">Respuesta:</span> {respuesta}
+        </div>
+      ) : null}
     </div>
   );
 }
