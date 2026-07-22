@@ -31,6 +31,22 @@ from shared.responses.api_response import ApiResponse
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 
+@router.get(
+    "/bootstrap-status",
+    summary="¿La plataforma necesita crear el primer administrador?",
+)
+async def bootstrap_status(
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Chequeo ligero y público: ``needs_bootstrap=true`` cuando no hay usuarios.
+
+    Lo usa la pantalla de login para ofrecer, solo entonces, la creación de la
+    primera cuenta de administrador.
+    """
+    needs = await AuthService(session).needs_bootstrap()
+    return ApiResponse.ok(data={"needs_bootstrap": needs})
+
+
 @router.post("/register", summary="Registrar un usuario (admin; bootstrap del primero)")
 async def register(
     body: RegisterRequest,

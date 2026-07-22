@@ -51,6 +51,18 @@ async def _bootstrap_admin(client) -> str:
     return login.json()["data"]["access_token"]
 
 
+async def test_bootstrap_status_refleja_si_hay_usuarios(client):
+    # Sin usuarios: necesita bootstrap.
+    r = await client.get("/api/v1/auth/bootstrap-status")
+    assert r.status_code == 200
+    assert r.json()["data"]["needs_bootstrap"] is True
+
+    # Tras crear el primer admin: ya no.
+    await _bootstrap_admin(client)
+    r = await client.get("/api/v1/auth/bootstrap-status")
+    assert r.json()["data"]["needs_bootstrap"] is False
+
+
 async def test_bootstrap_primer_usuario_nace_admin(client):
     r = await client.post(
         "/api/v1/auth/register",

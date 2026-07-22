@@ -12,6 +12,11 @@ import { apiRequest } from "./client";
 const JSON_HEADERS = { "content-type": "application/json" };
 
 export const authApi = {
+  /** Chequeo público: ¿hay que crear la primera cuenta de administrador? */
+  bootstrapStatus(): Promise<{ needs_bootstrap: boolean }> {
+    return apiRequest<{ needs_bootstrap: boolean }>("/auth/bootstrap-status");
+  },
+
   login(email: string, password: string): Promise<LoginResult> {
     return apiRequest<LoginResult>("/auth/login", {
       method: "POST",

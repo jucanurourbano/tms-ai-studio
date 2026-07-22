@@ -36,6 +36,10 @@ class AuthService:
     def _normalize_email(email: str) -> str:
         return email.strip().lower()
 
+    async def needs_bootstrap(self) -> bool:
+        """``True`` si no existe ningún usuario (habilita crear el primer admin)."""
+        return await self.repo.count() == 0
+
     async def register(
         self,
         *,
