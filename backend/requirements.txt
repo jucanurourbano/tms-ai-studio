@@ -8,6 +8,14 @@ sqlalchemy[asyncio]
 asyncpg
 alembic
 
+# === Autenticación (JWT + hashing) ===
+# bcrypt pinneado <4.1: passlib 1.7.4 no es compatible con la API de bcrypt 4.1+
+# (elimina `__about__` y cambia el manejo de secretos >72 bytes -> ValueError).
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+email-validator
+
 # === Cache / checkpointing ===
 redis
 

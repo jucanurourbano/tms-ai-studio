@@ -3,12 +3,16 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dependencies.current_user import get_current_user
 from app.dependencies.database import get_session
 from app.schemas.scrum import CreatePlanRequest, ScrumValidationPatchRequest
 from app.services.scrum_service import ScrumPlanningService
 from shared.responses.api_response import ApiResponse
 
-router = APIRouter(prefix="/scrum", tags=["Agente Scrum"])
+# Todas las rutas del Agente Scrum exigen autenticación (401 sin token válido).
+router = APIRouter(
+    prefix="/scrum", tags=["Agente Scrum"], dependencies=[Depends(get_current_user)]
+)
 
 
 def _service(session: AsyncSession) -> ScrumPlanningService:

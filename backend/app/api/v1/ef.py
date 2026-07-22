@@ -5,12 +5,16 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai.errors import IngestError
+from app.dependencies.current_user import get_current_user
 from app.dependencies.database import get_session
 from app.schemas.ef import AnalyzeTextRequest, ValidationPatchRequest
 from app.services.ef_service import EFAnalysisService
 from shared.responses.api_response import ApiResponse
 
-router = APIRouter(prefix="/ef", tags=["Agente EF"])
+# Todas las rutas del Agente EF exigen autenticación (401 sin token válido).
+router = APIRouter(
+    prefix="/ef", tags=["Agente EF"], dependencies=[Depends(get_current_user)]
+)
 
 _MIN_TEXT = 100
 

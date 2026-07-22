@@ -7,10 +7,25 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 import app.services.ef_service as ef_service
 from ai.agents.ef.schemas.examples import example_artifact
 from app.config.settings import settings
+from app.dependencies.current_user import get_current_user
 from app.dependencies.database import get_session
 from app.models.ef import JobStatus
+from app.models.user import User, UserRole
 from app.repositories.ef_repository import EFRepository
 from main import app
+
+
+def _fake_user() -> User:
+    """Usuario autenticado de prueba (evita depender de un JWT real aquí)."""
+    return User(
+        id="test-user",
+        email="qa@urbano.com.pe",
+        full_name="QA",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+
 
 TEXTO_LARGO = (
     "Proceso de registro de siniestros logísticos. " * 5
@@ -29,6 +44,7 @@ async def client(engine, monkeypatch, tmp_path):
             yield session
 
     app.dependency_overrides[get_session] = _get_session
+    app.dependency_overrides[get_current_user] = _fake_user
 
     async def fake_pipeline(job_id, source, authoritative_context=None):
         async with factory() as session:

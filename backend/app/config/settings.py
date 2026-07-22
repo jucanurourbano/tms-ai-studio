@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     CLICKUP_ALLOWED_LIST_IDS: list[str] = []  # allowlist explícita de listas
     CLICKUP_DRY_RUN: bool = True  # fase (b): por defecto no crea nada
 
+    # --- Autenticación (JWT) ---
+    # JWT_SECRET firma los access tokens. El default es SOLO para arrancar en
+    # desarrollo sin ``.env``; en producción se define uno fuerte en el entorno y
+    # se ROTA periódicamente (rotarlo invalida todos los tokens vigentes). Nunca
+    # se registran contraseñas ni tokens en logs (ver CLAUDE.md).
+    JWT_SECRET: str = "dev-insecure-secret-cambiar-en-produccion"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 12  # 12 h
+
     # --- CORS (desarrollo: abierto) ---
     CORS_ORIGINS: list[str] = ["*"]
 

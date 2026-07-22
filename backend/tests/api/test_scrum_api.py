@@ -7,11 +7,25 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 import app.services.scrum_service as scrum_service
 from ai.agents.ef.schemas.examples import example_artifact as ef_example
 from ai.agents.scrum.schemas.examples import example_artifact as scrum_example
+from app.dependencies.current_user import get_current_user
 from app.dependencies.database import get_session
 from app.models.agent import EFSourceDocType, JobStatus
+from app.models.user import User, UserRole
 from app.repositories.agent_job_repository import AgentJobRepository
 from app.repositories.ef_repository import EFRepository
 from main import app
+
+
+def _fake_user() -> User:
+    """Usuario autenticado de prueba (rutas EF/Scrum protegidas)."""
+    return User(
+        id="test-user",
+        email="qa@urbano.com.pe",
+        full_name="QA",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
 
 
 @pytest_asyncio.fixture
@@ -23,6 +37,7 @@ async def ctx(engine, monkeypatch):
             yield session
 
     app.dependency_overrides[get_session] = _get_session
+    app.dependency_overrides[get_current_user] = _fake_user
 
     # Semilla: un job EF COMPLETED con el artefacto de ejemplo (Q-001 blocking).
     async with factory() as session:
