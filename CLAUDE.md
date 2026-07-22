@@ -18,8 +18,9 @@ DevOps + un **Orquestador** que coordina el flujo entre ellos.
 (backend + frontend; bloques B0→B8 implementados, ver §4 y
 `docs/diseno-agente-scrum.md`). Persistencia **generalizada** a tablas `agent_*`
 multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) protegiendo
-toda la API de agentes y el frontend (ver §5). Siguiente eslabón: **Agente
-Arquitectura**.
+toda la API de agentes y el frontend (ver §6). **Agente Arquitectura** con
+**diseño validado** (ver §5 y `docs/diseno-agente-arquitectura.md`), en
+implementación por bloques A0→A7.
 
 ---
 
@@ -146,7 +147,80 @@ estructuralmente:
 
 ---
 
-## 5. Autenticación y usuarios
+## 5. Agente Arquitectura (diseño validado)
+
+> Diseño completo en **`docs/diseno-agente-arquitectura.md`**. Tercer agente del
+> ISDF (fase **DISEÑAR**). Consume el **par EF + Scrum** de un mismo flujo y
+> produce el diseño técnico que alimentará a los Agentes **BD** y **API**.
+> Reutiliza el patrón EF/Scrum; la infraestructura B0 ya es multi-agente.
+
+Pipeline **LangGraph**:
+
+```
+LOAD_SOURCES → CONTEXT → COMPONENTS → STACK → ADRS → CONTRACTS → DIAGRAMS
+             → CRITIQUE → QUESTION_GEN → ASSEMBLE → PERSIST
+```
+
+- **Entrada doble (transitiva, sin migración):** `input_job_id = scrum_job_id`;
+  el EF se resuelve por `scrum_job.input_job_id`. El artefacto guarda ambos ids +
+  hashes en `source`.
+- **COMPONENTS/STACK/ADRS/CONTRACTS** son *map*/structured output.
+  **CONTEXT** calcula un *scope profile* **determinista** → `size_class` S/M/L que
+  fundamenta la **recomendación de estilo** (default **monolito modular**; el LLM
+  justifica). **DIAGRAMS** genera Mermaid **determinista** desde el grafo
+  estructurado (nunca por LLM). **Prohibido inventar**: sin base en EF/Scrum →
+  pregunta al Arquitecto.
+- **Contrato `ArchitectureArtifact v1.0.0`** (claves inglés / valores español;
+  todo ítem con `id`/`source_refs`/`confidence`/`origin`): `source` (Scrum + EF de
+  origen + hashes), `context` (scope_profile, size_class, bounded_contexts),
+  `architecture_style`, `components[]` (con trazabilidad a épicas/historias del
+  Scrum y entidades/APIs del EF), `stack[]`, `adrs[]`, `integrations[]`,
+  `contracts[]` (eventos = `kind:"event"`), `cross_cutting[]`, `diagrams`
+  (Mermaid), `analysis` (riesgos/observaciones/cobertura de épicas/entidades/RNF),
+  `questions_for_architect[]` (`audience`/`blocking`/`linked_to_ref`), `metrics`.
+- **Stack de la casa:** `ai/knowledge/tech_stack.yaml` (allow-list por capa +
+  defaults) inyectado en STACK para **no proponer exotismos**. Refleja el stack
+  con el que Urbano construye sus **sistemas de negocio** (no el de TMS AI Studio);
+  nace **PENDIENTE DE VALIDACIÓN** por el equipo.
+- **Gate de entrada:** el servicio verifica Scrum `ready_for_next_stage=true`
+  antes de crear el job (`GateError` 409); re-verificado en `LOAD_SOURCES`.
+- **`ready_for_next_stage` (misma semántica que EF/Scrum):** sin preguntas
+  bloqueantes al Arquitecto pendientes **y** contenido mínimo (estilo decidido +
+  ≥1 componente + cobertura de épicas/entidades ≥ umbral). **RNF sin atender** y
+  **contratos de integración desconocidos** → **preguntas bloqueantes** (no
+  condiciones extra del gate). Un único `ready` habilita a **BD** y **API**.
+
+### Decisiones acordadas (A1–A8)
+
+- **A1** Entrada doble EF+Scrum: **transitiva** vía `scrum_job_id` (sin migración).
+- **A2** Recomendación de estilo: *scope profile* **determinista** + heurística
+  (LLM justifica); default **monolito modular**.
+- **A3** Diagramas **deterministas** desde el grafo (Mermaid válido); nodo `DIAGRAMS`.
+- **A4** `mermaid` en frontend con **import dinámico client-only y lazy SOLO en la
+  vista del artefacto de Arquitectura** (no en el bundle global).
+- **A5** Stack desde allow-list **cerrada** (`tech_stack.yaml`, negocio de Urbano,
+  PENDIENTE DE VALIDACIÓN); necesidad exótica → pregunta.
+- **A6** Granularidad de componentes: **bounded-context/módulo** (~5–15), no clases.
+- **A7** Eventos/colas: **síncrono en monolito por defecto**; eventos solo si se
+  justifican; si no → `Observation` "no requerido v1".
+- **A8** Semáforo: **único `ready`** (sin bloqueantes + contenido mínimo).
+
+### Plan de implementación por bloques (tests mockeados, commit+push por bloque)
+
+- **A0** `tech_stack.yaml` (borrador PENDIENTE DE VALIDACIÓN) + loader;
+  `<MermaidDiagram>` frontend (lazy). EF/Scrum siguen verdes.
+- **A1** Contrato `ArchitectureArtifact v1.0.0` (Pydantic + fixture + round-trip).
+- **A2** Grafo + `LOAD_SOURCES` (carga doble + gate) + `CONTEXT` (scope determinista) + stubs.
+- **A3** `COMPONENTS`/`STACK` (LLM mockeado) + trazabilidad.
+- **A4** `ADRS`/`CONTRACTS`/`DIAGRAMS` (Mermaid determinista).
+- **A5** `CRITIQUE`/`QUESTION_GEN` + cobertura (RNF/integraciones → bloqueantes).
+- **A6** `ASSEMBLE/VALIDATE/PERSIST` + servicio + API (`/arquitectura/*`) + refine + gate 409.
+- **A7** Frontend: nav DISEÑAR, `ArchitectureResultView`, Mermaid lazy, flujo
+  new→design→afinar, export PDF con diagramas.
+
+---
+
+## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
 de agentes y el frontend. Sigue la misma arquitectura del proyecto
@@ -193,7 +267,7 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 ---
 
-## 6. Ciclo de afinamiento
+## 7. Ciclo de afinamiento
 
 - Las **validaciones** (`pendiente` | `confirmado` | `corregido` + respuesta) se
   persisten **aparte, sin mutar el artefacto**.
@@ -204,7 +278,7 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 ---
 
-## 7. Lecciones obligatorias
+## 8. Lecciones obligatorias
 
 - **Timeout 180s** en llamadas al modelo.
 - **Backoff respetando `retry-after`.**
@@ -235,7 +309,7 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 ---
 
-## 8. Reglas de proceso
+## 9. Reglas de proceso
 
 - **Modelo Claude por defecto:** `claude-sonnet-5` (`CLAUDE_MODEL` en `.env`).
   Tarifas para cálculo de costos: **$3 / MTok input**, **$15 / MTok output**
@@ -247,7 +321,7 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 ---
 
-## 9. Alcance v1
+## 10. Alcance v1
 
 - **Sin OCR.**
 - **Sin RAG pgvector** (la extensión está disponible en la imagen, pero no se usa
@@ -256,7 +330,7 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 ---
 
-## 10. Estructura del repositorio
+## 11. Estructura del repositorio
 
 ```
 tms-ai-studio/
