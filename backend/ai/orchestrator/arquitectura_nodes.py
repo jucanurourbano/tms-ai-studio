@@ -10,10 +10,13 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
+from ai.agents.arquitectura.adrs import run_adrs
 from ai.agents.arquitectura.assemble import assemble_artifact, validate_artifact
 from ai.agents.arquitectura.common import merge_metrics
 from ai.agents.arquitectura.components import run_components
 from ai.agents.arquitectura.context import build_scope_profile, classify_size
+from ai.agents.arquitectura.contracts import run_contracts
+from ai.agents.arquitectura.diagrams import build_diagrams
 from ai.agents.arquitectura.load_sources import (
     assert_scrum_ready,
     extract_sources,
@@ -29,6 +32,31 @@ def _llm(config: RunnableConfig):
     """LLM inyectado por config (mock en tests); si no, el cliente real."""
     llm = (config or {}).get("configurable", {}).get("llm")
     return llm if llm is not None else ClaudeLLMClient()
+
+
+def _adr_valid_refs(
+    sources: dict, components: list[dict], stack: list[dict]
+) -> set[str]:
+    """Refs reales que un ADR puede citar: EF + Scrum + componentes + stack."""
+    ef = sources.get("ef", {}) or {}
+    scrum = sources.get("scrum", {}) or {}
+    reqs = ef.get("requirements", {}) or {}
+    valid: set[str] = set()
+    for key in (
+        "entities",
+        "apis",
+        "modules",
+        "processes",
+        "business_rules",
+        "validations",
+    ):
+        valid |= {i["id"] for i in ef.get(key, []) if i.get("id")}
+    valid |= {r["id"] for r in reqs.get("non_functional", []) if r.get("id")}
+    valid |= {e["id"] for e in scrum.get("epics", []) if e.get("id")}
+    valid |= {s["id"] for s in scrum.get("stories", []) if s.get("id")}
+    valid |= {c["id"] for c in components if c.get("id")}
+    valid |= {s["id"] for s in stack if s.get("id")}
+    return valid
 
 
 async def node_load_sources(state: ArchitectureState) -> dict:
@@ -88,22 +116,56 @@ async def node_stack(state: ArchitectureState, config: RunnableConfig) -> dict:
     return {"stack": stack, "metrics": merge_metrics(state, tokens, skipped)}
 
 
-# --- ADRS / CONTRACTS / DIAGRAMS (stubs A4) ---------------------------------
+# --- ADRS / CONTRACTS / DIAGRAMS (Bloque A4) --------------------------------
 
 
-async def node_adrs(state: ArchitectureState) -> dict:
-    """ADRS (stub A4): sintetizará las decisiones de arquitectura."""
-    return {"adrs": []}
+async def node_adrs(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """ADRS: estilo (determinista desde size_class) + ADRs adicionales (LLM)."""
+    sources = state.get("sources") or {}
+    components = state.get("components") or []
+    stack = state.get("stack") or []
+    adrs, style, skipped, tokens = await run_adrs(
+        _llm(config),
+        state.get("size_class") or "M",
+        state.get("scope_profile") or {},
+        components,
+        stack,
+        _adr_valid_refs(sources, components, stack),
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "adrs": adrs,
+        "style": style,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
-async def node_contracts(state: ArchitectureState) -> dict:
-    """CONTRACTS (stub A4): contratos, integraciones y transversales."""
-    return {"contracts": [], "integrations": [], "cross_cutting": []}
+async def node_contracts(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """CONTRACTS: contratos (determinista) + integraciones y transversales (LLM)."""
+    contracts, integrations, cross_cutting, skipped, tokens = await run_contracts(
+        _llm(config),
+        state.get("sources") or {},
+        state.get("components") or [],
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "contracts": contracts,
+        "integrations": integrations,
+        "cross_cutting": cross_cutting,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_diagrams(state: ArchitectureState) -> dict:
-    """DIAGRAMS (stub A4): generará Mermaid determinista desde componentes."""
-    return {"diagrams": {}}
+    """DIAGRAMS: Mermaid determinista desde componentes/contratos/integraciones."""
+    actors = (state.get("sources") or {}).get("ef", {}).get("actors", []) or []
+    diagrams = build_diagrams(
+        state.get("components") or [],
+        state.get("contracts") or [],
+        state.get("integrations") or [],
+        actors,
+    )
+    return {"diagrams": diagrams}
 
 
 # --- CRITIQUE / QUESTION_GEN (stubs A5) -------------------------------------

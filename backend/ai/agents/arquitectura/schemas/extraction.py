@@ -9,7 +9,12 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .enums import ComponentType
+from .enums import (
+    ComponentType,
+    CrossCuttingConcern,
+    IntegrationDirection,
+    IntegrationProtocol,
+)
 
 
 class ComponentExtract(BaseModel):
@@ -55,3 +60,57 @@ class StackExtract(BaseModel):
     """Salida del nodo STACK (recomendación por capa desde el allow-list)."""
 
     stack: list[StackChoiceExtract] = Field(default_factory=list)
+
+
+class AdrExtract(BaseModel):
+    """Un ADR propuesto por el LLM (ids/estilo se resuelven en Python)."""
+
+    title: str
+    decision: str
+    context: str
+    alternatives_considered: list[str] = Field(default_factory=list)
+    consequences: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class AdrsExtract(BaseModel):
+    """Salida del nodo ADRS (ADRs adicionales al de estilo, que fija Python)."""
+
+    adrs: list[AdrExtract] = Field(default_factory=list)
+
+
+class IntegrationExtract(BaseModel):
+    """Una integración externa detectada por el LLM en el EF."""
+
+    name: str
+    system: str
+    direction: IntegrationDirection = IntegrationDirection.OUTBOUND
+    protocol: IntegrationProtocol = IntegrationProtocol.UNKNOWN
+    purpose: str
+    data_exchanged: Optional[str] = None
+    source_refs: list[str] = Field(default_factory=list)
+    contract_known: bool = False
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class IntegrationsExtract(BaseModel):
+    """Salida del sub-paso de detección de integraciones (nodo CONTRACTS)."""
+
+    integrations: list[IntegrationExtract] = Field(default_factory=list)
+
+
+class CrossCuttingExtract(BaseModel):
+    """Un requisito transversal propuesto por el LLM (auth, auditoría, …)."""
+
+    concern: CrossCuttingConcern
+    requirement: str
+    approach: str
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class CrossCuttingListExtract(BaseModel):
+    """Salida del sub-paso de transversales (nodo CONTRACTS)."""
+
+    cross_cutting: list[CrossCuttingExtract] = Field(default_factory=list)

@@ -94,8 +94,24 @@ async def test_grafo_end_to_end_con_stubs():
     backend = next(s for s in stack if s["layer"] == "framework_backend")
     assert "Cobol" not in backend["alternatives"]
     assert "ASP.NET Core" in backend["alternatives"]
-    # Nodos aún stub (A4-A5): estilo/ADRs pendientes.
-    assert art["architecture_style"] is None
+    # ADRS (A4): estilo determinista (size S -> monolito modular) + ADR extra.
+    assert art["architecture_style"]["chosen"] == "modular_monolith"
+    assert art["architecture_style"]["adr_ref"] == "ADR-001"
+    assert art["adrs"][0]["id"] == "ADR-001"
+    assert "modular_monolith" in art["adrs"][0]["title"]
+    assert art["metrics"]["adrs_total"] == 2
+    # El ADR del LLM conserva solo refs reales (REF-INEXISTENTE se filtra).
+    assert set(art["adrs"][1]["source_refs"]) == {"ENT-001", "REQ-N-001"}
+    # CONTRACTS (A4): integración detectada + contratos (depends_on + externo).
+    assert art["metrics"]["integrations_total"] == 1
+    assert art["integrations"][0]["contract_known"] is False
+    kinds = {c["kind"] for c in art["contracts"]}
+    assert "sync_api" in kinds and "external" in kinds
+    assert art["cross_cutting"][0]["concern"] == "audit"
+    # DIAGRAMS (A4): Mermaid determinista y válido.
+    assert art["diagrams"]["component"]["format"] == "mermaid"
+    assert art["diagrams"]["component"]["code"].startswith("flowchart")
+    assert "SYS" in art["diagrams"]["context"]["code"]
     # Métricas: hubo LLM (mock) -> tokens estimados > 0.
     assert art["metrics"]["tokens"]["total"] > 0
 

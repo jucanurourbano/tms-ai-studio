@@ -422,4 +422,58 @@ class ArchMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Redactor de ADRs" in system:
+            return json.dumps(
+                {
+                    "adrs": [
+                        {
+                            "title": "Persistencia relacional para siniestros",
+                            "decision": "Usar una base de datos relacional única.",
+                            "context": "Datos transaccionales con integridad referencial.",
+                            "alternatives_considered": ["NoSQL documental"],
+                            "consequences": [
+                                "+ Integridad",
+                                "- Menos flexibilidad de esquema",
+                            ],
+                            "source_refs": ["ENT-001", "REQ-N-001", "REF-INEXISTENTE"],
+                            "confidence": 0.7,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Detector de integraciones" in system:
+            return json.dumps(
+                {
+                    "integrations": [
+                        {
+                            "name": "Sistema de Planillas",
+                            "system": "planillas",
+                            "direction": "outbound",
+                            "protocol": "unknown",
+                            "purpose": "Registrar descuentos a personal (papeleta).",
+                            "data_exchanged": "Empleado, monto, motivo.",
+                            "source_refs": ["PRO-001", "BR-001"],
+                            "contract_known": False,
+                            "confidence": 0.6,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Analista de requisitos transversales" in system:
+            return json.dumps(
+                {
+                    "cross_cutting": [
+                        {
+                            "concern": "audit",
+                            "requirement": "Auditar toda operación sobre un siniestro.",
+                            "approach": "Bitácora por módulo con interceptor.",
+                            "source_refs": ["BR-001"],
+                            "confidence": 0.65,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
         return "{}"
