@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Oculta el indicador flotante de desarrollo (el botón circular "N").
+  devIndicators: false,
 };
 
 export default nextConfig;

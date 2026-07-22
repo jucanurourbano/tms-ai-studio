@@ -221,3 +221,32 @@
 .icon-glow {
   box-shadow: 0 10px 26px -10px rgba(124, 58, 237, 0.6);
 }
+
+/*
+ * Impresión / Exportar PDF: se ocultan la navegación y los controles (marcados
+ * con `print:hidden`), el contenedor de scroll pasa a alto/overflow automáticos
+ * para no recortar el artículo, y la portada `print-cover` se hace visible.
+ */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    background: #fff !important;
+  }
+  /* Neutraliza el layout de app (flex a pantalla completa) para que fluya. */
+  .app-root {
+    display: block !important;
+    height: auto !important;
+  }
+  #app-scroll {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  @page {
+    margin: 1.6cm;
+  }
+  /* Evita cortes feos dentro de tarjetas/filas. */
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

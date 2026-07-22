@@ -16,16 +16,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="flex h-screen">
+    <div className="app-root flex h-screen">
       {/* Sidebar de escritorio */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex print:hidden">
         <AppSidebar />
       </div>
 
       {/* Drawer móvil */}
       <div
         className={cn(
-          "fixed inset-0 z-40 md:hidden",
+          "fixed inset-0 z-40 md:hidden print:hidden",
           drawerOpen ? "pointer-events-auto" : "pointer-events-none",
         )}
         aria-hidden={!drawerOpen}
@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra superior móvil con hamburguesa */}
-        <div className="brand-gradient flex items-center gap-3 px-3 py-2.5 text-white md:hidden">
+        <div className="brand-gradient flex items-center gap-3 px-3 py-2.5 text-white md:hidden print:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}

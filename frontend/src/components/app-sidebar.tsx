@@ -10,6 +10,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 import { useAuth } from "@/lib/auth/auth-context";
 import { AgentIconView } from "@/lib/agent-icons";
@@ -40,42 +41,84 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
   const toggleGroup = (key: string) =>
     setOpenGroups((prev) => ({ ...prev, [key]: !(prev[key] ?? false) }));
 
+  // Atajo Ctrl+B para colapsar/expandir (solo en la sidebar de escritorio).
+  useEffect(() => {
+    if (forceExpanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        setCollapsed((c) => !c);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [forceExpanded, setCollapsed]);
+
   return (
     <aside
       data-collapsed={collapsed}
       className={cn(
         "flex h-full shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out",
-        collapsed ? "w-[4.5rem]" : "w-64",
+        collapsed ? "w-16" : "w-64",
       )}
     >
-      {/* Cabecera de marca (degradado violeta Urbano) */}
+      {/* Cabecera de marca (degradado violeta Urbano) + toggle de colapso */}
       <div
         className={cn(
-          "brand-gradient flex items-center gap-3 px-4 py-4",
-          collapsed && "justify-center px-0",
+          "brand-gradient flex items-center gap-2 px-3 py-3.5",
+          collapsed && "flex-col gap-2 px-0",
         )}
       >
         <Link
           href="/"
           onClick={onNavigate}
-          className="flex items-center gap-3"
+          className="flex min-w-0 items-center gap-2.5"
           title="TMS AI Studio"
         >
-          <Image
-            src="/logo-urbano.png"
-            alt="Urbano"
-            width={36}
-            height={36}
-            priority
-            className="rounded-md ring-1 ring-white/30"
-          />
-          {!collapsed && (
-            <div className="leading-tight text-white">
-              <div className="font-heading text-sm font-semibold">TMS AI Studio</div>
-              <div className="text-[11px] text-white/85">ISDF · Urbano TI</div>
-            </div>
+          {collapsed ? (
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 font-heading text-lg font-bold text-white ring-1 ring-white/30">
+              Ü
+            </span>
+          ) : (
+            <>
+              <Image
+                src="/logo-urbano.png"
+                alt="Urbano"
+                width={32}
+                height={32}
+                priority
+                className="rounded-md ring-1 ring-white/30"
+              />
+              <span className="min-w-0 leading-tight text-white">
+                <span className="block font-heading text-sm font-semibold">
+                  TMS AI Studio
+                </span>
+                <span className="block text-[11px] text-white/85">
+                  ISDF · Urbano TI
+                </span>
+              </span>
+            </>
           )}
         </Link>
+
+        {!forceExpanded && (
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Expandir menú (Ctrl+B)" : "Colapsar menú (Ctrl+B)"}
+            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+            className={cn(
+              "rounded-md p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white",
+              !collapsed && "ml-auto",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-2 py-4">
@@ -110,29 +153,6 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
           logout();
         }}
       />
-
-      {/* Toggle de colapso total (oculto en el drawer móvil) */}
-      <div className={cn("border-t p-2", forceExpanded && "hidden")}>
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? "Expandir menú" : "Colapsar menú"}
-          aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            collapsed && "justify-center",
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-4 w-4" />
-              <span>Colapsar menú</span>
-            </>
-          )}
-        </button>
-      </div>
     </aside>
   );
 }

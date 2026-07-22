@@ -1,6 +1,15 @@
 "use client";
 
-import { Kanban } from "lucide-react";
+import {
+  ClipboardCopy,
+  Clock,
+  Coins,
+  Download,
+  DollarSign,
+  Kanban,
+  Printer,
+  Target,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -14,9 +23,21 @@ import {
   OriginBadge,
 } from "@/components/ef/badges";
 import {
-  ArtifactIndex,
+  ArtifactIndexPanel,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import {
+  DataList,
+  DataRow,
+  EmptyHint,
+  GroupLabel,
+  IdTag,
+  PrintCover,
+  RefChip,
+  SectionCard,
+  Stat,
+  StatRow,
+} from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
 import { BackToTop } from "@/components/artifact/back-to-top";
 import { ValidationControls } from "@/components/ef/validation-controls";
@@ -39,42 +60,10 @@ import type {
   QuestionStatus,
   ValidationSummary,
 } from "@/lib/types/ef";
+import { usePersistentState } from "@/lib/use-persistent-state";
 import { cn } from "@/lib/utils";
 
 // --- utilidades --------------------------------------------------------------
-
-function jumpTo(ref?: string | null) {
-  if (!ref) return;
-  const el = document.getElementById(`ref-${ref}`);
-  if (!el) {
-    toast.info(`Referencia ${ref} no visible en esta vista.`);
-    return;
-  }
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
-  el.classList.add("ref-highlight");
-  window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
-}
-
-function RefLink({ refId }: { refId?: string | null }) {
-  if (!refId) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => jumpTo(refId)}
-      className="font-mono text-xs text-blue-600 underline underline-offset-2 hover:text-blue-800"
-    >
-      {refId}
-    </button>
-  );
-}
-
-/** Conteo con estado vacío EXPLÍCITO (nunca oculto). */
-function Count({ n }: { n: number }) {
-  if (n === 0) {
-    return <span className="text-amber-600">0 ⚠</span>;
-  }
-  return <span className="text-foreground">{n}</span>;
-}
 
 function downloadJson(artifact: EFArtifact, jobId: string) {
   const blob = new Blob([JSON.stringify(artifact, null, 2)], {
@@ -130,6 +119,10 @@ export function ResultView({ job }: { job: JobDetail }) {
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [refining, setRefining] = useState(false);
+  const [indexCollapsed, setIndexCollapsed] = usePersistentState(
+    "artifact:index-collapsed",
+    false,
+  );
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -173,7 +166,6 @@ export function ResultView({ job }: { job: JobDetail }) {
     window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
   }, []);
 
-  // Al responder una pregunta bloqueante, salta a la siguiente pendiente.
   const handleQuestionAnswered = useCallback(
     async (answeredId: string) => {
       const s = await reloadSummary();
@@ -279,6 +271,7 @@ export function ResultView({ job }: { job: JobDetail }) {
     (analysis.missing_info?.length ?? 0) +
     (analysis.inconsistencies?.length ?? 0) +
     (analysis.observations?.length ?? 0);
+  const modelTotal = modelCounts.reduce((acc, [, n]) => acc + n, 0);
   const blockingTotal = a.questions_for_analyst.filter((q) => q.blocking).length;
   const blockingRemaining = a.questions_for_analyst.filter(
     (q) => q.blocking && statusOf(q.id) === "pendiente",
@@ -303,9 +296,21 @@ export function ResultView({ job }: { job: JobDetail }) {
   ];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
+      <PrintCover
+        kind="Especificación Funcional (EF) v1.2.0"
+        title={a.source.filename || "Análisis EF"}
+        subtitle={a.summary}
+        stats={[
+          { label: "requisitos", value: String(reqTotal) },
+          { label: "modelo", value: String(modelTotal) },
+          { label: "preguntas", value: String(a.questions_for_analyst.length) },
+          { label: "cobertura", value: `${Math.round(a.metrics.coverage * 100)}%` },
+        ]}
+      />
+
       {/* Barra superior de afinamiento */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-6 py-3">
+      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="font-heading font-semibold">EF v1.2.0</span>
           <Badge variant="outline">
@@ -314,7 +319,7 @@ export function ResultView({ job }: { job: JobDetail }) {
           {job.parent_job_id && (
             <Link
               href={`/agents/ef/jobs/${job.parent_job_id}`}
-              className="text-xs underline underline-offset-2"
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
             >
               ver original (<Mono>{job.parent_job_id}</Mono>)
             </Link>
@@ -339,24 +344,37 @@ export function ResultView({ job }: { job: JobDetail }) {
             {ready ? "Listo para el Agente Scrum" : "Pendiente de afinamiento"}
           </span>
 
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
+              className="gap-1.5"
               onClick={() =>
                 void navigator.clipboard
                   .writeText(buildProcesosText(a, statusOf))
                   .then(() => toast.success("Copiado para Procesos"))
               }
             >
-              Copiar para Procesos
+              <ClipboardCopy className="h-3.5 w-3.5" />
+              Copiar
             </Button>
             <Button
               variant="outline"
               size="sm"
+              className="gap-1.5"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Exportar PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
               onClick={() => downloadJson(a, job.job_id)}
             >
-              Descargar JSON
+              <Download className="h-3.5 w-3.5" />
+              JSON
             </Button>
             <Dialog>
               <DialogTrigger
@@ -380,10 +398,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                   Esta acción consume tokens de la API.
                 </div>
                 <DialogFooter>
-                  <Button
-                    onClick={doRefine}
-                    disabled={refining || !canRefine}
-                  >
+                  <Button onClick={doRefine} disabled={refining || !canRefine}>
                     {refining ? "Regenerando…" : "Confirmar y regenerar"}
                   </Button>
                 </DialogFooter>
@@ -393,38 +408,60 @@ export function ResultView({ job }: { job: JobDetail }) {
         </div>
       </div>
 
-      {/* Cabecera: estado, fuente y métricas */}
+      {/* Cabecera: estado, fuente y mini-stats */}
       <div className="border-b px-6 py-4">
-        <div className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
           <JobStatusBadge status={job.status} />
-          <span className="text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             Fuente: {a.source.type} · {a.source.fidelity}
             {a.source.filename ? ` · ${a.source.filename}` : ""}
           </span>
-          <span className="text-muted-foreground">
-            tokens <Mono>{a.metrics.tokens.total}</Mono> · costo{" "}
-            <Mono>${a.metrics.cost.toFixed(4)}</Mono> · duración{" "}
-            <Mono>{a.metrics.duration}s</Mono> · cobertura{" "}
-            <Mono>{Math.round(a.metrics.coverage * 100)}%</Mono>
-          </span>
         </div>
-        <p className="mt-1 text-sm">{a.summary}</p>
+        <StatRow>
+          <Stat
+            icon={<Coins />}
+            value={a.metrics.tokens.total.toLocaleString("es-PE")}
+            label="tokens"
+          />
+          <Stat
+            icon={<DollarSign />}
+            value={`$${a.metrics.cost.toFixed(4)}`}
+            label="costo"
+          />
+          <Stat icon={<Clock />} value={`${a.metrics.duration}s`} label="duración" />
+          <Stat
+            icon={<Target />}
+            value={`${Math.round(a.metrics.coverage * 100)}%`}
+            label="cobertura"
+          />
+        </StatRow>
+        <p className="mt-3 max-w-3xl text-sm text-muted-foreground">{a.summary}</p>
       </div>
 
-      {/* Dos columnas: índice + contenido (una columna en móvil) */}
-      <div className="grid grid-cols-1 gap-6 px-4 py-5 md:grid-cols-[13rem_1fr] md:px-6">
-        {/* Índice navegable (scrollspy + sub-grupo plegable); select en móvil */}
-        <div className="md:sticky md:top-24 md:self-start">
-          <ArtifactIndex sections={indexSections} />
+      {/* Dos columnas: índice (plegable) + contenido */}
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-6 px-4 py-5 md:px-6 print:block!",
+          indexCollapsed
+            ? "md:grid-cols-[2.75rem_1fr]"
+            : "md:grid-cols-[13rem_1fr]",
+        )}
+      >
+        <div className="md:sticky md:top-24 md:self-start print:hidden">
+          <ArtifactIndexPanel
+            sections={indexSections}
+            collapsed={indexCollapsed}
+            onToggle={() => setIndexCollapsed((v) => !v)}
+          />
         </div>
 
         {/* Contenido */}
-        <div className="space-y-8 min-w-0">
+        <div className="min-w-0 space-y-6">
           {/* Banner de éxito al resolver todas las bloqueantes */}
           {blockingDone && (
             <div
               className={cn(
-                "rounded-lg border p-4",
+                "rounded-xl border p-4 print:hidden",
                 ready
                   ? "border-emerald-300 bg-emerald-50"
                   : "border-amber-300 bg-amber-50",
@@ -454,10 +491,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                 {ready && (
                   <Link
                     href="/agents/scrum/new"
-                    className={buttonVariants({
-                      size: "sm",
-                      className: "gap-1.5",
-                    })}
+                    className={buttonVariants({ size: "sm", className: "gap-1.5" })}
                   >
                     <Kanban className="h-3.5 w-3.5" />
                     Generar plan Scrum
@@ -468,132 +502,117 @@ export function ResultView({ job }: { job: JobDetail }) {
           )}
 
           {/* 1. Interpretación para Sistemas */}
-          <section id="sec-interpretation" className="scroll-mt-24">
-            <SectionTitle>1. Interpretación para Sistemas</SectionTitle>
-            <div className="rounded-md border p-3 text-sm space-y-3">
+          <SectionCard
+            id="sec-interpretation"
+            index="1"
+            title="Interpretación para Sistemas"
+          >
+            <div className="space-y-4">
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">
-                  Qué pide Procesos
-                </div>
-                <p>{si.what_process_requests}</p>
+                <GroupLabel>Qué pide Procesos</GroupLabel>
+                <p className="text-sm">{si.what_process_requests}</p>
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">
+                <GroupLabel count={si.scope_for_systems?.length}>
                   Alcance para Sistemas
-                </div>
+                </GroupLabel>
                 {si.scope_for_systems && si.scope_for_systems.length > 0 ? (
-                  <ul className="space-y-1">
+                  <DataList>
                     {si.scope_for_systems.map((s, i) => (
-                      <li key={s.id ?? i} className="text-sm">
-                        {s.description}{" "}
-                        {s.requirement_refs?.map((r) => (
-                          <span key={r} className="ml-1">
-                            <RefLink refId={r} />
-                          </span>
+                      <DataRow
+                        key={s.id ?? i}
+                        index={i + 1}
+                        right={s.requirement_refs?.map((r) => (
+                          <RefChip key={r} refId={r} />
                         ))}
-                      </li>
+                      >
+                        {s.description}
+                      </DataRow>
                     ))}
-                  </ul>
+                  </DataList>
                 ) : (
-                  <p className="text-amber-600 text-sm">0 ⚠ sin alcance definido</p>
+                  <EmptyHint>Sin alcance definido.</EmptyHint>
                 )}
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">
+                <GroupLabel count={si.apparent_out_of_scope?.length}>
                   Aparentemente fuera de alcance
-                </div>
+                </GroupLabel>
                 {si.apparent_out_of_scope &&
                 si.apparent_out_of_scope.length > 0 ? (
-                  <ul className="list-disc pl-5 text-sm">
+                  <DataList>
                     {si.apparent_out_of_scope.map((s, i) => (
-                      <li key={s.id ?? i}>
+                      <DataRow key={s.id ?? i} index={i + 1}>
                         {s.description}
                         {s.reason ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            — {s.reason}
-                          </span>
+                          <span className="text-muted-foreground"> — {s.reason}</span>
                         ) : null}
-                      </li>
+                      </DataRow>
                     ))}
-                  </ul>
+                  </DataList>
                 ) : (
-                  <p className="text-muted-foreground text-sm">
-                    0 · nada marcado fuera de alcance
-                  </p>
+                  <EmptyHint warn={false}>Nada marcado fuera de alcance.</EmptyHint>
                 )}
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">
+                <GroupLabel count={assumptions.length}>
                   Supuestos de interpretación (validables)
-                </div>
+                </GroupLabel>
                 {assumptions.length > 0 ? (
                   <div className="space-y-2">
                     {assumptions.map((s) => (
                       <div
                         key={s.id}
                         id={`ref-${s.id}`}
-                        className="rounded-md border p-2"
+                        className="rounded-lg border p-3"
                       >
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mono>{s.id}</Mono>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={s.id} />
                           <OriginBadge origin={s.origin} />
                           <ConfidenceBadge value={s.confidence} />
                         </div>
-                        <p className="text-sm">{s.assumption}</p>
+                        <p className="mt-1.5 text-sm">{s.assumption}</p>
                         {s.rationale && (
                           <p className="text-xs text-muted-foreground">
                             {s.rationale}
                           </p>
                         )}
-                        <ValidationControls
-                          jobId={job.job_id}
-                          targetType="assumption"
-                          targetId={s.id}
-                          status={statusOf(s.id)}
-                          respuesta={respuestaOf(s.id)}
-                          onChanged={reloadSummary}
-                        />
+                        <div className="print:hidden">
+                          <ValidationControls
+                            jobId={job.job_id}
+                            targetType="assumption"
+                            targetId={s.id}
+                            status={statusOf(s.id)}
+                            respuesta={respuestaOf(s.id)}
+                            onChanged={reloadSummary}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-amber-600 text-sm">0 ⚠ sin supuestos</p>
+                  <EmptyHint>Sin supuestos.</EmptyHint>
                 )}
               </div>
             </div>
-          </section>
+          </SectionCard>
 
           {/* 2. Preguntas al analista */}
-          <section id="sec-questions" className="scroll-mt-24">
-            <div className="flex items-center justify-between">
-              <SectionTitle>2. Preguntas al analista</SectionTitle>
-              <div className="flex gap-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setOnlyBlocking(false)}
-                  className={cn(
-                    "rounded px-2 py-0.5",
-                    !onlyBlocking ? "bg-accent font-medium" : "text-muted-foreground",
-                  )}
-                >
-                  Todas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlyBlocking(true)}
-                  className={cn(
-                    "rounded px-2 py-0.5",
-                    onlyBlocking ? "bg-accent font-medium" : "text-muted-foreground",
-                  )}
-                >
-                  Bloqueantes
-                </button>
-              </div>
-            </div>
+          <SectionCard
+            id="sec-questions"
+            index="2"
+            title="Preguntas al analista"
+            count={a.questions_for_analyst.length}
+            actions={
+              <FilterToggle
+                onlyBlocking={onlyBlocking}
+                onChange={setOnlyBlocking}
+              />
+            }
+          >
             {questions.length > 0 ? (
               <div className="space-y-2">
                 {questions.map((q) => (
@@ -601,278 +620,291 @@ export function ResultView({ job }: { job: JobDetail }) {
                     key={q.id}
                     id={`ref-${q.id}`}
                     className={cn(
-                      "rounded-md border p-3",
+                      "rounded-lg border p-3",
                       q.blocking && "border-red-300 bg-red-50/40",
                     )}
                   >
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Mono>{q.id}</Mono>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <IdTag id={q.id} />
                       <AudienceBadge audience={q.audience} />
                       {q.blocking && (
                         <Badge className="bg-red-600">bloqueante</Badge>
                       )}
                       {q.linked_to_ref && (
-                        <span className="text-xs text-muted-foreground">
-                          ligada a <RefLink refId={q.linked_to_ref} />
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          ligada a <RefChip refId={q.linked_to_ref} />
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm font-medium">{q.question}</p>
+                    <p className="mt-1.5 text-sm font-medium">{q.question}</p>
                     <p className="text-xs text-muted-foreground">
                       Motivo: {q.reason}
                     </p>
-                    <ValidationControls
-                      jobId={job.job_id}
-                      targetType="question"
-                      targetId={q.id}
-                      status={statusOf(q.id)}
-                      respuesta={respuestaOf(q.id)}
-                      onChanged={() => void handleQuestionAnswered(q.id)}
-                    />
+                    <div className="print:hidden">
+                      <ValidationControls
+                        jobId={job.job_id}
+                        targetType="question"
+                        targetId={q.id}
+                        status={statusOf(q.id)}
+                        respuesta={respuestaOf(q.id)}
+                        onChanged={() => void handleQuestionAnswered(q.id)}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-amber-600 text-sm">
-                {onlyBlocking ? "Sin preguntas bloqueantes." : "0 ⚠ sin preguntas"}
-              </p>
+              <EmptyHint warn={!onlyBlocking}>
+                {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
+              </EmptyHint>
             )}
-          </section>
+          </SectionCard>
 
           {/* 3. Requisitos */}
-          <section id="sec-requirements" className="scroll-mt-24">
-            <SectionTitle>3. Requisitos</SectionTitle>
-            {(
-              [
-                ["Negocio", a.requirements.business],
-                ["Funcionales", a.requirements.functional],
-                ["No funcionales", a.requirements.non_functional],
-              ] as const
-            ).map(([label, list]) => (
-              <div key={label} className="mb-4">
-                <div className="text-xs font-semibold text-muted-foreground mb-1">
-                  {label} <Count n={list.length} />
-                </div>
-                {list.length > 0 ? (
-                  <div className="rounded-md border divide-y [&>div:nth-child(even)]:bg-muted/20">
-                    {list.map((r) => (
-                      <div
-                        key={r.id}
-                        id={`ref-${r.id}`}
-                        className="p-2 hover:bg-muted/40"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggle(r.id)}
-                          className="flex w-full items-center gap-2 text-left text-sm"
-                        >
-                          <Mono>{r.id}</Mono>
-                          <span className="flex-1">{r.text}</span>
-                          <OriginBadge origin={r.origin} />
-                          <ConfidenceBadge value={r.confidence} />
-                        </button>
-                        {expanded.has(r.id) && (
-                          <div className="mt-2 pl-2 text-xs space-y-1">
-                            <div>
-                              source_ref:{" "}
-                              <Mono>{r.source_ref ?? "—"}</Mono>
+          <SectionCard
+            id="sec-requirements"
+            index="3"
+            title="Requisitos"
+            count={reqTotal}
+          >
+            <div className="space-y-4">
+              {(
+                [
+                  ["Negocio", a.requirements.business],
+                  ["Funcionales", a.requirements.functional],
+                  ["No funcionales", a.requirements.non_functional],
+                ] as const
+              ).map(([label, list]) => (
+                <div key={label}>
+                  <GroupLabel count={list.length}>{label}</GroupLabel>
+                  {list.length > 0 ? (
+                    <DataList>
+                      {list.map((r, i) => (
+                        <div key={r.id} id={`ref-${r.id}`}>
+                          <button
+                            type="button"
+                            onClick={() => toggle(r.id)}
+                            className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
+                          >
+                            <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground/70">
+                              {i + 1}
+                            </span>
+                            <span className="min-w-0 flex-1 text-sm">{r.text}</span>
+                            <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                              <OriginBadge origin={r.origin} />
+                              <ConfidenceBadge value={r.confidence} />
+                              <IdTag id={r.id} />
+                            </span>
+                          </button>
+                          {expanded.has(r.id) && (
+                            <div className="space-y-1 px-3 pb-3 pl-11 text-xs">
+                              <div>
+                                source_ref: <Mono>{r.source_ref ?? "—"}</Mono>
+                              </div>
+                              <div className="text-muted-foreground">evidence:</div>
+                              <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
+                                {r.evidence ?? "— sin evidencia —"}
+                              </pre>
                             </div>
-                            <div className="text-muted-foreground">evidence:</div>
-                            <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
-                              {r.evidence ?? "— sin evidencia —"}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </section>
+                          )}
+                        </div>
+                      ))}
+                    </DataList>
+                  ) : (
+                    <EmptyHint>Sin requisitos de {label.toLowerCase()}.</EmptyHint>
+                  )}
+                </div>
+              ))}
+            </div>
+          </SectionCard>
 
           {/* 4. Modelo */}
-          <section id="sec-model" className="scroll-mt-24 space-y-4">
-            <SectionTitle>4. Modelo</SectionTitle>
-            <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
-              {a.actors.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.name}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-modules" title="Módulos" n={a.modules.length}>
-              {a.modules.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.name}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-menus" title="Menús" n={a.menus.length}>
-              {a.menus.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-processes" title="Procesos" n={a.processes.length}>
-              {a.processes.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.name}
-                  {x.steps && x.steps.length > 0 ? (
+          <SectionCard id="sec-model" index="4" title="Modelo" count={modelTotal}>
+            <div className="space-y-4">
+              <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
+                {a.actors.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.name}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-modules" title="Módulos" n={a.modules.length}>
+                {a.modules.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.name}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-menus" title="Menús" n={a.menus.length}>
+                {a.menus.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-processes" title="Procesos" n={a.processes.length}>
+                {a.processes.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.name}
+                    {x.steps && x.steps.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {" "}
+                        · {x.steps.join(" → ")}
+                      </span>
+                    ) : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-rules" title="Reglas" n={a.business_rules.length}>
+                {a.business_rules.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.statement}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock
+                id="m-validations"
+                title="Validaciones"
+                n={a.validations.length}
+              >
+                {a.validations.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.rule}{" "}
+                    {x.field_ref ? (
+                      <span className="text-xs">
+                        (<RefChip refId={x.field_ref} />)
+                      </span>
+                    ) : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-fields" title="Campos" n={a.fields.length}>
+                {a.fields.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    <Mono>{x.name}</Mono>
                     <span className="text-xs text-muted-foreground">
                       {" "}
-                      · {x.steps.join(" → ")}
+                      {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
+                      {x.entity_ref ? " · " : ""}
                     </span>
-                  ) : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-rules" title="Reglas" n={a.business_rules.length}>
-              {a.business_rules.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.statement}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock
-              id="m-validations"
-              title="Validaciones"
-              n={a.validations.length}
-            >
-              {a.validations.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.rule}{" "}
-                  {x.field_ref ? (
-                    <span className="text-xs">
-                      (<RefLink refId={x.field_ref} />)
+                    {x.entity_ref ? <RefChip refId={x.entity_ref} /> : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-entities" title="Entidades" n={a.entities.length}>
+                {a.entities.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    {x.name}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock
+                id="m-relationships"
+                title="Relaciones"
+                n={a.relationships.length}
+              >
+                {a.relationships.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    <RefChip refId={x.source_entity_ref} />{" "}
+                    <Mono>{x.cardinality}</Mono>{" "}
+                    <RefChip refId={x.target_entity_ref} />
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-crud" title="CRUD" n={a.crud.length}>
+                {a.crud.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    <RefChip refId={x.entity_ref} />
+                    <span className="ml-2 font-mono text-xs">
+                      {x.create ? "C" : "-"}
+                      {x.read ? "R" : "-"}
+                      {x.update ? "U" : "-"}
+                      {x.delete ? "D" : "-"}
                     </span>
-                  ) : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-fields" title="Campos" n={a.fields.length}>
-              {a.fields.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  <Mono>{x.name}</Mono>
-                  <span className="text-xs text-muted-foreground">
-                    {" "}
-                    {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
-                    {x.entity_ref ? " · " : ""}
-                  </span>
-                  {x.entity_ref ? <RefLink refId={x.entity_ref} /> : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-entities" title="Entidades" n={a.entities.length}>
-              {a.entities.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  {x.name}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock
-              id="m-relationships"
-              title="Relaciones"
-              n={a.relationships.length}
-            >
-              {a.relationships.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  <RefLink refId={x.source_entity_ref} />{" "}
-                  <Mono>{x.cardinality}</Mono>{" "}
-                  <RefLink refId={x.target_entity_ref} />
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-crud" title="CRUD" n={a.crud.length}>
-              {a.crud.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  <RefLink refId={x.entity_ref} />
-                  <span className="ml-2 font-mono text-xs">
-                    {x.create ? "C" : "-"}
-                    {x.read ? "R" : "-"}
-                    {x.update ? "U" : "-"}
-                    {x.delete ? "D" : "-"}
-                  </span>
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock id="m-apis" title="APIs" n={a.apis.length}>
-              {a.apis.map((x) => (
-                <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                  <Mono>
-                    {x.method} {x.path}
-                  </Mono>
-                </ItemRow>
-              ))}
-            </ModelBlock>
-          </section>
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock id="m-apis" title="APIs" n={a.apis.length}>
+                {a.apis.map((x) => (
+                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                    <Mono>
+                      {x.method} {x.path}
+                    </Mono>
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+            </div>
+          </SectionCard>
 
           {/* 5. Análisis crítico */}
-          <section id="sec-analysis" className="scroll-mt-24 space-y-4">
-            <SectionTitle>5. Análisis crítico</SectionTitle>
-            <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
-              {(analysis.ambiguities ?? []).map((x) => (
-                <ItemRow key={x.id} id={x.id}>
-                  {x.description}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock title="Faltantes" n={analysis.missing_info?.length ?? 0}>
-              {(analysis.missing_info ?? []).map((x) => (
-                <ItemRow key={x.id} id={x.id}>
-                  {x.description}
-                  {x.expected_where ? (
-                    <span className="text-xs text-muted-foreground">
-                      {" "}
-                      — esperado en: {x.expected_where}
-                    </span>
-                  ) : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock
-              title="Inconsistencias"
-              n={analysis.inconsistencies?.length ?? 0}
-            >
-              {(analysis.inconsistencies ?? []).map((x) => (
-                <ItemRow key={x.id} id={x.id}>
-                  {x.description}
-                  {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
-                    <span className="ml-1">
-                      {x.conflicting_refs.map((r) => (
-                        <span key={r} className="ml-1">
-                          <RefLink refId={r} />
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-            <ModelBlock
-              title="Observaciones"
-              n={analysis.observations?.length ?? 0}
-            >
-              {(analysis.observations ?? []).map((x) => (
-                <ItemRow key={x.id} id={x.id}>
-                  {x.description}
-                  {x.reason ? (
-                    <span className="text-xs text-muted-foreground">
-                      {" "}
-                      — {x.reason}
-                    </span>
-                  ) : null}
-                </ItemRow>
-              ))}
-            </ModelBlock>
-          </section>
+          <SectionCard
+            id="sec-analysis"
+            index="5"
+            title="Análisis crítico"
+            count={analysisTotal}
+          >
+            <div className="space-y-4">
+              <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
+                {(analysis.ambiguities ?? []).map((x) => (
+                  <ItemRow key={x.id} id={x.id}>
+                    {x.description}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock title="Faltantes" n={analysis.missing_info?.length ?? 0}>
+                {(analysis.missing_info ?? []).map((x) => (
+                  <ItemRow key={x.id} id={x.id}>
+                    {x.description}
+                    {x.expected_where ? (
+                      <span className="text-xs text-muted-foreground">
+                        {" "}
+                        — esperado en: {x.expected_where}
+                      </span>
+                    ) : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock
+                title="Inconsistencias"
+                n={analysis.inconsistencies?.length ?? 0}
+              >
+                {(analysis.inconsistencies ?? []).map((x) => (
+                  <ItemRow key={x.id} id={x.id}>
+                    {x.description}
+                    {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
+                      <span className="ml-1 inline-flex flex-wrap gap-1">
+                        {x.conflicting_refs.map((r) => (
+                          <RefChip key={r} refId={r} />
+                        ))}
+                      </span>
+                    ) : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+              <ModelBlock
+                title="Observaciones"
+                n={analysis.observations?.length ?? 0}
+              >
+                {(analysis.observations ?? []).map((x) => (
+                  <ItemRow key={x.id} id={x.id}>
+                    {x.description}
+                    {x.reason ? (
+                      <span className="text-xs text-muted-foreground">
+                        {" "}
+                        — {x.reason}
+                      </span>
+                    ) : null}
+                  </ItemRow>
+                ))}
+              </ModelBlock>
+            </div>
+          </SectionCard>
         </div>
       </div>
 
       {/* Contador flotante de bloqueantes restantes */}
       {blockingRemaining > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur">
+        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur print:hidden">
           <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
           bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
           {blockingRemaining !== 1 ? "s" : ""}
@@ -886,11 +918,40 @@ export function ResultView({ job }: { job: JobDetail }) {
 
 // --- subcomponentes ----------------------------------------------------------
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function FilterToggle({
+  onlyBlocking,
+  onChange,
+}: {
+  onlyBlocking: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <h2 className="mb-2 text-sm font-heading font-semibold uppercase tracking-wide text-muted-foreground">
-      {children}
-    </h2>
+    <div className="flex rounded-lg border bg-muted/40 p-0.5 text-xs">
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={cn(
+          "rounded-md px-2 py-0.5 transition-colors",
+          !onlyBlocking
+            ? "bg-background font-medium text-foreground shadow-sm"
+            : "text-muted-foreground",
+        )}
+      >
+        Todas
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={cn(
+          "rounded-md px-2 py-0.5 transition-colors",
+          onlyBlocking
+            ? "bg-background font-medium text-foreground shadow-sm"
+            : "text-muted-foreground",
+        )}
+      >
+        Bloqueantes
+      </button>
+    </div>
   );
 }
 
@@ -906,17 +967,9 @@ function ModelBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div id={id} className="scroll-mt-24">
-      <div className="text-xs font-semibold text-muted-foreground mb-1">
-        {title} <Count n={n} />
-      </div>
-      {n > 0 ? (
-        <div className="rounded-md border divide-y [&>div:nth-child(even)]:bg-muted/20">
-          {children}
-        </div>
-      ) : (
-        <p className="text-amber-600 text-xs">0 ⚠ vacío</p>
-      )}
+    <div id={id} className="scroll-mt-28">
+      <GroupLabel count={n}>{title}</GroupLabel>
+      {n > 0 ? <DataList>{children}</DataList> : <EmptyHint>Vacío.</EmptyHint>}
     </div>
   );
 }
@@ -931,13 +984,16 @@ function ItemRow({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      id={`ref-${id}`}
-      className="flex items-center gap-2 p-2 text-sm hover:bg-muted/40"
+    <DataRow
+      id={id}
+      right={
+        <>
+          {origin === "derived" ? <OriginBadge origin={origin} /> : null}
+          <IdTag id={id} />
+        </>
+      }
     >
-      <Mono>{id}</Mono>
-      <span className="flex-1 min-w-0">{children}</span>
-      {origin === "derived" ? <OriginBadge origin={origin} /> : null}
-    </div>
+      {children}
+    </DataRow>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -79,19 +80,21 @@ export function ValidationControls({
         <Button
           size="sm"
           variant="outline"
-          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+          className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
           disabled={submitting}
           onClick={() => submit("confirmado")}
         >
+          <Check className="h-3.5 w-3.5" />
           Confirmar
         </Button>
         <Button
           size="sm"
           variant="outline"
-          className="border-amber-300 text-amber-700 hover:bg-amber-50"
+          className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
           disabled={submitting}
           onClick={() => submit("corregido")}
         >
+          <Pencil className="h-3.5 w-3.5" />
           Corregir
         </Button>
       </div>

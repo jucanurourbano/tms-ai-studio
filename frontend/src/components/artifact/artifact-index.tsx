@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useScrollSpy } from "@/lib/use-scroll-spy";
@@ -38,9 +38,12 @@ function Count({ n }: { n?: number }) {
 export function ArtifactIndex({
   sections,
   scrollRootId = "app-scroll",
+  hideDesktopNav = false,
 }: {
   sections: IndexSection[];
   scrollRootId?: string;
+  /** Oculta el índice de escritorio (modo colapsado); el select móvil se mantiene. */
+  hideDesktopNav?: boolean;
 }) {
   const key = sections.map((s) => s.id).join(",");
   const ids = useMemo(
@@ -94,7 +97,10 @@ export function ArtifactIndex({
       {/* Escritorio: índice lateral navegable con scrollspy */}
       <nav
         aria-label="Índice del artefacto"
-        className="hidden space-y-1 text-sm md:block"
+        className={cn(
+          "space-y-1 text-sm",
+          hideDesktopNav ? "hidden" : "hidden md:block",
+        )}
       >
       {sections.map((section) => {
         const childActive = section.children?.some((c) => c.id === active);
@@ -185,5 +191,58 @@ export function ArtifactIndex({
       })}
       </nav>
     </>
+  );
+}
+
+/**
+ * Índice con cabecera y botón icónico de colapso (mismo lenguaje visual que el
+ * sidebar). Colapsado deja el contenido a ancho completo; el estado lo gestiona
+ * (y persiste) la vista de artefacto. En móvil siempre se muestra el select.
+ */
+export function ArtifactIndexPanel({
+  sections,
+  collapsed,
+  onToggle,
+  scrollRootId,
+}: {
+  sections: IndexSection[];
+  collapsed: boolean;
+  onToggle: () => void;
+  scrollRootId?: string;
+}) {
+  return (
+    <div>
+      {/* Cabecera del índice (solo escritorio) */}
+      <div
+        className={cn(
+          "mb-2 hidden md:flex",
+          collapsed ? "md:justify-center" : "md:items-center md:justify-between",
+        )}
+      >
+        {!collapsed && (
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+            Índice
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          title={collapsed ? "Mostrar índice" : "Ocultar índice"}
+          aria-label={collapsed ? "Mostrar índice" : "Ocultar índice"}
+          className="rounded-md border bg-card p-1.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+      <ArtifactIndex
+        sections={sections}
+        scrollRootId={scrollRootId}
+        hideDesktopNav={collapsed}
+      />
+    </div>
   );
 }
