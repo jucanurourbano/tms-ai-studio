@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     SCRUM_SPRINT_CAPACITY: int = 20  # D4: puntos por sprint (configurable)
     SCRUM_COVERAGE_THRESHOLD: float = 1.0  # D5: RF cubiertos por >=1 historia
 
+    # --- Pipeline del Agente Arquitectura ---
+    # Umbrales del *scope profile* determinista (A2) que clasifican el tamaño del
+    # alcance y fundamentan la recomendación de estilo (monolito modular por
+    # defecto). score <= SMALL_MAX => S; score >= LARGE_MIN => L; en medio => M.
+    ARCH_SIZE_SMALL_MAX: int = 8
+    ARCH_SIZE_LARGE_MIN: int = 25
+    # Cobertura mínima (épicas/entidades) para el contenido mínimo del semáforo.
+    ARCH_COVERAGE_THRESHOLD: float = 1.0
+
     # --- Integración ClickUp (cuenta COMPARTIDA: guard fail-closed) ---
     # Sin allowlist configurada, el módulo NO escribe nada (ver CLAUDE.md).
     CLICKUP_API_TOKEN: str = ""
