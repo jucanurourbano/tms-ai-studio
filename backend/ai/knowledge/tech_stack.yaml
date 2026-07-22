@@ -1,0 +1,117 @@
+# =============================================================================
+# tech_stack.yaml — Stack tecnológico estándar de Urbano TI
+#
+#   ⚠️  PENDIENTE DE VALIDACIÓN POR EL EQUIPO DE ARQUITECTURA / SISTEMAS DE URBANO
+#
+# IMPORTANTE (léelo antes de usar):
+#   - Este archivo describe el stack con el que Urbano construye sus **SISTEMAS
+#     DE NEGOCIO** (los productos que diseñan los agentes ISDF), NO el stack de la
+#     plataforma TMS AI Studio (que es Python/FastAPI/Next.js).
+#   - Lo consume el nodo STACK del Agente Arquitectura como **allow-list**: el
+#     agente SOLO puede recomendar tecnologías presentes aquí; si detecta una
+#     necesidad fuera de esta lista, NO inventa un exótico → emite una pregunta
+#     al Arquitecto.
+#   - Los valores de abajo son un **BORRADOR razonable** puesto por el asistente
+#     para no dejar el archivo vacío. NO reflejan (aún) el stack real de Urbano.
+#     Cada capa lleva un comentario "# REVISAR:" indicando qué debes confirmar,
+#     podar o reemplazar.  Al validar, sube `status` a `validado` y `version` a 1.
+#
+# Formato por capa:
+#   default:     tecnología recomendada por defecto (la más frecuente en la casa)
+#   allowed:     lista blanca de tecnologías permitidas para esa capa
+#   notes:       contexto para el agente (cuándo preferir una alternativa)
+# =============================================================================
+
+status: pendiente_de_validacion   # REVISAR: cambiar a "validado" cuando el equipo confirme
+version: 0                        # REVISAR: subir a 1 al validar
+
+layers:
+  language_backend:
+    # REVISAR (CRÍTICO): ¿cuál es el lenguaje de backend de los sistemas de negocio
+    # de Urbano? Muchas casas de logística usan .NET/C# o Java. Ajusta default y poda
+    # los que no apliquen.
+    default: "Java"
+    allowed: ["Java", "C# (.NET)", "Python", "Node.js (TypeScript)"]
+    notes: "Preferir el lenguaje con mayor base instalada y equipo disponible."
+
+  framework_backend:
+    # REVISAR: debe ser coherente con language_backend (p. ej. Spring Boot↔Java,
+    # ASP.NET Core↔C#, Django/FastAPI↔Python, NestJS↔Node).
+    default: "Spring Boot"
+    allowed: ["Spring Boot", "ASP.NET Core", "Django", "NestJS"]
+    notes: "Framework corporativo estándar para APIs y servicios de negocio."
+
+  framework_frontend:
+    # REVISAR: ¿SPA (React/Angular) o server-rendered? ¿Hay estándar corporativo?
+    default: "Angular"
+    allowed: ["Angular", "React", "Vue", "Blazor"]
+    notes: "Angular es común en TI corporativa; React si el equipo ya lo domina."
+
+  database_relational:
+    # REVISAR (CRÍTICO): motor relacional de la casa. Logística suele usar
+    # SQL Server u Oracle; PostgreSQL si hay preferencia por open source.
+    default: "SQL Server"
+    allowed: ["SQL Server", "Oracle", "PostgreSQL", "MySQL"]
+    notes: "Motor transaccional principal para los sistemas de negocio."
+
+  cache:
+    # REVISAR: ¿se usa caché distribuida? Si no aplica, el agente lo omite.
+    default: "Redis"
+    allowed: ["Redis", "Memcached", "ninguna"]
+    notes: "Solo si hay requisitos de latencia/sesión que lo justifiquen."
+
+  message_queue:
+    # REVISAR: ¿mensajería/colas corporativas? Solo se recomienda si el diseño
+    # detecta asincronía justificada (eventos, tareas largas). Si no, "ninguna".
+    default: "RabbitMQ"
+    allowed: ["RabbitMQ", "Apache Kafka", "Azure Service Bus", "AWS SQS", "ninguna"]
+    notes: "Por defecto ninguna en monolito modular; añadir solo si se justifica."
+
+  auth:
+    # REVISAR (CRÍTICO): ¿hay IdP/SSO corporativo (Active Directory, Azure AD,
+    # Keycloak)? Impacta el requisito transversal de autenticación.
+    default: "Keycloak"
+    allowed: ["Keycloak", "Azure AD / Entra ID", "Active Directory (LDAP)", "OAuth2/OIDC propio"]
+    notes: "Preferir el IdP corporativo existente antes que auth propia."
+
+  api_style:
+    # REVISAR: estilo de API estándar (REST casi siempre; SOAP si hay legados).
+    default: "REST"
+    allowed: ["REST", "GraphQL", "gRPC", "SOAP"]
+    notes: "SOAP solo para integrarse con sistemas legados que lo exijan."
+
+  containerization:
+    # REVISAR: ¿se despliega en contenedores? ¿orquestador?
+    default: "Docker"
+    allowed: ["Docker", "ninguno"]
+    notes: "Estándar de empaquetado."
+
+  orchestration:
+    # REVISAR: ¿Kubernetes, un PaaS, o VMs/on-premise tradicional?
+    default: "Kubernetes"
+    allowed: ["Kubernetes", "OpenShift", "Docker Compose", "VMs / on-premise"]
+    notes: "Kubernetes solo si hay plataforma y equipo que lo operen."
+
+  cloud:
+    # REVISAR (CRÍTICO): ¿nube corporativa (Azure/AWS/GCP) u on-premise?
+    default: "on-premise"
+    allowed: ["Azure", "AWS", "GCP", "on-premise", "híbrido"]
+    notes: "Define disponibilidad de servicios gestionados (colas, auth, etc.)."
+
+  ci_cd:
+    # REVISAR: herramienta de integración/entrega continua corporativa.
+    default: "Azure DevOps"
+    allowed: ["Azure DevOps", "GitLab CI", "Jenkins", "GitHub Actions"]
+    notes: "Alinear con el repositorio y la nube corporativa."
+
+  observability:
+    # REVISAR: stack de logs/métricas/trazas si existe estándar.
+    default: "ELK (Elastic)"
+    allowed: ["ELK (Elastic)", "Grafana + Prometheus", "Datadog", "Application Insights"]
+    notes: "Opcional; recomendar solo si hay RNF de observabilidad."
+
+  reporting:
+    # REVISAR: ¿herramienta de reportería/BI corporativa? (logística la suele tener)
+    default: "Power BI"
+    allowed: ["Power BI", "JasperReports", "Tableau", "ninguna"]
+    notes: "Solo si el EF pide reportes/tableros."
