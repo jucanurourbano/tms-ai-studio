@@ -112,6 +112,19 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["diagrams"]["component"]["format"] == "mermaid"
     assert art["diagrams"]["component"]["code"].startswith("flowchart")
     assert "SYS" in art["diagrams"]["context"]["code"]
+    # CRITIQUE (A5): cobertura de épicas/entidades/RNF (RNF-001 sin transversal).
+    cov = art["analysis"]["coverage"]
+    assert cov["epics_mapped"] == 1
+    assert cov["entities_mapped"] == 2
+    assert cov["uncovered_nfr_refs"] == ["REQ-N-001"]
+    assert art["metrics"]["coverage"] == 0.75
+    # Riesgo determinista: integración sin contrato conocido.
+    assert any(r["source_ref"] == "INT-001" for r in art["analysis"]["risks"])
+    # QUESTION_GEN (A5): RNF sin atender e integración sin contrato -> bloqueantes.
+    qs = art["questions_for_architect"]
+    assert any(q["linked_to_ref"] == "REQ-N-001" and q["blocking"] for q in qs)
+    assert any(q["linked_to_ref"] == "INT-001" and q["blocking"] for q in qs)
+    assert all(q["audience"] == "tecnico" for q in qs)
     # Métricas: hubo LLM (mock) -> tokens estimados > 0.
     assert art["metrics"]["tokens"]["total"] > 0
 

@@ -14,6 +14,7 @@ from .enums import (
     CrossCuttingConcern,
     IntegrationDirection,
     IntegrationProtocol,
+    RiskSeverity,
 )
 
 
@@ -114,3 +115,18 @@ class CrossCuttingListExtract(BaseModel):
     """Salida del sub-paso de transversales (nodo CONTRACTS)."""
 
     cross_cutting: list[CrossCuttingExtract] = Field(default_factory=list)
+
+
+class RiskExtract(BaseModel):
+    """Un riesgo técnico propuesto por el pase LLM de crítica."""
+
+    description: str
+    severity: RiskSeverity = RiskSeverity.MEDIA
+    mitigation: Optional[str] = None
+    source_ref: Optional[str] = None
+
+
+class CritiqueExtract(BaseModel):
+    """Salida del pase LLM de CRITIQUE (solo riesgos; no propone soluciones)."""
+
+    risks: list[RiskExtract] = Field(default_factory=list)

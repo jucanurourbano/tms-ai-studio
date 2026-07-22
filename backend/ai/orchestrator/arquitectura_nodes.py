@@ -1,9 +1,9 @@
 """Nodos del grafo LangGraph del Agente Arquitectura.
 
-LOAD_SOURCES (gate + contexto consolidado), CONTEXT (scope profile determinista),
-ASSEMBLE y PERSIST son reales desde el Bloque A2. Los nodos generativos del medio
-(COMPONENTS…QUESTION_GEN) son *stubs* que dejan pasar el estado para correr el
-grafo de extremo a extremo; se completan en los Bloques A3-A5.
+Pipeline completo: LOAD_SOURCES (gate + contexto EF+Scrum) → CONTEXT (scope
+determinista) → COMPONENTS/STACK (A3) → ADRS/CONTRACTS/DIAGRAMS (A4) →
+CRITIQUE/QUESTION_GEN (A5) → ASSEMBLE/PERSIST. Los nodos generativos usan LLM
+inyectable (mock en tests); los diagramas y la cobertura son deterministas.
 """
 
 import time
@@ -16,12 +16,14 @@ from ai.agents.arquitectura.common import merge_metrics
 from ai.agents.arquitectura.components import run_components
 from ai.agents.arquitectura.context import build_scope_profile, classify_size
 from ai.agents.arquitectura.contracts import run_contracts
+from ai.agents.arquitectura.critique import run_critique
 from ai.agents.arquitectura.diagrams import build_diagrams
 from ai.agents.arquitectura.load_sources import (
     assert_scrum_ready,
     extract_sources,
     resolve_ef_hash,
 )
+from ai.agents.arquitectura.question_gen import generate_questions
 from ai.agents.arquitectura.stack import run_stack
 from ai.agents.arquitectura.state import ArchitectureState
 from ai.agents.base.structured import ClaudeLLMClient
@@ -168,17 +170,28 @@ async def node_diagrams(state: ArchitectureState) -> dict:
     return {"diagrams": diagrams}
 
 
-# --- CRITIQUE / QUESTION_GEN (stubs A5) -------------------------------------
+# --- CRITIQUE / QUESTION_GEN (Bloque A5) ------------------------------------
 
 
-async def node_critique(state: ArchitectureState) -> dict:
-    """CRITIQUE (stub A5): cobertura + refs huérfanas + ciclos + riesgos."""
-    return {"critique": {}}
+async def node_critique(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """CRITIQUE: cobertura (épicas/entidades/RNF) + ciclos + integraciones sin
+    contrato + riesgos (pase LLM opcional)."""
+    critique_dict, tokens = await run_critique(
+        state.get("components") or [],
+        state.get("contracts") or [],
+        state.get("integrations") or [],
+        state.get("cross_cutting") or [],
+        state.get("sources") or {},
+        llm=_llm(config),
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {"critique": critique_dict, "metrics": merge_metrics(state, tokens, [])}
 
 
 async def node_question_gen(state: ArchitectureState) -> dict:
-    """QUESTION_GEN (stub A5): preguntas al Arquitecto desde los vacíos."""
-    return {"questions": []}
+    """QUESTION_GEN: preguntas al Arquitecto (RNF/integraciones/cobertura → bloqueantes)."""
+    questions = generate_questions(state.get("critique") or {})
+    return {"questions": questions}
 
 
 # --- ASSEMBLE / PERSIST -----------------------------------------------------
