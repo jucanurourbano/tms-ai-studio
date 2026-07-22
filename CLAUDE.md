@@ -17,7 +17,9 @@ DevOps + un **Orquestador** que coordina el flujo entre ellos.
 **Estado:** Agente EF **completo** (backend + frontend). Agente Scrum **completo**
 (backend + frontend; bloques B0→B8 implementados, ver §4 y
 `docs/diseno-agente-scrum.md`). Persistencia **generalizada** a tablas `agent_*`
-multi-agente (D1). Siguiente eslabón: **Agente Arquitectura**.
+multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) protegiendo
+toda la API de agentes y el frontend (ver §5). Siguiente eslabón: **Agente
+Arquitectura**.
 
 ---
 
@@ -144,7 +146,54 @@ estructuralmente:
 
 ---
 
-## 5. Ciclo de afinamiento
+## 5. Autenticación y usuarios
+
+Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
+de agentes y el frontend. Sigue la misma arquitectura del proyecto
+(`api → services → repositories → models`) y el envelope `ApiResponse`.
+
+- **Modelo `User`** (`backend/app/models/user.py`, tabla `users`, migración
+  `0005_users`): `id` (ULID), `email` **único**, `full_name`, `password_hash`,
+  `role`, `is_active`, timestamps.
+- **Roles:** `admin` | `member`. `admin` puede registrar usuarios y gestionar el
+  panel; `member` solo usa los agentes.
+- **Hashing:** **bcrypt vía `passlib`** (`bcrypt` pinneado `<4.1` por
+  incompatibilidad con `passlib` 1.7.4). El `password_hash` **nunca** se expone en
+  la API ni se registra en logs; **jamás** se persiste la contraseña en claro.
+- **JWT** (`python-jose`, HS256): el `sub` es el id del usuario. `JWT_SECRET`,
+  `JWT_ALGORITHM` y `JWT_EXPIRE_MINUTES` viven en `settings`/`.env`. El
+  `JWT_SECRET` **no se commitea**; en producción es único y **se rota**
+  periódicamente (rotarlo cierra todas las sesiones vigentes).
+- **Endpoints `/api/v1/auth`** (OpenAPI en español, `ApiResponse`):
+  - `POST /auth/register` — crea usuario. **Solo un `admin` autenticado** puede
+    registrar. **Excepción de bootstrap:** si no existe ningún usuario, el primer
+    registro se permite **sin auth** y nace `admin`.
+  - `POST /auth/login` — `email` + `password` → `access_token` (JWT) + usuario.
+  - `GET /auth/me` — usuario autenticado actual.
+  - `GET /auth/users` — listado (**solo `admin`**).
+  - `PATCH /auth/users/{id}` — activar/desactivar (**solo `admin`**; un admin no
+    puede desactivarse a sí mismo).
+- **Protección:** la dependencia `get_current_user`
+  (`backend/app/dependencies/current_user.py`) valida el JWT y protege **TODOS**
+  los endpoints de EF y Scrum; sin token válido → **401** con mensaje claro.
+  `require_admin` añade la comprobación de rol. Errores de app (`app/errors.py`:
+  `AuthError` 401 / `ForbiddenError` 403 / `NotFoundError` 404 / `ConflictError`
+  409) se traducen al envelope uniforme por el middleware.
+- **Bootstrap del primer admin** (dos vías; **sin credenciales en el repo**):
+  1. CLI: `backend/scripts/create_admin.py --email <correo> --name "<nombre>"`
+     (pide la contraseña sin eco; idempotente).
+  2. Endpoint `POST /auth/register` mientras la tabla `users` esté vacía.
+- **Frontend:** `AuthProvider` guarda el token (memoria + `localStorage`), el
+  cliente API adjunta el `Bearer` y un handler global de **401** cierra sesión y
+  redirige a `/login`. Guarda de rutas (`AppGate`): sin sesión → `/login`; con
+  sesión, `/login` → dashboard. Pantalla `/login` con identidad Urbano; menú de
+  usuario (nombre + rol) con **cerrar sesión** en la sidebar. **Panel de usuarios**
+  (`/configuracion/usuarios`, **solo `admin`**): tabla (nombre/email/rol/estado/
+  fecha), alta y activar/desactivar.
+
+---
+
+## 6. Ciclo de afinamiento
 
 - Las **validaciones** (`pendiente` | `confirmado` | `corregido` + respuesta) se
   persisten **aparte, sin mutar el artefacto**.
@@ -155,7 +204,7 @@ estructuralmente:
 
 ---
 
-## 6. Lecciones obligatorias
+## 7. Lecciones obligatorias
 
 - **Timeout 180s** en llamadas al modelo.
 - **Backoff respetando `retry-after`.**
@@ -186,7 +235,7 @@ estructuralmente:
 
 ---
 
-## 7. Reglas de proceso
+## 8. Reglas de proceso
 
 - **Modelo Claude por defecto:** `claude-sonnet-5` (`CLAUDE_MODEL` en `.env`).
   Tarifas para cálculo de costos: **$3 / MTok input**, **$15 / MTok output**
@@ -198,7 +247,7 @@ estructuralmente:
 
 ---
 
-## 8. Alcance v1
+## 9. Alcance v1
 
 - **Sin OCR.**
 - **Sin RAG pgvector** (la extensión está disponible en la imagen, pero no se usa
@@ -207,7 +256,7 @@ estructuralmente:
 
 ---
 
-## 9. Estructura del repositorio
+## 10. Estructura del repositorio
 
 ```
 tms-ai-studio/
@@ -223,10 +272,12 @@ tms-ai-studio/
     ├── requirements.txt
     ├── app/
     │   ├── config/settings.py    # pydantic-settings
-    │   ├── core/logger.py
-    │   ├── api/v1/{router,health,ef}.py
-    │   ├── dependencies/  middlewares/  models/
+    │   ├── core/{logger,security}.py    # security: hashing bcrypt + JWT
+    │   ├── errors.py             # errores de app (auth/permisos → ApiResponse)
+    │   ├── api/v1/{router,health,auth,ef,scrum}.py
+    │   ├── dependencies/  middlewares/  models/    # models: agent, user
     │   ├── repositories/  services/  schemas/  utils/
+    ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
