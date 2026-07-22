@@ -11,14 +11,24 @@ import time
 from langchain_core.runnables import RunnableConfig
 
 from ai.agents.arquitectura.assemble import assemble_artifact, validate_artifact
+from ai.agents.arquitectura.common import merge_metrics
+from ai.agents.arquitectura.components import run_components
 from ai.agents.arquitectura.context import build_scope_profile, classify_size
 from ai.agents.arquitectura.load_sources import (
     assert_scrum_ready,
     extract_sources,
     resolve_ef_hash,
 )
+from ai.agents.arquitectura.stack import run_stack
 from ai.agents.arquitectura.state import ArchitectureState
+from ai.agents.base.structured import ClaudeLLMClient
 from app.config.settings import settings
+
+
+def _llm(config: RunnableConfig):
+    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    llm = (config or {}).get("configurable", {}).get("llm")
+    return llm if llm is not None else ClaudeLLMClient()
 
 
 async def node_load_sources(state: ArchitectureState) -> dict:
@@ -48,17 +58,37 @@ async def node_context(state: ArchitectureState) -> dict:
     return {"scope_profile": profile, "size_class": size, "bounded_contexts": []}
 
 
-# --- COMPONENTS / STACK / ADRS / CONTRACTS / DIAGRAMS (stubs A3-A4) ---------
+# --- COMPONENTS / STACK (Bloque A3) -----------------------------------------
 
 
-async def node_components(state: ArchitectureState) -> dict:
-    """COMPONENTS (stub A3): derivará componentes desde módulos/entidades/épicas."""
-    return {"components": []}
+async def node_components(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """COMPONENTS: deriva componentes desde EF (módulos/entidades/APIs/procesos) y
+    Scrum (épicas/historias), con trazabilidad y ``depends_on`` resueltos."""
+    components, skipped, tokens = await run_components(
+        _llm(config),
+        state.get("sources") or {},
+        state.get("size_class") or "M",
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {"components": components, "metrics": merge_metrics(state, tokens, skipped)}
 
 
-async def node_stack(state: ArchitectureState) -> dict:
-    """STACK (stub A3): recomendará stack por capa desde el allow-list de la casa."""
-    return {"stack": []}
+async def node_stack(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """STACK: recomienda el stack por capa desde el allow-list de la casa."""
+    component_types = sorted(
+        {c.get("type") for c in state.get("components") or [] if c.get("type")}
+    )
+    stack, skipped, tokens = await run_stack(
+        _llm(config),
+        state.get("sources") or {},
+        state.get("size_class") or "M",
+        component_types,
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {"stack": stack, "metrics": merge_metrics(state, tokens, skipped)}
+
+
+# --- ADRS / CONTRACTS / DIAGRAMS (stubs A4) ---------------------------------
 
 
 async def node_adrs(state: ArchitectureState) -> dict:

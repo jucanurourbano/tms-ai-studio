@@ -17,6 +17,7 @@ from ai.agents.scrum.schemas.examples import example_artifact as scrum_example
 from ai.errors import GateError
 from ai.orchestrator import build_arquitectura_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
+from tests.mocks import ArchMapLLM
 
 
 def _ef_dict():
@@ -32,7 +33,13 @@ async def _noop_persist(job_id, artifact, status, metrics):
 
 
 def _base_config():
-    return {"configurable": {"thread_id": "AR-1", "persist": _noop_persist}}
+    return {
+        "configurable": {
+            "thread_id": "AR-1",
+            "llm": ArchMapLLM(),
+            "persist": _noop_persist,
+        }
+    }
 
 
 def _base_state(scrum_ready: bool = True):
@@ -71,12 +78,26 @@ async def test_grafo_end_to_end_con_stubs():
     assert prof["stories"] == 2  # Scrum de ejemplo: 2 historias
     assert prof["nfr_count"] == 1
     assert art["context"]["size_class"] in {"S", "M", "L"}
-    # Nodos generativos aún stub: listas vacías, artefacto válido.
-    assert art["components"] == []
+    # COMPONENTS (A3): componentes con trazabilidad y depends_on resueltos.
+    comps = art["components"]
+    assert len(comps) == 3
+    by_name = {c["name"]: c for c in comps}
+    assert by_name["Módulo Siniestros"]["source_refs"]["module_refs"] == ["MOD-001"]
+    # depends_on resuelto de nombre -> id real (API -> Módulo Siniestros).
+    modulo_id = by_name["Módulo Siniestros"]["id"]
+    assert modulo_id in by_name["API Siniestros"]["depends_on"]
+    assert art["metrics"]["components_total"] == 3
+    # STACK (A3): recomendaciones dentro del allow-list de la casa.
+    stack = art["stack"]
+    assert {s["technology"] for s in stack} == {"Spring Boot", "SQL Server"}
+    # Alternativa fuera del allow-list ("Cobol") descartada.
+    backend = next(s for s in stack if s["layer"] == "framework_backend")
+    assert "Cobol" not in backend["alternatives"]
+    assert "ASP.NET Core" in backend["alternatives"]
+    # Nodos aún stub (A4-A5): estilo/ADRs pendientes.
     assert art["architecture_style"] is None
-    # Métricas: sin LLM en A2, sin tokens ni costo.
-    assert art["metrics"]["tokens"]["total"] == 0
-    assert art["metrics"]["cost"] == 0.0
+    # Métricas: hubo LLM (mock) -> tokens estimados > 0.
+    assert art["metrics"]["tokens"]["total"] > 0
 
 
 async def test_checkpointer_conserva_estado():

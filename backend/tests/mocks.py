@@ -346,3 +346,80 @@ class ScrumMapLLM:
                 ensure_ascii=False,
             )
         return "{}"
+
+
+class ArchMapLLM:
+    """LLM mock del Agente Arquitectura: responde por nodo según el rol del system.
+
+    - COMPONENTS: componentes que citan refs reales (MOD-/PRO-/ENT-/API-/EPIC-/US-)
+      con ``depends_on`` por nombre.
+    - STACK: recomendaciones dentro del allow-list de ``tech_stack.yaml``.
+    - Resto de dimensiones (ADRs, contratos, crítica): se completan en A4-A5.
+    """
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Arquitecto de componentes" in system:
+            return json.dumps(
+                {
+                    "components": [
+                        {
+                            "name": "Módulo Siniestros",
+                            "type": "domain",
+                            "layer": "dominio",
+                            "responsibility": "Registrar y dar seguimiento a siniestros.",
+                            "module_refs": ["MOD-001"],
+                            "process_refs": ["PRO-001"],
+                            "entity_refs": ["ENT-001"],
+                            "epic_refs": ["EPIC-001"],
+                            "story_refs": ["US-001"],
+                            "depends_on": ["Base de Datos"],
+                            "confidence": 0.8,
+                        },
+                        {
+                            "name": "API Siniestros",
+                            "type": "api",
+                            "layer": "aplicación",
+                            "responsibility": "Exponer los casos de uso vía REST.",
+                            "api_refs": ["API-001"],
+                            "depends_on": ["Módulo Siniestros"],
+                            "confidence": 0.75,
+                        },
+                        {
+                            "name": "Base de Datos",
+                            "type": "datastore",
+                            "layer": "datos",
+                            "responsibility": "Persistencia relacional.",
+                            "entity_refs": ["ENT-001", "ENT-002"],
+                            "depends_on": [],
+                            "confidence": 0.8,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Arquitecto técnico" in system:
+            return json.dumps(
+                {
+                    "stack": [
+                        {
+                            "layer": "framework_backend",
+                            "technology": "Spring Boot",
+                            "version": None,
+                            "rationale": "Stack de negocio de la casa.",
+                            "alternatives": ["ASP.NET Core", "Cobol"],
+                            "source_refs": ["REQ-N-001"],
+                            "confidence": 0.7,
+                        },
+                        {
+                            "layer": "database_relational",
+                            "technology": "SQL Server",
+                            "rationale": "Motor transaccional estándar.",
+                            "alternatives": ["PostgreSQL"],
+                            "source_refs": [],
+                            "confidence": 0.65,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return "{}"
