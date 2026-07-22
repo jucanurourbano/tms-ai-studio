@@ -55,7 +55,8 @@ export const ISDF_NAV: PhaseNav[] = [
       {
         key: "arquitectura",
         name: "Arquitectura",
-        enabled: false,
+        href: "/agents/arquitectura",
+        enabled: true,
         icon: "layers",
         description:
           "Define la arquitectura técnica de la solución a partir de la EF y el plan ágil.",

@@ -18,9 +18,9 @@ DevOps + un **Orquestador** que coordina el flujo entre ellos.
 (backend + frontend; bloques B0→B8 implementados, ver §4 y
 `docs/diseno-agente-scrum.md`). Persistencia **generalizada** a tablas `agent_*`
 multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) protegiendo
-toda la API de agentes y el frontend (ver §6). **Agente Arquitectura** con
-**diseño validado** (ver §5 y `docs/diseno-agente-arquitectura.md`), en
-implementación por bloques A0→A7.
+toda la API de agentes y el frontend (ver §6). Agente **Arquitectura** **completo**
+(backend + frontend; bloques A0→A7 implementados, ver §5 y
+`docs/diseno-agente-arquitectura.md`). Siguiente eslabón: **Agente BD**.
 
 ---
 
