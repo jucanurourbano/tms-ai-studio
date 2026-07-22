@@ -1,10 +1,17 @@
 "use client";
 
-import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  ChevronRight,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Users,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useAuth } from "@/lib/auth/auth-context";
 import { AgentIconView } from "@/lib/agent-icons";
 import { defaultOpenGroups, ISDF_NAV, type PhaseNav } from "@/lib/isdf";
 import { usePersistentState } from "@/lib/use-persistent-state";
@@ -19,6 +26,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProps) {
   const pathname = usePathname();
+  const { user, isAdmin, logout } = useAuth();
   const [collapsedPref, setCollapsed] = usePersistentState<boolean>(
     "sidebar:collapsed",
     false,
@@ -82,7 +90,26 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
             onNavigate={onNavigate}
           />
         ))}
+
+        {/* Configuración (solo admin) */}
+        {isAdmin && (
+          <ConfigSection
+            collapsed={collapsed}
+            pathname={pathname}
+            onNavigate={onNavigate}
+          />
+        )}
       </nav>
+
+      {/* Usuario actual + cerrar sesión */}
+      <UserFooter
+        user={user}
+        collapsed={collapsed}
+        onLogout={() => {
+          onNavigate?.();
+          logout();
+        }}
+      />
 
       {/* Toggle de colapso total (oculto en el drawer móvil) */}
       <div className={cn("border-t p-2", forceExpanded && "hidden")}>
@@ -107,6 +134,102 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
         </button>
       </div>
     </aside>
+  );
+}
+
+interface ConfigSectionProps {
+  collapsed: boolean;
+  pathname: string;
+  onNavigate?: () => void;
+}
+
+/** Sección "Configuración" con el enlace al panel de usuarios (solo admin). */
+function ConfigSection({ collapsed, pathname, onNavigate }: ConfigSectionProps) {
+  const href = "/configuracion/usuarios";
+  const active = pathname.startsWith("/configuracion");
+  return (
+    <div className="mt-1 border-t border-sidebar-border/60 pt-2">
+      {!collapsed && (
+        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+          Configuración
+        </div>
+      )}
+      <Link
+        href={href}
+        onClick={onNavigate}
+        title={collapsed ? "Usuarios" : undefined}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+          collapsed && "justify-center px-0",
+          active
+            ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <Users className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
+        {!collapsed && <span className="flex-1">Usuarios</span>}
+      </Link>
+    </div>
+  );
+}
+
+interface UserFooterProps {
+  user: { full_name: string; email: string; role: "admin" | "member" } | null;
+  collapsed: boolean;
+  onLogout: () => void;
+}
+
+/** Pie de la sidebar: identidad del usuario (nombre + rol) y cerrar sesión. */
+function UserFooter({ user, collapsed, onLogout }: UserFooterProps) {
+  if (!user) return null;
+  const initials = user.full_name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join("");
+  const roleLabel = user.role === "admin" ? "Administrador" : "Miembro";
+
+  if (collapsed) {
+    return (
+      <div className="border-t p-2">
+        <button
+          type="button"
+          onClick={onLogout}
+          title={`${user.full_name} · Cerrar sesión`}
+          aria-label="Cerrar sesión"
+          className="flex w-full items-center justify-center rounded-md px-2 py-2 text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t p-2">
+      <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/20">
+          {initials || "?"}
+        </div>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-sm font-medium" title={user.full_name}>
+            {user.full_name}
+          </div>
+          <div className="truncate text-[11px] text-muted-foreground" title={user.email}>
+            {roleLabel}
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onLogout}
+        className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+      >
+        <LogOut className="h-4 w-4" />
+        <span>Cerrar sesión</span>
+      </button>
+    </div>
   );
 }
 

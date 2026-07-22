@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
-import { AppShell } from "@/components/shell/app-shell";
+import { AppGate } from "@/components/shell/app-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/lib/auth/auth-context";
 
 import "./globals.css";
 
@@ -33,10 +34,12 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <TooltipProvider delay={200}>
-          <AppShell>{children}</AppShell>
-        </TooltipProvider>
-        <Toaster position="top-right" />
+        <AuthProvider>
+          <TooltipProvider delay={200}>
+            <AppGate>{children}</AppGate>
+          </TooltipProvider>
+          <Toaster position="top-right" />
+        </AuthProvider>
       </body>
     </html>
   );
