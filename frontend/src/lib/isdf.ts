@@ -21,6 +21,8 @@ export interface AgentNav {
   href?: string;
   enabled: boolean;
   icon: AgentIcon;
+  /** Descripción corta de qué hace el agente (dashboard). */
+  description?: string;
 }
 
 export interface PhaseNav {
@@ -41,6 +43,8 @@ export const ISDF_NAV: PhaseNav[] = [
         href: "/agents/ef",
         enabled: true,
         icon: "file-search",
+        description:
+          "Traduce Procesos a lenguaje de Sistemas: requisitos, modelo de datos y preguntas de afinamiento, con trazabilidad a la evidencia.",
       },
     ],
   },
@@ -48,23 +52,63 @@ export const ISDF_NAV: PhaseNav[] = [
     key: "disenar",
     phase: "Diseñar",
     agents: [
-      { key: "arquitectura", name: "Arquitectura", enabled: false, icon: "layers" },
-      { key: "bd", name: "Base de Datos", enabled: false, icon: "database" },
+      {
+        key: "arquitectura",
+        name: "Arquitectura",
+        enabled: false,
+        icon: "layers",
+        description:
+          "Define la arquitectura técnica de la solución a partir de la EF y el plan ágil.",
+      },
+      {
+        key: "bd",
+        name: "Base de Datos",
+        enabled: false,
+        icon: "database",
+        description:
+          "Diseña el modelo de datos y el esquema de base de datos.",
+      },
     ],
   },
   {
     key: "construir",
     phase: "Construir",
     agents: [
-      { key: "api", name: "API", enabled: false, icon: "plug" },
-      { key: "backend", name: "Backend", enabled: false, icon: "server" },
-      { key: "frontend", name: "Frontend", enabled: false, icon: "monitor" },
+      {
+        key: "api",
+        name: "API",
+        enabled: false,
+        icon: "plug",
+        description: "Especifica los contratos de API: endpoints y payloads.",
+      },
+      {
+        key: "backend",
+        name: "Backend",
+        enabled: false,
+        icon: "server",
+        description: "Genera la capa de servicios y la lógica de negocio.",
+      },
+      {
+        key: "frontend",
+        name: "Frontend",
+        enabled: false,
+        icon: "monitor",
+        description: "Construye la interfaz de usuario de la solución.",
+      },
     ],
   },
   {
     key: "verificar",
     phase: "Verificar",
-    agents: [{ key: "qa", name: "QA", enabled: false, icon: "shield-check" }],
+    agents: [
+      {
+        key: "qa",
+        name: "QA",
+        enabled: false,
+        icon: "shield-check",
+        description: "Diseña casos de prueba y valida la calidad del entregable.",
+      },
+    ],
   },
   {
     key: "gestionar",
@@ -76,11 +120,31 @@ export const ISDF_NAV: PhaseNav[] = [
         href: "/agents/scrum",
         enabled: true,
         icon: "kanban",
+        description:
+          "Genera épicas, historias, criterios, estimaciones y plan de sprints desde una EF lista.",
       },
-      { key: "devops", name: "DevOps", enabled: false, icon: "rocket" },
+      {
+        key: "devops",
+        name: "DevOps",
+        enabled: false,
+        icon: "rocket",
+        description: "Automatiza el despliegue y la integración continua.",
+      },
     ],
   },
 ];
+
+/** Un agente con la fase ISDF a la que pertenece (aplanado para el dashboard). */
+export interface FlatAgent extends AgentNav {
+  phase: string;
+}
+
+/** Aplana `ISDF_NAV` a una única lista de agentes, con su fase, en orden ISDF. */
+export function flatAgents(): FlatAgent[] {
+  return ISDF_NAV.flatMap((p) =>
+    p.agents.map((a) => ({ ...a, phase: p.phase })),
+  );
+}
 
 /** Un grupo tiene al menos un agente activo (se expande por defecto). */
 export function phaseHasActive(phase: PhaseNav): boolean {
