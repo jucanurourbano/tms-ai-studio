@@ -58,7 +58,7 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "flex h-full shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out",
+        "flex h-full shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
         collapsed ? "w-16" : "w-64",
       )}
     >

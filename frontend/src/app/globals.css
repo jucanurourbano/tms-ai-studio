@@ -101,6 +101,17 @@
   --chart-4: #6b21a8;
   --chart-5: #581c87;
   --radius: 0.625rem;
+  /*
+   * Tokens de MOTION (movimiento con propósito, nunca decorativo).
+   * Una sola curva (ease-out decisiva) y tres duraciones en la banda 150–250ms.
+   * Se usan SOLO para: expandir/colapsar, entrada de paneles, hover de tarjetas
+   * clicables, transición del sidebar, aparición escalonada al cargar y la única
+   * celebración del semáforo. Cero loops, cero parallax, cero efectos de scroll.
+   */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 150ms;
+  --dur-mid: 200ms;
+  --dur-slow: 250ms;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.16 0.01 285);
   --sidebar-primary: var(--brand);
@@ -250,6 +261,107 @@
 /* Glow violeta suave detrás del icono de un agente activo (tarjetas del grid). */
 .icon-glow {
   box-shadow: 0 10px 26px -10px rgba(124, 58, 237, 0.6);
+}
+
+/*
+ * MOTION — utilidades de movimiento con propósito.
+ *
+ * `rise-in`: aparición al cargar (fade + subida sutil de 8px).
+ * `.stagger-children`: escalona la aparición de los hijos directos (~40ms) para
+ * que el contenido "aterrice" en cascada, no de golpe.
+ * `.animate-celebrate`: única celebración discreta del semáforo al pasar a verde.
+ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes celebrate-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+  35% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.animate-rise {
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+
+.stagger-children > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+.stagger-children > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-children > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger-children > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger-children > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.stagger-children > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.stagger-children > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.stagger-children > *:nth-child(7) {
+  animation-delay: 240ms;
+}
+.stagger-children > *:nth-child(8) {
+  animation-delay: 280ms;
+}
+.stagger-children > *:nth-child(9) {
+  animation-delay: 320ms;
+}
+.stagger-children > *:nth-child(n + 10) {
+  animation-delay: 360ms;
+}
+
+.animate-celebrate {
+  animation: celebrate-pop 600ms var(--ease-out);
+}
+
+/*
+ * Respeto a prefers-reduced-motion: neutraliza animaciones y transiciones (y el
+ * scroll suave). El contenido aparece de inmediato, sin movimiento.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* En impresión, nada de animaciones (el contenido debe estar ya asentado). */
+@media print {
+  .stagger-children > *,
+  .animate-rise,
+  .animate-celebrate {
+    animation: none !important;
+  }
 }
 
 /*

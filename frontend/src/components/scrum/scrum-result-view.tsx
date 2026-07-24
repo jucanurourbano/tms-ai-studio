@@ -72,6 +72,7 @@ import type {
   ScrumValidationSummary,
   Story,
 } from "@/lib/types/scrum";
+import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
@@ -155,6 +156,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  const celebrate = useCelebrateOnTrue(
+    summary?.ready_for_next_stage ?? false,
+    summary != null,
+  );
 
   const toggleStory = (id: string) =>
     setExpandedStories((prev) => {
@@ -373,6 +378,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               ready
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-slate-300 bg-slate-50 text-slate-600",
+              ready && celebrate && "animate-celebrate",
             )}
           >
             <span
@@ -528,7 +534,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           />
         </div>
 
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6 stagger-children">
           {/* Banner de éxito */}
           {blockingDone && (
             <div

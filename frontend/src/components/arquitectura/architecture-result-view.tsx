@@ -64,6 +64,7 @@ import type {
   ArchValidationSummary,
   RiskSeverity,
 } from "@/lib/types/arquitectura";
+import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
@@ -113,6 +114,10 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  const celebrate = useCelebrateOnTrue(
+    summary?.ready_for_next_stage ?? false,
+    summary != null,
+  );
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -287,6 +292,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               ready
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-slate-300 bg-slate-50 text-slate-600",
+              ready && celebrate && "animate-celebrate",
             )}
           >
             <span
@@ -416,7 +422,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
           />
         </div>
 
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6 stagger-children">
           {/* 1. Estilo arquitectónico */}
           <ArtifactSection
             id="sec-style"

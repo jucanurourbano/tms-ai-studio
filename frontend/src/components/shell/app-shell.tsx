@@ -36,13 +36,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           aria-label="Cerrar menú"
           onClick={() => setDrawerOpen(false)}
           className={cn(
-            "absolute inset-0 bg-black/40 transition-opacity duration-300",
+            "absolute inset-0 bg-black/40 transition-opacity duration-200",
             drawerOpen ? "opacity-100" : "opacity-0",
           )}
         />
         <div
           className={cn(
-            "absolute inset-y-0 left-0 w-64 shadow-xl transition-transform duration-300 ease-in-out",
+            "absolute inset-y-0 left-0 w-64 shadow-xl transition-transform duration-200 ease-out",
             drawerOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >

@@ -68,6 +68,7 @@ import type {
   QuestionStatus,
   ValidationSummary,
 } from "@/lib/types/ef";
+import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
@@ -136,6 +137,10 @@ export function ResultView({ job }: { job: JobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  const celebrate = useCelebrateOnTrue(
+    summary?.ready_for_next_stage ?? false,
+    summary != null,
+  );
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -357,6 +362,7 @@ export function ResultView({ job }: { job: JobDetail }) {
               ready
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-slate-300 bg-slate-50 text-slate-600",
+              ready && celebrate && "animate-celebrate",
             )}
           >
             <span
@@ -498,7 +504,7 @@ export function ResultView({ job }: { job: JobDetail }) {
         </div>
 
         {/* Contenido */}
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6 stagger-children">
           {/* Banner de éxito al resolver todas las bloqueantes */}
           {blockingDone && (
             <div
