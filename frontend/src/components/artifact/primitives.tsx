@@ -61,7 +61,7 @@ export function IdTag({
   return (
     <span
       className={cn(
-        "print-color inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground",
+        "print-color inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-none text-meta-foreground",
         className,
       )}
     >
@@ -117,11 +117,11 @@ export function SectionCard({
     >
       <header className="print-heading flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5 print:border-b-2 print:border-violet-800/70 print:bg-transparent print:px-0">
         {index && (
-          <span className="font-heading text-xs font-semibold tabular-nums text-muted-foreground print:text-violet-800">
+          <span className="font-heading text-xs font-semibold tabular-nums text-meta-foreground print:text-violet-800">
             {index}
           </span>
         )}
-        <h2 className="font-heading text-sm font-semibold tracking-tight print:text-base print:text-violet-800">
+        <h2 className="font-heading text-base font-semibold tracking-tight print:text-base print:text-violet-800">
           {title}
         </h2>
         {count !== undefined && <CountChip n={count} />}
@@ -145,7 +145,7 @@ export function GroupLabel({
   count?: number;
 }) {
   return (
-    <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-meta-foreground">
       {children}
       {count !== undefined && <CountChip n={count} />}
     </div>
@@ -198,11 +198,11 @@ export function DataRow({
       )}
     >
       {index !== undefined && (
-        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground/70">
+        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
           {index}
         </span>
       )}
-      <div className="min-w-0 flex-1 text-sm">{children}</div>
+      <div className="min-w-0 flex-1 text-sm leading-relaxed">{children}</div>
       {right && (
         <div className="flex shrink-0 items-center gap-1.5 pt-0.5">{right}</div>
       )}
@@ -252,7 +252,7 @@ export function Stat({
         <div className="font-heading text-sm font-semibold tabular-nums">
           {value}
         </div>
-        <div className="text-[11px] text-muted-foreground">{label}</div>
+        <div className="text-[11px] text-meta-foreground">{label}</div>
       </div>
     </div>
   );

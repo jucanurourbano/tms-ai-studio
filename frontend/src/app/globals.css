@@ -30,6 +30,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
+  --color-meta-foreground: var(--meta-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
@@ -69,17 +70,25 @@
   );
 
   --background: oklch(1 0 0);
-  --foreground: oklch(0.16 0.01 285);
+  /*
+   * Jerarquía de grises con contraste explícito (revelación progresiva: el ojo
+   * debe saber qué leer primero).
+   *   foreground       → texto principal, casi negro.
+   *   muted-foreground → texto secundario, gris medio (más legible que antes).
+   *   meta-foreground  → metadatos (ids, conteos, etiquetas), gris claro.
+   */
+  --foreground: oklch(0.145 0.006 285);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.01 285);
+  --card-foreground: oklch(0.145 0.006 285);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.01 285);
+  --popover-foreground: oklch(0.145 0.006 285);
   --primary: var(--brand);
   --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.548 0.01 285);
+  --muted-foreground: oklch(0.5 0.012 285);
+  --meta-foreground: oklch(0.605 0.008 285);
   --accent: var(--brand-soft);
   --accent-foreground: var(--brand-strong);
   --destructive: oklch(0.577 0.245 27.325);
@@ -114,7 +123,8 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --meta-foreground: oklch(0.58 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
@@ -140,11 +150,31 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+  /*
+   * Escala global compacta (revelación progresiva): raíz a 15px en vez de 16px,
+   * de modo que toda la app baja ~un punto de forma proporcional —
+   *   text-sm → ~13px (cuerpo), text-xs → ~11px (metadatos),
+   *   text-base → 15px (títulos de sección).
+   * Los tamaños en px fijos (p. ej. text-[11px]) ya viven en la banda de
+   * metadatos y no necesitan escalar.
+   */
   html {
     @apply font-sans;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Leading cómodo por defecto; los títulos ajustan tracking en su clase. */
+    line-height: 1.55;
+  }
+  /* La impresión conserva su propia escala en puntos (ver @media print). */
+  @media print {
+    html {
+      font-size: 16px;
+    }
   }
 }
 
