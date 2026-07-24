@@ -6,6 +6,7 @@ import {
   Download,
   DollarSign,
   FileStack,
+  MessagesSquare,
   Plug,
   Printer,
   Target,
@@ -21,6 +22,11 @@ import {
   ArtifactIndexPanel,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import { ArtifactSection } from "@/components/artifact/artifact-section";
+import {
+  QuestionSheet,
+  type SheetQuestion,
+} from "@/components/artifact/question-sheet";
 import {
   DataList,
   DataRow,
@@ -32,7 +38,6 @@ import {
   PrintToc,
   PrintValidationState,
   RefChip,
-  SectionCard,
   Stat,
   StatRow,
 } from "@/components/artifact/primitives";
@@ -59,7 +64,9 @@ import type {
   ArchValidationSummary,
   RiskSeverity,
 } from "@/lib/types/arquitectura";
+import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
+import { usePrintExpand } from "@/lib/use-print-expand";
 import { cn } from "@/lib/utils";
 
 // Mermaid: import dinámico client-only y lazy SOLO en esta vista (fuera del
@@ -99,10 +106,13 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
   const [loading, setLoading] = useState(true);
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [indexCollapsed, setIndexCollapsed] = usePersistentState(
     "artifact:index-collapsed",
     false,
   );
+  const disc = useDisclosure(2);
+  const { printMode, printNow } = usePrintExpand();
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -289,11 +299,27 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
           </span>
 
           <div className="ml-auto flex flex-wrap gap-2">
+            {a.questions_for_architect.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setSheetOpen(true)}
+              >
+                <MessagesSquare className="h-3.5 w-3.5" />
+                Responder preguntas
+                {blockingRemaining > 0 && (
+                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                    {blockingRemaining}
+                  </span>
+                )}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5"
-              onClick={() => window.print()}
+              onClick={printNow}
             >
               <Printer className="h-3.5 w-3.5" />
               Exportar PDF
@@ -385,12 +411,28 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             sections={indexSections}
             collapsed={indexCollapsed}
             onToggle={() => setIndexCollapsed((v) => !v)}
+            onNavigate={disc.openOnly}
+            openIds={disc.openIds}
           />
         </div>
 
         <div className="min-w-0 space-y-6">
           {/* 1. Estilo arquitectónico */}
-          <SectionCard id="sec-style" index="1" title="Estilo arquitectónico">
+          <ArtifactSection
+            id="sec-style"
+            index="1"
+            title="Estilo arquitectónico"
+            open={disc.isOpen("sec-style")}
+            onToggle={() => disc.toggle("sec-style")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {style
+                  ? `${style.chosen} · tamaño ${a.context.size_class}`
+                  : "Sin decidir"}
+              </span>
+            }
+          >
             {style ? (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -410,14 +452,23 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint>Estilo arquitectónico sin decidir.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 2. Componentes */}
-          <SectionCard
+          <ArtifactSection
             id="sec-components"
             index="2"
             title="Componentes"
             count={a.components.length}
+            open={disc.isOpen("sec-components")}
+            onToggle={() => disc.toggle("sec-components")}
+            forceRender={printMode}
+            preview={
+              <span className="line-clamp-2">
+                {a.components.map((c) => c.name).join(" · ") ||
+                  "Sin componentes"}
+              </span>
+            }
           >
             {a.components.length > 0 ? (
               <div className="space-y-2">
@@ -459,10 +510,20 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint>Sin componentes.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 3. Diagramas */}
-          <SectionCard id="sec-diagrams" index="3" title="Diagramas">
+          <ArtifactSection
+            id="sec-diagrams"
+            index="3"
+            title="Diagramas"
+            open={disc.isOpen("sec-diagrams")}
+            onToggle={() => disc.toggle("sec-diagrams")}
+            forceRender={printMode}
+            preview={
+              <span>Componentes por capa y contexto del sistema (Mermaid)</span>
+            }
+          >
             <div className="space-y-4">
               <div>
                 <GroupLabel>Componentes por capa</GroupLabel>
@@ -481,14 +542,23 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
                 )}
               </div>
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 4. Stack */}
-          <SectionCard
+          <ArtifactSection
             id="sec-stack"
             index="4"
             title="Stack tecnológico"
             count={a.stack.length}
+            open={disc.isOpen("sec-stack")}
+            onToggle={() => disc.toggle("sec-stack")}
+            forceRender={printMode}
+            preview={
+              <span className="line-clamp-2">
+                {a.stack.map((s) => s.technology).join(" · ") ||
+                  "Sin stack recomendado"}
+              </span>
+            }
           >
             {a.stack.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border">
@@ -529,10 +599,23 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint>Sin stack recomendado.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 5. ADRs */}
-          <SectionCard id="sec-adrs" index="5" title="ADRs" count={a.adrs.length}>
+          <ArtifactSection
+            id="sec-adrs"
+            index="5"
+            title="ADRs"
+            count={a.adrs.length}
+            open={disc.isOpen("sec-adrs")}
+            onToggle={() => disc.toggle("sec-adrs")}
+            forceRender={printMode}
+            preview={
+              <span className="line-clamp-2">
+                {a.adrs.map((adr) => adr.title).join(" · ") || "Sin ADRs"}
+              </span>
+            }
+          >
             {a.adrs.length > 0 ? (
               <div className="space-y-2">
                 {a.adrs.map((adr) => (
@@ -572,14 +655,24 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint warn={false}>Sin ADRs adicionales.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 6. Integraciones */}
-          <SectionCard
+          <ArtifactSection
             id="sec-integrations"
             index="6"
             title="Integraciones"
             count={a.integrations.length}
+            open={disc.isOpen("sec-integrations")}
+            onToggle={() => disc.toggle("sec-integrations")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.integrations.length > 0
+                  ? `${a.integrations.filter((i) => !i.contract_known).length} con contrato por definir`
+                  : "Sin integraciones externas"}
+              </span>
+            }
           >
             {a.integrations.length > 0 ? (
               <div className="space-y-2">
@@ -627,14 +720,24 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint warn={false}>Sin integraciones externas.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 7. Contratos */}
-          <SectionCard
+          <ArtifactSection
             id="sec-contracts"
             index="7"
             title="Contratos"
             count={a.contracts.length}
+            open={disc.isOpen("sec-contracts")}
+            onToggle={() => disc.toggle("sec-contracts")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.contracts.length > 0
+                  ? `${a.contracts.length} contrato${a.contracts.length !== 1 ? "s" : ""} entre componentes`
+                  : "Sin contratos entre componentes"}
+              </span>
+            }
           >
             {a.contracts.length > 0 ? (
               <DataList>
@@ -659,14 +762,23 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint warn={false}>Sin contratos entre componentes.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 8. Transversales */}
-          <SectionCard
+          <ArtifactSection
             id="sec-crosscutting"
             index="8"
             title="Requisitos transversales"
             count={a.cross_cutting.length}
+            open={disc.isOpen("sec-crosscutting")}
+            onToggle={() => disc.toggle("sec-crosscutting")}
+            forceRender={printMode}
+            preview={
+              <span className="line-clamp-2">
+                {a.cross_cutting.map((xc) => xc.concern).join(" · ") ||
+                  "Sin requisitos transversales"}
+              </span>
+            }
           >
             {a.cross_cutting.length > 0 ? (
               <div className="space-y-2">
@@ -697,14 +809,25 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             ) : (
               <EmptyHint warn={false}>Sin requisitos transversales.</EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 9. Análisis */}
-          <SectionCard
+          <ArtifactSection
             id="sec-analysis"
             index="9"
             title="Análisis"
             count={a.analysis.risks.length}
+            open={disc.isOpen("sec-analysis")}
+            onToggle={() => disc.toggle("sec-analysis")}
+            forceRender={printMode}
+            preview={
+              <span>
+                Épicas {cov.epics_mapped}/{cov.epics_total} · entidades{" "}
+                {cov.entities_mapped}/{cov.entities_total} · RNF{" "}
+                {cov.nfr_addressed}/{cov.nfr_total} · {a.analysis.risks.length}{" "}
+                riesgos
+              </span>
+            }
           >
             <div className="space-y-4">
               <div className="rounded-lg border p-3 text-sm">
@@ -758,14 +881,36 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
                 )}
               </div>
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 10. Preguntas al Arquitecto */}
-          <SectionCard
+          <ArtifactSection
             id="sec-questions"
             index="10"
             title="Preguntas al Arquitecto"
             count={a.questions_for_architect.length}
+            meta={`${blockingTotal} bloq.`}
+            open={disc.isOpen("sec-questions")}
+            onToggle={() => disc.toggle("sec-questions")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {blockingRemaining > 0 ? (
+                  <span className="font-medium text-red-600">
+                    {blockingRemaining} bloqueante
+                    {blockingRemaining !== 1 ? "s" : ""} sin responder
+                  </span>
+                ) : blockingTotal > 0 ? (
+                  <span className="font-medium text-emerald-600">
+                    Bloqueantes resueltas
+                  </span>
+                ) : (
+                  "Sin preguntas bloqueantes"
+                )}
+                {" · "}
+                {answered} respondidas
+              </span>
+            }
             actions={
               <FilterToggle onlyBlocking={onlyBlocking} onChange={setOnlyBlocking} />
             }
@@ -813,17 +958,49 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
                 {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
               </EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
         </div>
       </div>
 
       {blockingRemaining > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur print:hidden">
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur transition-colors hover:border-primary/40 hover:text-primary print:hidden"
+        >
           <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
           bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
-          {blockingRemaining !== 1 ? "s" : ""}
-        </div>
+          {blockingRemaining !== 1 ? "s" : ""} · responder
+        </button>
       )}
+
+      <QuestionSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="Responder preguntas al Arquitecto"
+        questions={a.questions_for_architect.map(
+          (q): SheetQuestion => ({
+            id: q.id,
+            question: q.question,
+            reason: q.reason,
+            blocking: q.blocking,
+            linked_to_ref: q.linked_to_ref,
+          }),
+        )}
+        statusOf={statusOf}
+        renderControls={(q, onAnswered) => (
+          <ArchitectValidationControls
+            jobId={job.job_id}
+            targetId={q.id}
+            status={statusOf(q.id)}
+            respuesta={respuestaOf(q.id)}
+            onChanged={() => {
+              void reloadSummary();
+              onAnswered();
+            }}
+          />
+        )}
+      />
 
       <BackToTop />
     </div>

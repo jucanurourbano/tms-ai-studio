@@ -9,6 +9,7 @@ import {
   Hash,
   Layers,
   ListChecks,
+  MessagesSquare,
   Printer,
   Target,
 } from "lucide-react";
@@ -22,6 +23,11 @@ import {
   ArtifactIndexPanel,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import { ArtifactSection } from "@/components/artifact/artifact-section";
+import {
+  QuestionSheet,
+  type SheetQuestion,
+} from "@/components/artifact/question-sheet";
 import {
   DataList,
   DataRow,
@@ -33,7 +39,6 @@ import {
   PrintToc,
   PrintValidationState,
   RefChip,
-  SectionCard,
   Stat,
   StatRow,
   StatusPill,
@@ -67,7 +72,9 @@ import type {
   ScrumValidationSummary,
   Story,
 } from "@/lib/types/scrum";
+import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
+import { usePrintExpand } from "@/lib/use-print-expand";
 import { cn } from "@/lib/utils";
 
 // --- badges de dominio -------------------------------------------------------
@@ -140,11 +147,14 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const [loading, setLoading] = useState(true);
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [expandedStories, setExpandedStories] = useState<Set<string>>(new Set());
   const [indexCollapsed, setIndexCollapsed] = usePersistentState(
     "artifact:index-collapsed",
     false,
   );
+  const disc = useDisclosure(2);
+  const { printMode, printNow } = usePrintExpand();
 
   const toggleStory = (id: string) =>
     setExpandedStories((prev) => {
@@ -375,11 +385,27 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           </span>
 
           <div className="ml-auto flex flex-wrap gap-2">
+            {a.questions_for_po.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setSheetOpen(true)}
+              >
+                <MessagesSquare className="h-3.5 w-3.5" />
+                Responder preguntas
+                {blockingRemaining > 0 && (
+                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                    {blockingRemaining}
+                  </span>
+                )}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5"
-              onClick={() => window.print()}
+              onClick={printNow}
             >
               <Printer className="h-3.5 w-3.5" />
               Exportar PDF
@@ -497,6 +523,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             sections={indexSections}
             collapsed={indexCollapsed}
             onToggle={() => setIndexCollapsed((v) => !v)}
+            onNavigate={disc.openOnly}
+            openIds={disc.openIds}
           />
         </div>
 
@@ -537,11 +565,20 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           )}
 
           {/* 1. Backlog — tabla real */}
-          <SectionCard
+          <ArtifactSection
             id="sec-backlog"
             index="1"
             title={`Backlog de producto (${a.product_backlog.method})`}
             count={a.product_backlog.ordered_story_ids.length}
+            open={disc.isOpen("sec-backlog")}
+            onToggle={() => disc.toggle("sec-backlog")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.product_backlog.ordered_story_ids.length} historias priorizadas
+                por {a.product_backlog.method}
+              </span>
+            }
           >
             {a.product_backlog.ordered_story_ids.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border">
@@ -594,14 +631,29 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 {a.product_backlog.rationale}
               </p>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 2. Sprints */}
-          <SectionCard
+          <ArtifactSection
             id="sec-sprints"
             index="2"
             title="Sprints"
             count={a.sprints.length}
+            open={disc.isOpen("sec-sprints")}
+            onToggle={() => disc.toggle("sec-sprints")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.metrics.points_total} puntos en {a.sprints.length} sprint
+                {a.sprints.length !== 1 ? "s" : ""}
+                {a.unassigned_story_ids.length > 0 ? (
+                  <span className="text-amber-700">
+                    {" "}
+                    · {a.unassigned_story_ids.length} sin asignar
+                  </span>
+                ) : null}
+              </span>
+            }
           >
             <div className="space-y-3">
               {a.sprints.map((sp) => (
@@ -637,14 +689,23 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 </p>
               )}
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 3. Historias */}
-          <SectionCard
+          <ArtifactSection
             id="sec-stories"
             index="3"
             title="Historias de usuario"
             count={a.stories.length}
+            open={disc.isOpen("sec-stories")}
+            onToggle={() => disc.toggle("sec-stories")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.stories.filter((s) => s.story_points != null).length} de{" "}
+                {a.stories.length} estimadas · con criterios de aceptación Gherkin
+              </span>
+            }
           >
             <div className="space-y-3">
               {a.stories.map((s) => (
@@ -761,10 +822,23 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 </div>
               ))}
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 4. Épicas */}
-          <SectionCard id="sec-epics" index="4" title="Épicas" count={a.epics.length}>
+          <ArtifactSection
+            id="sec-epics"
+            index="4"
+            title="Épicas"
+            count={a.epics.length}
+            open={disc.isOpen("sec-epics")}
+            onToggle={() => disc.toggle("sec-epics")}
+            forceRender={printMode}
+            preview={
+              <span className="line-clamp-2">
+                {a.epics.map((e) => e.title).join(" · ") || "Sin épicas"}
+              </span>
+            }
+          >
             <div className="space-y-2">
               {a.epics.map((e) => (
                 <div
@@ -799,14 +873,36 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 </div>
               ))}
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 5. Preguntas al PO */}
-          <SectionCard
+          <ArtifactSection
             id="sec-questions"
             index="5"
             title="Preguntas al Product Owner"
             count={a.questions_for_po.length}
+            meta={`${blockingTotal} bloq.`}
+            open={disc.isOpen("sec-questions")}
+            onToggle={() => disc.toggle("sec-questions")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {blockingRemaining > 0 ? (
+                  <span className="font-medium text-red-600">
+                    {blockingRemaining} bloqueante
+                    {blockingRemaining !== 1 ? "s" : ""} sin responder
+                  </span>
+                ) : blockingTotal > 0 ? (
+                  <span className="font-medium text-emerald-600">
+                    Bloqueantes resueltas
+                  </span>
+                ) : (
+                  "Sin preguntas bloqueantes"
+                )}
+                {" · "}
+                {answered} respondidas
+              </span>
+            }
             actions={
               <FilterToggle onlyBlocking={onlyBlocking} onChange={setOnlyBlocking} />
             }
@@ -855,14 +951,24 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas al PO."}
               </EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 6. Análisis */}
-          <SectionCard
+          <ArtifactSection
             id="sec-analysis"
             index="6"
             title="Análisis"
             count={a.analysis.risks.length + a.analysis.observations.length}
+            open={disc.isOpen("sec-analysis")}
+            onToggle={() => disc.toggle("sec-analysis")}
+            forceRender={printMode}
+            preview={
+              <span>
+                Cobertura RF {Math.round(cov.coverage_ratio * 100)}% ·{" "}
+                {a.analysis.risks.length} riesgos ·{" "}
+                {a.analysis.observations.length} observaciones
+              </span>
+            }
           >
             <div className="space-y-4">
               <div className="rounded-lg border p-3 text-sm">
@@ -929,18 +1035,51 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 )}
               </div>
             </div>
-          </SectionCard>
+          </ArtifactSection>
         </div>
       </div>
 
-      {/* Contador flotante de bloqueantes restantes */}
+      {/* Contador flotante de bloqueantes → abre el modo enfocado */}
       {blockingRemaining > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur print:hidden">
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur transition-colors hover:border-primary/40 hover:text-primary print:hidden"
+        >
           <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
           bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
-          {blockingRemaining !== 1 ? "s" : ""}
-        </div>
+          {blockingRemaining !== 1 ? "s" : ""} · responder
+        </button>
       )}
+
+      <QuestionSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="Responder preguntas al PO"
+        questions={a.questions_for_po.map(
+          (q): SheetQuestion => ({
+            id: q.id,
+            question: q.question,
+            reason: q.reason,
+            blocking: q.blocking,
+            audience: q.audience,
+            linked_to_ref: q.linked_to_ref,
+          }),
+        )}
+        statusOf={statusOf}
+        renderControls={(q, onAnswered) => (
+          <ScrumValidationControls
+            jobId={job.job_id}
+            targetId={q.id}
+            status={statusOf(q.id)}
+            respuesta={respuestaOf(q.id)}
+            onChanged={() => {
+              void reloadSummary();
+              onAnswered();
+            }}
+          />
+        )}
+      />
 
       <BackToTop />
     </div>

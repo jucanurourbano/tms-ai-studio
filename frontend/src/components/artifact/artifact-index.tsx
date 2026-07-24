@@ -39,11 +39,20 @@ export function ArtifactIndex({
   sections,
   scrollRootId = "app-scroll",
   hideDesktopNav = false,
+  onNavigate,
+  openIds,
 }: {
   sections: IndexSection[];
   scrollRootId?: string;
   /** Oculta el índice de escritorio (modo colapsado); el select móvil se mantiene. */
   hideDesktopNav?: boolean;
+  /**
+   * Revelación progresiva: al saltar a una sección se abre esa y se colapsan las
+   * demás. Si se pasa, el índice deja de ser puro scroll y coordina la apertura.
+   */
+  onNavigate?: (id: string) => void;
+  /** Secciones actualmente abiertas (para resaltarlas en el índice). */
+  openIds?: string[];
 }) {
   const key = sections.map((s) => s.id).join(",");
   const ids = useMemo(
@@ -57,11 +66,17 @@ export function ArtifactIndex({
   const isOpen = (id: string, fallback: boolean) => openSubs[id] ?? fallback;
 
   const jumpTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    history.replaceState(null, "", `#${id}`);
+    onNavigate?.(id);
+    // Espera un frame para que la sección destino se expanda antes de desplazar.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      history.replaceState(null, "", `#${id}`);
+    });
   };
+
+  const openSet = openIds ? new Set(openIds) : null;
 
   return (
     <>
@@ -104,7 +119,8 @@ export function ArtifactIndex({
       >
       {sections.map((section) => {
         const childActive = section.children?.some((c) => c.id === active);
-        const parentActive = active === section.id || childActive;
+        const sectionOpen = openSet?.has(section.id) ?? false;
+        const parentActive = sectionOpen || active === section.id || childActive;
         const hasChildren = !!section.children?.length;
         const open = isOpen(section.id, true);
 
@@ -118,6 +134,14 @@ export function ArtifactIndex({
             >
               <a
                 href={`#${section.id}`}
+                onClick={
+                  onNavigate
+                    ? (e) => {
+                        e.preventDefault();
+                        jumpTo(section.id);
+                      }
+                    : undefined
+                }
                 className={cn(
                   "flex flex-1 items-center justify-between gap-2 rounded-md px-2 py-1.5 font-medium transition-colors hover:text-primary",
                   parentActive ? "text-primary" : "text-foreground/80",
@@ -171,6 +195,23 @@ export function ArtifactIndex({
                     <li key={child.id}>
                       <a
                         href={`#${child.id}`}
+                        onClick={
+                          onNavigate
+                            ? (e) => {
+                                e.preventDefault();
+                                // Abre la sección padre y desplaza al sub-bloque.
+                                onNavigate(section.id);
+                                requestAnimationFrame(() =>
+                                  document
+                                    .getElementById(child.id)
+                                    ?.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "start",
+                                    }),
+                                );
+                              }
+                            : undefined
+                        }
                         className={cn(
                           "flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:text-primary",
                           active === child.id
@@ -204,11 +245,15 @@ export function ArtifactIndexPanel({
   collapsed,
   onToggle,
   scrollRootId,
+  onNavigate,
+  openIds,
 }: {
   sections: IndexSection[];
   collapsed: boolean;
   onToggle: () => void;
   scrollRootId?: string;
+  onNavigate?: (id: string) => void;
+  openIds?: string[];
 }) {
   return (
     <div>
@@ -242,6 +287,8 @@ export function ArtifactIndexPanel({
         sections={sections}
         scrollRootId={scrollRootId}
         hideDesktopNav={collapsed}
+        onNavigate={onNavigate}
+        openIds={openIds}
       />
     </div>
   );

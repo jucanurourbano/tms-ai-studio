@@ -7,6 +7,7 @@ import {
   Download,
   DollarSign,
   Kanban,
+  MessagesSquare,
   Printer,
   Target,
 } from "lucide-react";
@@ -26,6 +27,11 @@ import {
   ArtifactIndexPanel,
   type IndexSection,
 } from "@/components/artifact/artifact-index";
+import { ArtifactSection } from "@/components/artifact/artifact-section";
+import {
+  QuestionSheet,
+  type SheetQuestion,
+} from "@/components/artifact/question-sheet";
 import {
   DataList,
   DataRow,
@@ -37,7 +43,6 @@ import {
   PrintToc,
   PrintValidationState,
   RefChip,
-  SectionCard,
   Stat,
   StatRow,
 } from "@/components/artifact/primitives";
@@ -63,7 +68,9 @@ import type {
   QuestionStatus,
   ValidationSummary,
 } from "@/lib/types/ef";
+import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
+import { usePrintExpand } from "@/lib/use-print-expand";
 import { cn } from "@/lib/utils";
 
 // --- utilidades --------------------------------------------------------------
@@ -122,10 +129,13 @@ export function ResultView({ job }: { job: JobDetail }) {
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [refining, setRefining] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [indexCollapsed, setIndexCollapsed] = usePersistentState(
     "artifact:index-collapsed",
     false,
   );
+  const disc = useDisclosure(2);
+  const { printMode, printNow } = usePrintExpand();
 
   const loadAll = useCallback(() => {
     Promise.all([
@@ -359,6 +369,22 @@ export function ResultView({ job }: { job: JobDetail }) {
           </span>
 
           <div className="ml-auto flex flex-wrap gap-2">
+            {a.questions_for_analyst.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setSheetOpen(true)}
+              >
+                <MessagesSquare className="h-3.5 w-3.5" />
+                Responder preguntas
+                {blockingRemaining > 0 && (
+                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                    {blockingRemaining}
+                  </span>
+                )}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -376,7 +402,7 @@ export function ResultView({ job }: { job: JobDetail }) {
               variant="outline"
               size="sm"
               className="gap-1.5"
-              onClick={() => window.print()}
+              onClick={printNow}
             >
               <Printer className="h-3.5 w-3.5" />
               Exportar PDF
@@ -466,6 +492,8 @@ export function ResultView({ job }: { job: JobDetail }) {
             sections={indexSections}
             collapsed={indexCollapsed}
             onToggle={() => setIndexCollapsed((v) => !v)}
+            onNavigate={disc.openOnly}
+            openIds={disc.openIds}
           />
         </div>
 
@@ -516,10 +544,15 @@ export function ResultView({ job }: { job: JobDetail }) {
           )}
 
           {/* 1. Interpretación para Sistemas */}
-          <SectionCard
+          <ArtifactSection
             id="sec-interpretation"
             index="1"
             title="Interpretación para Sistemas"
+            meta={`${si.scope_for_systems?.length ?? 0} alcance · ${assumptions.length} supuestos`}
+            open={disc.isOpen("sec-interpretation")}
+            onToggle={() => disc.toggle("sec-interpretation")}
+            forceRender={printMode}
+            preview={<span className="line-clamp-2">{si.what_process_requests}</span>}
           >
             <div className="space-y-4">
               <div>
@@ -616,14 +649,36 @@ export function ResultView({ job }: { job: JobDetail }) {
                 )}
               </div>
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 2. Preguntas al analista */}
-          <SectionCard
+          <ArtifactSection
             id="sec-questions"
             index="2"
             title="Preguntas al analista"
             count={a.questions_for_analyst.length}
+            meta={`${blockingTotal} bloq.`}
+            open={disc.isOpen("sec-questions")}
+            onToggle={() => disc.toggle("sec-questions")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {blockingRemaining > 0 ? (
+                  <span className="font-medium text-red-600">
+                    {blockingRemaining} bloqueante
+                    {blockingRemaining !== 1 ? "s" : ""} sin responder
+                  </span>
+                ) : blockingTotal > 0 ? (
+                  <span className="font-medium text-emerald-600">
+                    Bloqueantes resueltas
+                  </span>
+                ) : (
+                  "Sin preguntas bloqueantes"
+                )}
+                {" · "}
+                {progress.answered} de {progress.total} respondidas
+              </span>
+            }
             actions={
               <FilterToggle
                 onlyBlocking={onlyBlocking}
@@ -680,14 +735,24 @@ export function ResultView({ job }: { job: JobDetail }) {
                 {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
               </EmptyHint>
             )}
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 3. Requisitos */}
-          <SectionCard
+          <ArtifactSection
             id="sec-requirements"
             index="3"
             title="Requisitos"
             count={reqTotal}
+            open={disc.isOpen("sec-requirements")}
+            onToggle={() => disc.toggle("sec-requirements")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.requirements.business.length} de negocio ·{" "}
+                {a.requirements.functional.length} funcionales ·{" "}
+                {a.requirements.non_functional.length} no funcionales
+              </span>
+            }
           >
             <div className="space-y-4">
               {(
@@ -738,10 +803,24 @@ export function ResultView({ job }: { job: JobDetail }) {
                 </div>
               ))}
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 4. Modelo */}
-          <SectionCard id="sec-model" index="4" title="Modelo" count={modelTotal}>
+          <ArtifactSection
+            id="sec-model"
+            index="4"
+            title="Modelo"
+            count={modelTotal}
+            open={disc.isOpen("sec-model")}
+            onToggle={() => disc.toggle("sec-model")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {a.entities.length} entidades · {a.processes.length} procesos ·{" "}
+                {a.business_rules.length} reglas · {a.apis.length} APIs
+              </span>
+            }
+          >
             <div className="space-y-4">
               <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
                 {a.actors.map((x) => (
@@ -856,14 +935,25 @@ export function ResultView({ job }: { job: JobDetail }) {
                 ))}
               </ModelBlock>
             </div>
-          </SectionCard>
+          </ArtifactSection>
 
           {/* 5. Análisis crítico */}
-          <SectionCard
+          <ArtifactSection
             id="sec-analysis"
             index="5"
             title="Análisis crítico"
             count={analysisTotal}
+            open={disc.isOpen("sec-analysis")}
+            onToggle={() => disc.toggle("sec-analysis")}
+            forceRender={printMode}
+            preview={
+              <span>
+                {analysis.ambiguities?.length ?? 0} ambigüedades ·{" "}
+                {analysis.missing_info?.length ?? 0} faltantes ·{" "}
+                {analysis.inconsistencies?.length ?? 0} inconsistencias ·{" "}
+                {analysis.observations?.length ?? 0} observaciones
+              </span>
+            }
           >
             <div className="space-y-4">
               <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
@@ -920,18 +1010,52 @@ export function ResultView({ job }: { job: JobDetail }) {
                 ))}
               </ModelBlock>
             </div>
-          </SectionCard>
+          </ArtifactSection>
         </div>
       </div>
 
-      {/* Contador flotante de bloqueantes restantes */}
+      {/* Contador flotante de bloqueantes → abre el modo enfocado */}
       {blockingRemaining > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur print:hidden">
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur transition-colors hover:border-primary/40 hover:text-primary print:hidden"
+        >
           <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
           bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
-          {blockingRemaining !== 1 ? "s" : ""}
-        </div>
+          {blockingRemaining !== 1 ? "s" : ""} · responder
+        </button>
       )}
+
+      <QuestionSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="Responder preguntas al analista"
+        questions={a.questions_for_analyst.map(
+          (q): SheetQuestion => ({
+            id: q.id,
+            question: q.question,
+            reason: q.reason,
+            blocking: q.blocking,
+            audience: q.audience,
+            linked_to_ref: q.linked_to_ref,
+          }),
+        )}
+        statusOf={statusOf}
+        renderControls={(q, onAnswered) => (
+          <ValidationControls
+            jobId={job.job_id}
+            targetType="question"
+            targetId={q.id}
+            status={statusOf(q.id)}
+            respuesta={respuestaOf(q.id)}
+            onChanged={() => {
+              void reloadSummary();
+              onAnswered();
+            }}
+          />
+        )}
+      />
 
       <BackToTop />
     </div>
