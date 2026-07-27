@@ -4,6 +4,7 @@ import { Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { ValidationReadOnly } from "@/components/artifact/validation-readonly";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,12 +25,15 @@ export function ArchitectValidationControls({
   status,
   respuesta,
   onChanged,
+  readOnly = false,
 }: {
   jobId: string;
   targetId: string;
   status: QuestionStatus;
   respuesta?: string | null;
   onChanged: () => void;
+  /** Modo lectura: se muestra el estado, sin controles de escritura. */
+  readOnly?: boolean;
 }) {
   const [comment, setComment] = useState(respuesta ?? "");
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +62,11 @@ export function ArchitectValidationControls({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Sin permiso de edición en el módulo: mismo estado, sin acciones.
+  if (readOnly) {
+    return <ValidationReadOnly status={status} respuesta={respuesta} />;
   }
 
   return (

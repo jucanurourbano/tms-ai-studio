@@ -1,10 +1,11 @@
 "use client";
 
 import {
-  Boxes,
+Boxes,
   Coins,
-  Download,
   DollarSign,
+  Download,
+  Eye,
   FileStack,
   MessagesSquare,
   Plug,
@@ -68,6 +69,7 @@ import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
+import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
 
 // Mermaid: import dinámico client-only y lazy SOLO en esta vista (fuera del
@@ -114,6 +116,11 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  // Modo lectura: con acceso de solo lectura al módulo «arquitectura» se muestra
+  // todo el contenido pero se retiran las acciones de escritura (responder,
+  // confirmar/corregir, regenerar). El backend las rechazaría con 403.
+  const { can } = useAuth();
+  const puedeEditar = can("arquitectura", "full");
   const celebrate = useCelebrateOnTrue(
     summary?.ready_for_next_stage ?? false,
     summary != null,
@@ -304,8 +311,18 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             {ready ? "Listo para el Agente BD" : "Pendiente de afinamiento"}
           </span>
 
+          {!puedeEditar && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
+              title="Tu rol permite consultar este módulo, no modificarlo"
+            >
+              <Eye className="h-3 w-3" />
+              Modo lectura
+            </span>
+          )}
+
           <div className="ml-auto flex flex-wrap gap-2">
-            {a.questions_for_architect.length > 0 && (
+            {puedeEditar && a.questions_for_architect.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -345,33 +362,35 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               <Download className="h-3.5 w-3.5" />
               JSON
             </Button>
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <Button size="sm" disabled={!canRefine}>
-                    Regenerar diseño afinado
-                  </Button>
-                }
-              />
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Regenerar diseño afinado</DialogTitle>
-                  <DialogDescription>
-                    Se creará un diseño hijo reinyectando las respuestas del
-                    Arquitecto y se ejecutará el modelo real.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                  Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al diseño
-                  anterior). Esta acción consume tokens de la API.
-                </div>
-                <DialogFooter>
-                  <Button onClick={doRefine} disabled={refining || !canRefine}>
-                    {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            {puedeEditar && (
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <Button size="sm" disabled={!canRefine}>
+                      Regenerar diseño afinado
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Regenerar diseño afinado</DialogTitle>
+                    <DialogDescription>
+                      Se creará un diseño hijo reinyectando las respuestas del
+                      Arquitecto y se ejecutará el modelo real.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al diseño
+                    anterior). Esta acción consume tokens de la API.
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={doRefine} disabled={refining || !canRefine}>
+                      {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
       </div>
@@ -983,6 +1002,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
                         <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
                         <div className="print:hidden">
                           <ArchitectValidationControls
+                            readOnly={!puedeEditar}
                             jobId={job.job_id}
                             targetId={q.id}
                             status={statusOf(q.id)}
@@ -1008,7 +1028,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
         </div>
       </div>
 
-      {blockingRemaining > 0 && (
+      {puedeEditar && blockingRemaining > 0 && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
@@ -1036,6 +1056,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
         statusOf={statusOf}
         renderControls={(q, onAnswered) => (
           <ArchitectValidationControls
+                            readOnly={!puedeEditar}
             jobId={job.job_id}
             targetId={q.id}
             status={statusOf(q.id)}

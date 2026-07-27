@@ -4,6 +4,7 @@ import { Loader2, ShieldAlert, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { GrantsEditor } from "@/components/configuracion/grants-editor";
 import { PageHeader } from "@/components/shell/page-header";
 import { TableShell, TH_META } from "@/components/shell/table-shell";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { absoluteTime, relativeTime } from "@/lib/format";
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/permissions";
-import type { AuthUser, UserRole } from "@/lib/types/auth";
+import type { AuthUser, RolesCatalog, UserRole } from "@/lib/types/auth";
 import { cn } from "@/lib/utils";
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -61,8 +62,13 @@ function ActiveBadge({ active }: { active: boolean }) {
 }
 
 export default function UsuariosPage() {
-  const { user: current, isAdmin } = useAuth();
+  // El PANEL se abre con acceso al módulo `config` (rol o acceso adicional);
+  // cambiar roles y accesos exige rol admin estricto — el backend lo impone y
+  // aquí se refleja deshabilitando los controles (ver `require_admin_role`).
+  const { user: current, isAdmin, can, refresh } = useAuth();
+  const puedeVerPanel = can("config");
   const [users, setUsers] = useState<AuthUser[]>([]);
+  const [catalog, setCatalog] = useState<RolesCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,8 +98,25 @@ export default function UsuariosPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) fetchUsers();
-  }, [isAdmin, fetchUsers]);
+    if (puedeVerPanel) fetchUsers();
+  }, [puedeVerPanel, fetchUsers]);
+
+  // Catálogo de roles/módulos: la matriz la define el backend, no el cliente.
+  useEffect(() => {
+    if (!puedeVerPanel) return;
+    let cancelled = false;
+    authApi
+      .roles()
+      .then((c) => {
+        if (!cancelled) setCatalog(c);
+      })
+      .catch(() => {
+        /* el editor funciona sin el contexto "por rol" */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [puedeVerPanel]);
 
   async function onRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -115,6 +138,24 @@ export default function UsuariosPage() {
     }
   }
 
+  async function onChangeRole(u: AuthUser, role: UserRole) {
+    if (role === u.role) return;
+    setBusyId(u.id);
+    try {
+      await authApi.setRole(u.id, role);
+      toast.success(`Rol actualizado: ${ROLE_LABELS[role]}`);
+      fetchUsers();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo cambiar el rol.",
+      );
+      // Recarga para descartar la selección optimista del <select>.
+      fetchUsers();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onToggleActive(u: AuthUser) {
     setBusyId(u.id);
     try {
@@ -130,7 +171,7 @@ export default function UsuariosPage() {
     }
   }
 
-  if (!isAdmin) {
+  if (!puedeVerPanel) {
     return (
       <div className="mx-auto max-w-2xl p-6">
         <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-800">
@@ -140,7 +181,8 @@ export default function UsuariosPage() {
               Acceso restringido
             </h1>
             <p className="mt-1 text-sm">
-              Solo los administradores pueden gestionar usuarios.
+              No tienes acceso al módulo de Configuración. Pide a un
+              administrador que te lo asigne.
             </p>
           </div>
         </div>
@@ -153,7 +195,7 @@ export default function UsuariosPage() {
       <PageHeader
         eyebrow="Configuración"
         title="Usuarios"
-        description="Administra el acceso a TMS AI Studio: registra usuarios y activa o desactiva cuentas."
+        description="Administra el acceso a TMS AI Studio: registra usuarios, asigna su rol funcional y concede accesos adicionales por módulo."
       />
 
       {/* Alta de usuario */}
@@ -250,6 +292,7 @@ export default function UsuariosPage() {
               <TableHead className={TH_META}>Nombre</TableHead>
               <TableHead className={TH_META}>Correo</TableHead>
               <TableHead className={TH_META}>Rol</TableHead>
+              <TableHead className={TH_META}>Accesos extra</TableHead>
               <TableHead className={TH_META}>Estado</TableHead>
               <TableHead className={TH_META}>Registrado</TableHead>
               <TableHead className={cn(TH_META, "text-right")}>Acción</TableHead>
@@ -269,6 +312,9 @@ export default function UsuariosPage() {
                     <Skeleton className="h-5 w-24" />
                   </TableCell>
                   <TableCell>
+                    <Skeleton className="h-7 w-20" />
+                  </TableCell>
+                  <TableCell>
                     <Skeleton className="h-5 w-16" />
                   </TableCell>
                   <TableCell>
@@ -281,7 +327,7 @@ export default function UsuariosPage() {
               ))
             ) : users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="text-sm text-muted-foreground">
                   No hay usuarios.
                 </TableCell>
               </TableRow>
@@ -302,7 +348,47 @@ export default function UsuariosPage() {
                       {u.email}
                     </TableCell>
                     <TableCell>
-                      <RoleBadge role={u.role} />
+                      {/* Un admin no cambia su propio rol (guarda anti-bloqueo
+                          del backend): se muestra el badge, sin selector. */}
+                      {isAdmin && !isSelf ? (
+                        <select
+                          aria-label={`Rol de ${u.full_name}`}
+                          value={u.role}
+                          disabled={busyId === u.id}
+                          onChange={(e) =>
+                            onChangeRole(u, e.target.value as UserRole)
+                          }
+                          className="h-7 rounded-md border border-input bg-background px-2 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                        >
+                          {ALL_ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <RoleBadge role={u.role} />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin && !isSelf ? (
+                        <GrantsEditor
+                          user={u}
+                          catalog={catalog}
+                          onSaved={() => {
+                            fetchUsers();
+                            // Si se tocaron los accesos del usuario en sesión,
+                            // su navegación debe reflejarlo al instante.
+                            if (u.id === current?.id) void refresh();
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs text-meta-foreground">
+                          {u.grants.length > 0
+                            ? `${u.grants.length} módulo(s)`
+                            : "—"}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <ActiveBadge active={u.is_active} />

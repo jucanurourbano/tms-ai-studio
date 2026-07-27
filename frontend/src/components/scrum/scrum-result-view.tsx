@@ -1,10 +1,11 @@
 "use client";
 
 import {
-  ChevronRight,
+ChevronRight,
   Coins,
-  Download,
   DollarSign,
+  Download,
+  Eye,
   FileDown,
   Hash,
   Layers,
@@ -76,6 +77,7 @@ import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
+import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
 
 // --- badges de dominio -------------------------------------------------------
@@ -156,6 +158,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  // Modo lectura: con acceso de solo lectura al módulo «scrum» se muestra
+  // todo el contenido pero se retiran las acciones de escritura (responder,
+  // confirmar/corregir, regenerar). El backend las rechazaría con 403.
+  const { can } = useAuth();
+  const puedeEditar = can("scrum", "full");
   const celebrate = useCelebrateOnTrue(
     summary?.ready_for_next_stage ?? false,
     summary != null,
@@ -390,8 +397,18 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             {ready ? "Listo para el Agente Arquitectura" : "Pendiente de afinamiento"}
           </span>
 
+          {!puedeEditar && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
+              title="Tu rol permite consultar este módulo, no modificarlo"
+            >
+              <Eye className="h-3 w-3" />
+              Modo lectura
+            </span>
+          )}
+
           <div className="ml-auto flex flex-wrap gap-2">
-            {a.questions_for_po.length > 0 && (
+            {puedeEditar && a.questions_for_po.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -449,33 +466,35 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               <Download className="h-3.5 w-3.5" />
               Artefacto
             </Button>
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <Button size="sm" disabled={!canRefine}>
-                    Regenerar plan afinado
-                  </Button>
-                }
-              />
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Regenerar plan afinado</DialogTitle>
-                  <DialogDescription>
-                    Se creará un plan hijo reinyectando las respuestas del Product
-                    Owner y se ejecutará el modelo real.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                  Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al plan
-                  anterior). Esta acción consume tokens de la API.
-                </div>
-                <DialogFooter>
-                  <Button onClick={doRefine} disabled={refining || !canRefine}>
-                    {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            {puedeEditar && (
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <Button size="sm" disabled={!canRefine}>
+                      Regenerar plan afinado
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Regenerar plan afinado</DialogTitle>
+                    <DialogDescription>
+                      Se creará un plan hijo reinyectando las respuestas del Product
+                      Owner y se ejecutará el modelo real.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al plan
+                    anterior). Esta acción consume tokens de la API.
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={doRefine} disabled={refining || !canRefine}>
+                      {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
         {checks && (
@@ -958,6 +977,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                         <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
                         <div className="print:hidden">
                           <ScrumValidationControls
+                            readOnly={!puedeEditar}
                             jobId={job.job_id}
                             targetId={q.id}
                             status={statusOf(q.id)}
@@ -1072,7 +1092,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       </div>
 
       {/* Contador flotante de bloqueantes → abre el modo enfocado */}
-      {blockingRemaining > 0 && (
+      {puedeEditar && blockingRemaining > 0 && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
@@ -1101,6 +1121,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         statusOf={statusOf}
         renderControls={(q, onAnswered) => (
           <ScrumValidationControls
+                            readOnly={!puedeEditar}
             jobId={job.job_id}
             targetId={q.id}
             status={statusOf(q.id)}

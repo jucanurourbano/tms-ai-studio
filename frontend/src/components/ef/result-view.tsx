@@ -1,11 +1,12 @@
 "use client";
 
 import {
-  ClipboardCopy,
+ClipboardCopy,
   Clock,
   Coins,
-  Download,
   DollarSign,
+  Download,
+  Eye,
   Kanban,
   MessagesSquare,
   Printer,
@@ -72,6 +73,7 @@ import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
+import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
 
 // --- utilidades --------------------------------------------------------------
@@ -137,6 +139,11 @@ export function ResultView({ job }: { job: JobDetail }) {
   );
   const disc = useDisclosure(2);
   const { printMode, printNow } = usePrintExpand();
+  // Modo lectura: con acceso de solo lectura al módulo «ef» se muestra
+  // todo el contenido pero se retiran las acciones de escritura (responder,
+  // confirmar/corregir, regenerar). El backend las rechazaría con 403.
+  const { can } = useAuth();
+  const puedeEditar = can("ef", "full");
   const celebrate = useCelebrateOnTrue(
     summary?.ready_for_next_stage ?? false,
     summary != null,
@@ -374,8 +381,18 @@ export function ResultView({ job }: { job: JobDetail }) {
             {ready ? "Listo para el Agente Scrum" : "Pendiente de afinamiento"}
           </span>
 
+          {!puedeEditar && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
+              title="Tu rol permite consultar este módulo, no modificarlo"
+            >
+              <Eye className="h-3 w-3" />
+              Modo lectura
+            </span>
+          )}
+
           <div className="ml-auto flex flex-wrap gap-2">
-            {a.questions_for_analyst.length > 0 && (
+            {puedeEditar && a.questions_for_analyst.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -422,34 +439,36 @@ export function ResultView({ job }: { job: JobDetail }) {
               <Download className="h-3.5 w-3.5" />
               JSON
             </Button>
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <Button size="sm" disabled={!canRefine}>
-                    Regenerar EF afinada
-                  </Button>
-                }
-              />
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Regenerar EF afinada</DialogTitle>
-                  <DialogDescription>
-                    Se creará un análisis hijo reinyectando tus respuestas y se
-                    ejecutará el modelo real.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                  Costo estimado: ~$
-                  {a.metrics.cost.toFixed(4)} (similar al análisis anterior).
-                  Esta acción consume tokens de la API.
-                </div>
-                <DialogFooter>
-                  <Button onClick={doRefine} disabled={refining || !canRefine}>
-                    {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            {puedeEditar && (
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <Button size="sm" disabled={!canRefine}>
+                      Regenerar EF afinada
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Regenerar EF afinada</DialogTitle>
+                    <DialogDescription>
+                      Se creará un análisis hijo reinyectando tus respuestas y se
+                      ejecutará el modelo real.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Costo estimado: ~$
+                    {a.metrics.cost.toFixed(4)} (similar al análisis anterior).
+                    Esta acción consume tokens de la API.
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={doRefine} disabled={refining || !canRefine}>
+                      {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
       </div>
@@ -639,6 +658,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                             )}
                             <div className="print:hidden">
                               <ValidationControls
+                            readOnly={!puedeEditar}
                                 jobId={job.job_id}
                                 targetType="assumption"
                                 targetId={s.id}
@@ -729,6 +749,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                         </p>
                         <div className="print:hidden">
                           <ValidationControls
+                            readOnly={!puedeEditar}
                             jobId={job.job_id}
                             targetType="question"
                             targetId={q.id}
@@ -1043,7 +1064,7 @@ export function ResultView({ job }: { job: JobDetail }) {
       </div>
 
       {/* Contador flotante de bloqueantes → abre el modo enfocado */}
-      {blockingRemaining > 0 && (
+      {puedeEditar && blockingRemaining > 0 && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
@@ -1072,6 +1093,7 @@ export function ResultView({ job }: { job: JobDetail }) {
         statusOf={statusOf}
         renderControls={(q, onAnswered) => (
           <ValidationControls
+                            readOnly={!puedeEditar}
             jobId={job.job_id}
             targetType="question"
             targetId={q.id}
