@@ -17,8 +17,9 @@ DevOps + un **Orquestador** que coordina el flujo entre ellos.
 **Estado:** Agente EF **completo** (backend + frontend). Agente Scrum **completo**
 (backend + frontend; bloques B0→B8 implementados, ver §4 y
 `docs/diseno-agente-scrum.md`). Persistencia **generalizada** a tablas `agent_*`
-multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) protegiendo
-toda la API de agentes y el frontend (ver §6). Agente **Arquitectura** **completo**
+multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) y **permisos
+por fase ISDF** (matriz rol → módulo/nivel + accesos adicionales) protegiendo
+toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** **completo**
 (backend + frontend; bloques A0→A7 implementados, ver §5 y
 `docs/diseno-agente-arquitectura.md`). Siguiente eslabón: **Agente BD**.
 
@@ -229,8 +230,8 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 - **Modelo `User`** (`backend/app/models/user.py`, tabla `users`, migración
   `0005_users`): `id` (ULID), `email` **único**, `full_name`, `password_hash`,
   `role`, `is_active`, timestamps.
-- **Roles:** `admin` | `member`. `admin` puede registrar usuarios y gestionar el
-  panel; `member` solo usa los agentes.
+- **Roles funcionales por fase ISDF** (migración `0006_roles_por_fase`; sustituyen
+  al par binario `admin`|`member`, cuyos usuarios pasaron a `analista`).
 - **Hashing:** **bcrypt vía `passlib`** (`bcrypt` pinneado `<4.1` por
   incompatibilidad con `passlib` 1.7.4). El `password_hash` **nunca** se expone en
   la API ni se registra en logs; **jamás** se persiste la contraseña en claro.
@@ -239,20 +240,29 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   `JWT_SECRET` **no se commitea**; en producción es único y **se rota**
   periódicamente (rotarlo cierra todas las sesiones vigentes).
 - **Endpoints `/api/v1/auth`** (OpenAPI en español, `ApiResponse`):
-  - `POST /auth/register` — crea usuario. **Solo un `admin` autenticado** puede
-    registrar. **Excepción de bootstrap:** si no existe ningún usuario, el primer
-    registro se permite **sin auth** y nace `admin`.
+  - `POST /auth/register` — crea usuario. Exige **`config` FULL**. **Excepción de
+    bootstrap:** si no existe ningún usuario, el primer registro se permite **sin
+    auth** y nace `admin`. Crear otro `admin` exige **rol** `admin`.
   - `POST /auth/login` — `email` + `password` → `access_token` (JWT) + usuario.
-  - `GET /auth/me` — usuario autenticado actual.
-  - `GET /auth/users` — listado (**solo `admin`**).
-  - `PATCH /auth/users/{id}` — activar/desactivar (**solo `admin`**; un admin no
+  - `GET /auth/me` — usuario actual + **`modules` efectivos** (rol + grants ya
+    resueltos). Es la única fuente de permisos del frontend.
+  - `GET /auth/roles` — catálogo de roles/módulos/niveles con la matriz (panel).
+  - `GET /auth/users` — listado (**`config` READ**).
+  - `PATCH /auth/users/{id}` — activar/desactivar (**`config` FULL**; un admin no
     puede desactivarse a sí mismo).
-- **Protección:** la dependencia `get_current_user`
-  (`backend/app/dependencies/current_user.py`) valida el JWT y protege **TODOS**
-  los endpoints de EF y Scrum; sin token válido → **401** con mensaje claro.
-  `require_admin` añade la comprobación de rol. Errores de app (`app/errors.py`:
-  `AuthError` 401 / `ForbiddenError` 403 / `NotFoundError` 404 / `ConflictError`
-  409) se traducen al envelope uniforme por el middleware.
+  - `PATCH /auth/users/{id}/role` — cambia el rol (**rol `admin` estricto**; un
+    admin no puede cambiar su propio rol).
+  - `PUT /auth/users/{id}/grants` — reemplaza los accesos adicionales
+    (**rol `admin` estricto**; semántica de *replace*).
+- **Protección:** `get_current_user`
+  (`backend/app/dependencies/current_user.py`) valida el JWT → **401** sin token.
+  La **autorización** vive aparte en `app/dependencies/permissions.py`:
+  `require_module(module, level)` protege EF, Scrum, Arquitectura y configuración
+  (READ a nivel de router, FULL por endpoint de escritura) y devuelve **403** con
+  un mensaje que distingue "sin acceso al módulo" de "solo lectura".
+  Errores de app (`app/errors.py`: `AuthError` 401 / `ForbiddenError` 403 /
+  `NotFoundError` 404 / `ConflictError` 409) se traducen al envelope uniforme por
+  el middleware.
 - **Bootstrap del primer admin** (dos vías; **sin credenciales en el repo**):
   1. CLI: `backend/scripts/create_admin.py --email <correo> --name "<nombre>"`
      (pide la contraseña sin eco; idempotente).
@@ -260,10 +270,51 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 - **Frontend:** `AuthProvider` guarda el token (memoria + `localStorage`), el
   cliente API adjunta el `Bearer` y un handler global de **401** cierra sesión y
   redirige a `/login`. Guarda de rutas (`AppGate`): sin sesión → `/login`; con
-  sesión, `/login` → dashboard. Pantalla `/login` con identidad Urbano; menú de
-  usuario (nombre + rol) con **cerrar sesión** en la sidebar. **Panel de usuarios**
-  (`/configuracion/usuarios`, **solo `admin`**): tabla (nombre/email/rol/estado/
-  fecha), alta y activar/desactivar.
+  sesión, `/login` → dashboard; **sin permiso para la ruta → dashboard con aviso**
+  (`lib/route-permissions.ts`; las rutas `/new` exigen FULL). Pantalla `/login` con
+  identidad Urbano; sidebar con **badge del rol** y **cerrar sesión**.
+  **Panel de usuarios** (`/configuracion/usuarios`, módulo `config`): tabla
+  (nombre/email/rol/accesos/estado/fecha), alta, activar/desactivar, **select de
+  rol** y **editor de accesos adicionales** por usuario.
+
+### 6.1 Permisos por fase ISDF (matriz)
+
+**Fuente de verdad única: `backend/app/core/permissions.py`.** No duplicar la
+matriz en ningún otro sitio — el frontend consume los `modules` ya resueltos que
+devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
+
+- **Módulos** (`Module`): un agente del ISDF (`ef`, `scrum`, `arquitectura`, `bd`,
+  `api`, `backend`, `frontend`, `qa`, `devops`) o `config`. Los agentes aún no
+  implementados ya tienen módulo, para no tocar el enum al asignar permisos.
+- **Niveles** (`AccessLevel`): `READ` (consultar) y `FULL` (crear/editar/afinar).
+  **`FULL` implica `READ`.**
+
+| Rol | FULL | READ |
+|---|---|---|
+| `admin` | todo (+ `config`) | — |
+| `procesos` | `ef` | — |
+| `analista` | `ef`, `scrum` | — |
+| `arquitecto` | `arquitectura` | `ef`, `scrum` |
+| `developer` | `api`, `backend`, `frontend` | `arquitectura`, `scrum` |
+| `qa` | `qa` | `scrum` |
+
+- **`bd` y `devops` NO tienen rol asignado** (solo `admin`): el modelo acordado no
+  los menciona y no se les inventó dueño. Añadirlos a la matriz cuando el equipo
+  decida a quién pertenecen.
+- **Grants** (`user_module_grants`, única por `(user_id, module)`): accesos extra
+  por usuario que **SUMAN** sobre el rol y **nunca restan** — si el rol da `FULL`
+  y el grant dice `READ`, gana `FULL`. `User.grants` usa `lazy="selectin"`.
+- **Anti-escalada (crítico):** cambiar roles, editar grants y crear un `admin`
+  exigen **rol `admin` estricto**, no `config` FULL. Si bastara el módulo,
+  conceder un grant de `config` equivaldría a regalar el rol admin, porque el
+  beneficiario podría auto-asignarse cualquier permiso. Fail-closed.
+- **El JWT identifica, no autoriza:** el `sub` es el id del usuario y los permisos
+  se resuelven en cada petición. Cambiar un rol surte efecto **con el mismo
+  token**, sin cerrar sesión (y por eso la migración `0006` no rompe sesiones).
+- **Navegación:** los módulos sin acceso son **invisibles**, no deshabilitados
+  (una fase sin agentes visibles desaparece). Con acceso `READ` la vista del
+  artefacto se muestra completa pero **sin acciones de escritura**, con un badge
+  "Modo lectura" que explica la ausencia.
 
 ---
 
@@ -347,9 +398,11 @@ tms-ai-studio/
     ├── app/
     │   ├── config/settings.py    # pydantic-settings
     │   ├── core/{logger,security}.py    # security: hashing bcrypt + JWT
+    │   ├── core/permissions.py   # MATRIZ rol → módulo/nivel (fuente única)
     │   ├── errors.py             # errores de app (auth/permisos → ApiResponse)
-    │   ├── api/v1/{router,health,auth,ef,scrum}.py
-    │   ├── dependencies/  middlewares/  models/    # models: agent, user
+    │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura}.py
+    │   ├── dependencies/         # current_user (401) + permissions (403)
+    │   ├── middlewares/  models/    # models: agent, user (+ grants)
     │   ├── repositories/  services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
     ├── shared/responses/api_response.py
