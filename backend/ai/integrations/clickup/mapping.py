@@ -4,7 +4,7 @@ Mapeo elegido: **Sprint → Lista, Historia → Tarea, Épica → tag/custom fie
 Las historias sin asignar van a la lista ``Backlog`` (siempre visibles).
 """
 
-from typing import Any
+from typing import Any, Optional
 
 # Prioridad ClickUp: must→urgent, should→high, could→normal, wont→low.
 CLICKUP_PRIORITY = {
@@ -51,8 +51,19 @@ def _description(story: dict) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def story_rows(artifact: dict[str, Any]) -> list[dict]:
-    """Convierte las historias del artefacto en filas de tarea ClickUp."""
+def story_rows(
+    artifact: dict[str, Any],
+    assignees: Optional[dict[str, str]] = None,
+) -> list[dict]:
+    """Convierte las historias del artefacto en filas de tarea ClickUp.
+
+    ``assignees`` mapea ``story_id`` -> correo institucional del responsable. Las
+    asignaciones NO viven en el artefacto (tabla ``story_assignments``), así que
+    se inyectan aquí. El campo resultante (``assignee_email``) es el que ClickUp
+    espera para asignar la tarea al importar, y es el mismo que consumirá la
+    fase (b) al crear tareas por API — sin cambiar este mapeo.
+    """
+    assignees = assignees or {}
     sprint_of = _sprint_of(artifact)
     epic_title = {e["id"]: e.get("title") for e in artifact.get("epics", [])}
     rows: list[dict] = []
@@ -71,6 +82,9 @@ def story_rows(artifact: dict[str, Any]) -> list[dict]:
                 "epic": epic_title.get(story.get("epic_ref")) or story.get("epic_ref"),
                 "tags": list(story.get("tags", [])),
                 "external_key": story.get("external_key") or sid,
+                # Vacío cuando la historia no tiene responsable: ClickUp la
+                # importa sin asignar, que es exactamente lo que se quiere.
+                "assignee_email": assignees.get(sid, ""),
             }
         )
     return rows

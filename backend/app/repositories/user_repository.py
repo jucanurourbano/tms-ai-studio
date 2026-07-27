@@ -125,12 +125,25 @@ class UserRepository:
         *,
         full_name: Optional[str] = None,
         email: Optional[str] = None,
+        institutional_email: Optional[str] = None,
+        position: Optional[str] = None,
+        available_for_assignment: Optional[bool] = None,
     ) -> User:
-        """Actualiza los datos de identidad. Solo toca lo que llega informado."""
+        """Actualiza identidad y perfil de equipo. Solo toca lo que llega informado.
+
+        Los campos de texto del perfil admiten cadena vacía para BORRAR el valor
+        (se normaliza a ``None``); ``None`` significa "no tocar".
+        """
         if full_name is not None:
             user.full_name = full_name
         if email is not None:
             user.email = email
+        if institutional_email is not None:
+            user.institutional_email = institutional_email.strip() or None
+        if position is not None:
+            user.position = position.strip() or None
+        if available_for_assignment is not None:
+            user.available_for_assignment = available_for_assignment
         await self.session.flush()
         return user
 

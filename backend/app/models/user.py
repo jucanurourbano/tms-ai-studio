@@ -46,6 +46,21 @@ class User(Base, IdMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    # --- Perfil de equipo (asignación de historias del Agente Scrum) ---------
+    # Correo INSTITUCIONAL: puede coincidir con el de acceso o diferir (p. ej. si
+    # se entra con un alias). Es el que se exporta a ClickUp como `assignee`, por
+    # eso vive aparte del `email` de login, que puede cambiarse sin tocar el
+    # destinatario de las tareas.
+    institutional_email: Mapped[Optional[str]] = mapped_column(
+        String(320), nullable=True
+    )
+    #: Cargo o especialidad libre (backend, frontend, QA, analista funcional…).
+    position: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    #: Si aparece en el selector "Asignar a" del plan Scrum.
+    available_for_assignment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
     # BAJA LÓGICA (soft delete). Se conserva la fila para no romper la trazabilidad:
     # los jobs (``created_by``), las validaciones (``answered_by``) y las
     # asignaciones de historias apuntan a este usuario, y anonimizar dejaría el

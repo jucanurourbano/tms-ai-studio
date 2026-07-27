@@ -50,10 +50,18 @@ class SetRoleRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    """Edita los datos de un usuario. Solo se aplica lo que llega informado."""
+    """Edita los datos de un usuario. Solo se aplica lo que llega informado.
+
+    Incluye el **perfil de equipo** que consume la asignación de historias del
+    Agente Scrum. ``institutional_email`` admite cadena vacía para borrarlo (y
+    volver a usar el correo de acceso como destinatario en el export).
+    """
 
     full_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
+    institutional_email: Optional[str] = Field(default=None, max_length=320)
+    position: Optional[str] = Field(default=None, max_length=120)
+    available_for_assignment: Optional[bool] = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -104,6 +112,10 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     created_at: Optional[datetime] = None
+    # --- perfil de equipo (asignación de historias del Agente Scrum) ---
+    institutional_email: Optional[str] = None
+    position: Optional[str] = None
+    available_for_assignment: bool = True
     #: Accesos adicionales explícitos (para el editor del panel de usuarios).
     grants: list[ModuleGrantOut] = Field(default_factory=list)
     #: Módulos efectivos: ``{"ef": "full", "scrum": "read", ...}``.
@@ -119,6 +131,9 @@ class UserOut(BaseModel):
             role=user.role,
             is_active=user.is_active,
             created_at=user.created_at,
+            institutional_email=user.institutional_email,
+            position=user.position,
+            available_for_assignment=user.available_for_assignment,
             grants=[
                 ModuleGrantOut(module=g.module, level=g.level) for g in user.grants
             ],

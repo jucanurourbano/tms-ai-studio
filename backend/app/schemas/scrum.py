@@ -21,3 +21,13 @@ class ScrumValidationPatchRequest(BaseModel):
     target_id: str
     status: Literal["pendiente", "confirmado", "corregido"]
     respuesta: Optional[str] = None
+
+
+class AssignStoryRequest(BaseModel):
+    """Asigna una historia a un colaborador. ``user_id=None`` la desasigna."""
+
+    story_id: str = Field(description="Id de la historia (``stories[].id``).")
+    user_id: Optional[str] = Field(
+        default=None,
+        description="Id del colaborador; null para retirar la asignación.",
+    )

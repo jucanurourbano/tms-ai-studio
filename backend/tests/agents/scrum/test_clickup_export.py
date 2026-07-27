@@ -88,8 +88,37 @@ def test_export_csv_cabecera_y_filas():
         "Epic",
         "Tags",
         "External Key",
+        "Assignee",
     ]
     assert len(reader) == 3  # cabecera + 2 historias
+
+
+def test_assignee_email_vacio_sin_asignacion():
+    """Sin asignaciones, la columna Assignee va vacía: ClickUp importa sin asignar."""
+    rows = to_clickup_rows(_artifact())
+    assert all(r["assignee_email"] == "" for r in rows)
+
+
+def test_assignee_email_se_inyecta_por_historia():
+    """Las asignaciones NO están en el artefacto: se inyectan en el mapeo."""
+    artifact = _artifact()
+    primera = artifact["stories"][0]["id"]
+    rows = to_clickup_rows(artifact, assignees={primera: "ana@urbano.com.pe"})
+    por_id = {r["external_key"]: r for r in rows}
+    asignada = next(r for r in rows if r["assignee_email"])
+    assert asignada["assignee_email"] == "ana@urbano.com.pe"
+    # El resto sigue sin responsable.
+    assert sum(1 for r in rows if r["assignee_email"]) == 1
+    assert len(por_id) == 2
+
+
+def test_assignee_email_en_el_csv():
+    artifact = _artifact()
+    primera = artifact["stories"][0]["id"]
+    csv_text = to_clickup_csv(artifact, assignees={primera: "ana@urbano.com.pe"})
+    reader = list(csv.reader(io.StringIO(csv_text)))
+    columna = reader[0].index("Assignee")
+    assert "ana@urbano.com.pe" in [fila[columna] for fila in reader[1:]]
 
 
 def test_unassigned_va_a_backlog():

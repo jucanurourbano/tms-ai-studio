@@ -144,8 +144,11 @@ class AuthService:
         actor: User,
         full_name: Optional[str] = None,
         email: Optional[str] = None,
+        institutional_email: Optional[str] = None,
+        position: Optional[str] = None,
+        available_for_assignment: Optional[bool] = None,
     ) -> User:
-        """Edita nombre y/o correo de acceso de un usuario (requiere `config` FULL)."""
+        """Edita identidad y perfil de equipo de un usuario (requiere `config` FULL)."""
         user = await self.repo.get_by_id(user_id)
         if user is None:
             raise NotFoundError("Usuario no encontrado.")
@@ -160,7 +163,14 @@ class AuthService:
                 if otro is not None and otro.id != user.id:
                     raise ConflictError("Ya existe un usuario con ese correo.")
 
-        await self.repo.update_profile(user, full_name=full_name, email=normalized)
+        await self.repo.update_profile(
+            user,
+            full_name=full_name,
+            email=normalized,
+            institutional_email=institutional_email,
+            position=position,
+            available_for_assignment=available_for_assignment,
+        )
         await self.session.commit()
         return user
 

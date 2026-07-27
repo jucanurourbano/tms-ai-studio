@@ -7,7 +7,11 @@ from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
 from app.models.user import User
-from app.schemas.scrum import CreatePlanRequest, ScrumValidationPatchRequest
+from app.schemas.scrum import (
+    AssignStoryRequest,
+    CreatePlanRequest,
+    ScrumValidationPatchRequest,
+)
 from app.services.scrum_service import ScrumPlanningService
 from shared.responses.api_response import ApiResponse
 
@@ -168,6 +172,63 @@ async def get_validation_summary(
     """Resumen de validaciones con el ``ready_for_next_stage`` compuesto (D5)."""
     summary = await _service(session).validation_summary(job_id)
     return ApiResponse.ok(data=summary)
+
+
+@router.get(
+    "/team",
+    summary="Colaboradores disponibles para asignar historias",
+)
+async def list_team(session: AsyncSession = Depends(get_session)) -> ApiResponse:
+    """Lista los colaboradores asignables (activos, vigentes y disponibles).
+
+    Vive bajo ``/scrum`` y no bajo ``/auth`` a propósito: lo necesita cualquiera
+    que consulte un plan (nivel READ del módulo Scrum) y expone solo el perfil
+    mínimo de equipo, sin abrir el panel de usuarios a quien no tiene
+    Configuración.
+    """
+    return ApiResponse.ok(data={"items": await _service(session).list_team()})
+
+
+@router.get(
+    "/jobs/{job_id}/assignments",
+    summary="Asignaciones de historias del plan",
+)
+async def list_assignments(
+    job_id: str, session: AsyncSession = Depends(get_session)
+) -> ApiResponse:
+    """Asignaciones del plan con el responsable resuelto.
+
+    Viven **fuera del artefacto** (tabla ``story_assignments``), igual que las
+    validaciones: el ``ScrumArtifact`` no se muta nunca.
+    """
+    items = await _service(session).list_assignments(job_id)
+    return ApiResponse.ok(data={"items": items})
+
+
+@router.patch(
+    "/jobs/{job_id}/assignments",
+    summary="Asignar o desasignar una historia",
+)
+async def patch_assignment(
+    job_id: str,
+    body: AssignStoryRequest,
+    actor: User = _WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Asigna la historia a un colaborador; ``user_id: null`` la desasigna.
+
+    Exige nivel FULL del módulo Scrum, que es lo que tienen `analista` y `admin`.
+    """
+    data = await _service(session).assign_story(
+        job_id=job_id,
+        story_id=body.story_id,
+        user_id=body.user_id,
+        actor_id=actor.id,
+    )
+    return ApiResponse.ok(
+        data=data,
+        message="Historia asignada" if body.user_id else "Asignación retirada",
+    )
 
 
 @router.get("/jobs/{job_id}/export", summary="Export compatible con ClickUp (CSV/JSON)")

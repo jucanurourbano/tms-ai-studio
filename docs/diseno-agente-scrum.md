@@ -302,6 +302,7 @@ API, Backend, Frontend. Cadena:
 | Estimación | custom field de puntos (o `points` nativo) | tag |
 | Prioridad | ClickUp priority: must→urgent, should→high, could→normal, wont→low | custom field |
 | Trazabilidad EF | tags `ef:<job>`, `REQ-F-…` + custom field "EF ref" | solo descripción |
+| **Responsable** | **`assignee` por correo institucional** del colaborador asignado (columna `Assignee` del CSV / campo `assignee_email` del JSON) | dejar sin asignar e imputar en ClickUp |
 
 **Elegido:** Sprint→Lista, Historia→Tarea, Épica→tag/custom field (más una carpeta
 por corrida). Mantiene todo dentro de una carpeta acotada del space de Sistemas
@@ -324,6 +325,30 @@ riesgo en cuenta compartida).
 El `ScrumArtifact` ya nace con `tags`, `external_key`, `priority`, criterios
 estructurados y agrupación sprint/épica ⇒ **sin migración de esquema** al
 implementar (b).
+
+### Asignación de responsables (listo para la fase (b))
+
+Quién ejecuta cada historia **no vive en el artefacto**: está en la tabla
+`story_assignments` (`job_id`, `story_id`, `user_id`, `assigned_at`,
+`assigned_by`), misma filosofía que las validaciones — el `ScrumArtifact` es la
+salida del agente y no se muta, y reasignar no obliga a regenerar el plan.
+
+El mapeo (`ai/integrations/clickup/mapping.py`) recibe las asignaciones como
+parámetro (`story_rows(artifact, assignees={story_id: correo})`) y emite el campo
+**`assignee_email`** con el **correo institucional** del responsable
+(`users.institutional_email`, con fallback al correo de acceso para no dejar la
+tarea sin destinatario). En el CSV es la columna **`Assignee`**, que es la que
+reconoce el importador de ClickUp.
+
+**Lo que falta en (b)** — y por qué no hace falta tocar el mapeo:
+1. Resolver `assignee_email` → **id de miembro del workspace** (`GET /team` de
+   ClickUp), porque la API de creación de tareas espera `assignees: [<user_id>]`,
+   no correos. El importador CSV sí acepta el correo; la API, no.
+2. Enviar ese id en el `POST /list/{list_id}/task` dentro del guard fail-closed
+   ya existente, con `dry_run` mostrando a quién se asignaría cada tarea.
+3. Si el correo no corresponde a ningún miembro del workspace: **crear la tarea
+   sin asignar** y registrar una `Observation` (nunca fallar la publicación
+   entera por un responsable no encontrado, ni asignar a alguien distinto).
 
 ---
 

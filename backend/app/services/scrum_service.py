@@ -6,6 +6,7 @@ gestiona el ciclo de afinamiento con el PO (validaciones + refine con job hijo).
 """
 
 import json
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,9 @@ from app.models.agent import (
     ValidationStatus,
     ValidationTargetType,
 )
+from app.models.user import User
 from app.repositories.agent_job_repository import AgentJobRepository
+from app.repositories.story_assignment_repository import StoryAssignmentRepository
 from app.services.ef_service import EFAnalysisService
 
 
@@ -138,6 +141,111 @@ class ScrumPlanningService:
             agent_type=AgentType.SCRUM, limit=limit, offset=offset
         )
 
+    # --- Equipo y asignación de historias -----------------------------------
+
+    def _assignments(self) -> StoryAssignmentRepository:
+        return StoryAssignmentRepository(self.session)
+
+    @staticmethod
+    def _member_out(user: User) -> dict:
+        """Vista pública mínima de un colaborador (nunca expone credenciales)."""
+        return {
+            "id": user.id,
+            "full_name": user.full_name,
+            # El correo institucional es el que se exporta a ClickUp; si no está
+            # informado se cae al de acceso para no dejar la tarea sin destinatario.
+            "institutional_email": user.institutional_email or user.email,
+            "position": user.position,
+            "role": user.role.value,
+            "is_active": user.is_active,
+        }
+
+    async def list_team(self) -> list[dict]:
+        """Colaboradores asignables (activos, vigentes y disponibles)."""
+        users = await self._assignments().assignable_users()
+        return [self._member_out(u) for u in users]
+
+    async def list_assignments(self, job_id: str) -> list[dict]:
+        """Asignaciones del plan, con los datos del responsable resueltos."""
+        rows = await self._assignments().list_for_job(job_id)
+        users = await self._assignments().users_by_ids([r.user_id for r in rows])
+        out: list[dict] = []
+        for row in rows:
+            user = users.get(row.user_id)
+            out.append(
+                {
+                    "story_id": row.story_id,
+                    "user_id": row.user_id,
+                    "assigned_at": (
+                        row.assigned_at.isoformat() if row.assigned_at else None
+                    ),
+                    "assigned_by": row.assigned_by,
+                    # ``user`` puede faltar solo si se borró físicamente (la app
+                    # usa baja lógica), pero el listado no debe romperse por eso.
+                    "user": self._member_out(user) if user is not None else None,
+                }
+            )
+        return out
+
+    async def assign_story(
+        self,
+        *,
+        job_id: str,
+        story_id: str,
+        user_id: Optional[str],
+        actor_id: Optional[str] = None,
+    ) -> dict:
+        """Asigna o desasigna una historia (``user_id=None`` desasigna).
+
+        Valida que el plan exista, que la historia pertenezca a su artefacto y
+        que el destinatario sea asignable: sin esto se podrían crear asignaciones
+        a historias inventadas que nunca aparecerían en la UI.
+        """
+        job = await self.repo.get_job(job_id)
+        if job is None or job.agent_type != AgentType.SCRUM:
+            raise IngestError(f"No existe un job Scrum con id {job_id}.")
+
+        artifact = await self.get_artifact(job_id)
+        if artifact is None:
+            raise IngestError(f"El job Scrum {job_id} no tiene artefacto disponible.")
+        known = {s.get("id") for s in artifact.get("stories", [])}
+        if story_id not in known:
+            raise IngestError(f"La historia {story_id} no pertenece al plan {job_id}.")
+
+        repo = self._assignments()
+        if user_id is None:
+            await repo.unassign(job_id=job_id, story_id=story_id)
+            await self.session.commit()
+            return {"story_id": story_id, "user_id": None}
+
+        assignable = {u.id for u in await repo.assignable_users()}
+        if user_id not in assignable:
+            raise IngestError(
+                "El usuario indicado no está disponible para asignación "
+                "(inactivo, dado de baja o marcado como no asignable)."
+            )
+
+        await repo.assign(
+            job_id=job_id,
+            story_id=story_id,
+            user_id=user_id,
+            assigned_by=actor_id,
+            when=datetime.now(timezone.utc),
+        )
+        await self.session.commit()
+        return {"story_id": story_id, "user_id": user_id}
+
+    async def _assignee_emails(self, job_id: str) -> dict[str, str]:
+        """``story_id`` -> correo institucional del responsable (para el export)."""
+        rows = await self._assignments().list_for_job(job_id)
+        users = await self._assignments().users_by_ids([r.user_id for r in rows])
+        emails: dict[str, str] = {}
+        for row in rows:
+            user = users.get(row.user_id)
+            if user is not None:
+                emails[row.story_id] = user.institutional_email or user.email
+        return emails
+
     # --- Export ClickUp (fase a: sin API, sin riesgo) -----------------------
 
     async def export_clickup(self, job_id: str, fmt: str = "csv") -> dict:
@@ -148,16 +256,21 @@ class ScrumPlanningService:
         if artifact is None:
             raise IngestError(f"El job Scrum {job_id} no tiene artefacto disponible.")
 
+        # Las asignaciones NO están en el artefacto: se resuelven aparte y se
+        # inyectan en el mapeo como `assignee_email` (lo que ClickUp espera para
+        # asignar la tarea al importar).
+        assignees = await self._assignee_emails(job_id)
+
         if fmt == "json":
             return {
                 "format": "json",
                 "filename": f"scrum_{job_id}_clickup.json",
-                "content": to_clickup_rows(artifact),
+                "content": to_clickup_rows(artifact, assignees=assignees),
             }
         return {
             "format": "csv",
             "filename": f"scrum_{job_id}_clickup.csv",
-            "content": to_clickup_csv(artifact),
+            "content": to_clickup_csv(artifact, assignees=assignees),
         }
 
     async def list_ready_ef_jobs(self, limit: int, offset: int) -> list[dict]:

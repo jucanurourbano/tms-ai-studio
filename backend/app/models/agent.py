@@ -208,6 +208,43 @@ class AgentExternalLink(Base, IdMixin, TimestampMixin):
     )
 
 
+class StoryAssignment(Base, IdMixin, TimestampMixin):
+    """Asignación de una historia del plan Scrum a un colaborador.
+
+    Vive **FUERA del artefacto**, igual que las validaciones: el ``ScrumArtifact``
+    es la salida del agente y no se muta: quién ejecuta cada historia es una
+    decisión del equipo, posterior e independiente de la generación del plan (y
+    revisable sin regenerar nada).
+
+    Una historia tiene **como máximo un** responsable por plan (única sobre
+    ``job_id`` + ``story_id``); reasignar actualiza la fila y su ``assigned_at``.
+    """
+
+    __tablename__ = "story_assignments"
+
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Id de la historia dentro del artefacto (``stories[].id``), no una FK.
+    story_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Cuándo se hizo ESTA asignación (se refresca al reasignar, a diferencia de
+    #: ``created_at``, que conserva la primera vez que se tocó la historia).
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    assigned_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ux_story_assignment_job_story", "job_id", "story_id", unique=True),
+        Index("ix_story_assignments_user_id", "user_id"),
+    )
+
+
 class AgentValidation(Base, IdMixin, TimestampMixin):
     """Validación del ciclo de afinamiento. Persiste aparte, sin mutar el artefacto."""
 

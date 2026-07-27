@@ -6,7 +6,7 @@ usuario importa manualmente. No crea nada en ClickUp.
 
 import csv
 import io
-from typing import Any
+from typing import Any, Optional
 
 from .mapping import story_rows
 
@@ -21,17 +21,26 @@ _COLUMNS = [
     ("epic", "Epic"),
     ("tags", "Tags"),
     ("external_key", "External Key"),
+    # Cabecera "Assignee": es la que reconoce el importador de ClickUp para
+    # asignar la tarea a partir del correo del miembro del workspace.
+    ("assignee_email", "Assignee"),
 ]
 
 
-def to_clickup_rows(artifact: dict[str, Any]) -> list[dict]:
+def to_clickup_rows(
+    artifact: dict[str, Any],
+    assignees: Optional[dict[str, str]] = None,
+) -> list[dict]:
     """Filas estructuradas (JSON) para importar/consumir programáticamente."""
-    return story_rows(artifact)
+    return story_rows(artifact, assignees=assignees)
 
 
-def to_clickup_csv(artifact: dict[str, Any]) -> str:
+def to_clickup_csv(
+    artifact: dict[str, Any],
+    assignees: Optional[dict[str, str]] = None,
+) -> str:
     """Cadena CSV lista para importar en ClickUp (una fila por historia)."""
-    rows = story_rows(artifact)
+    rows = story_rows(artifact, assignees=assignees)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow([header for _key, header in _COLUMNS])

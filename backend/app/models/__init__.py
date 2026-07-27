@@ -9,6 +9,7 @@ from .agent import (
     EFSourceDoc,
     EFSourceDocType,
     JobStatus,
+    StoryAssignment,
     ValidationStatus,
     ValidationTargetType,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "EFSourceDocType",
     "EFValidation",
     "JobStatus",
+    "StoryAssignment",
     "User",
     "UserModuleGrant",
     "UserRole",

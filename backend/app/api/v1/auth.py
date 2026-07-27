@@ -203,6 +203,9 @@ async def update_user_profile(
         actor=actor,
         full_name=body.full_name,
         email=body.email,
+        institutional_email=body.institutional_email,
+        position=body.position,
+        available_for_assignment=body.available_for_assignment,
     )
     return ApiResponse.ok(
         data=UserOut.of(user).model_dump(mode="json"),
