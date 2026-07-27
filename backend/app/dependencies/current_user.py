@@ -1,10 +1,12 @@
-"""Dependencias de autenticación de FastAPI.
+"""Dependencias de **autenticación** de FastAPI (identidad, no permisos).
 
 - ``get_current_user``: exige un JWT válido en ``Authorization: Bearer <token>``
   y devuelve el ``User``. Sin token / token inválido -> ``AuthError`` (401).
 - ``get_optional_user``: variante que devuelve ``None`` en vez de fallar (la usa
   el registro para soportar el bootstrap del primer usuario sin auth).
-- ``require_admin``: además exige rol ``admin`` (403 si no lo es).
+
+La **autorización** (403 por rol/módulo) vive aparte, en
+``app/dependencies/permissions.py``: ``require_module`` y ``require_admin_role``.
 """
 
 from typing import Optional
@@ -15,8 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.dependencies.database import get_session
-from app.errors import AuthError, ForbiddenError
-from app.models.user import User, UserRole
+from app.errors import AuthError
+from app.models.user import User
 from app.services.auth_service import AuthService
 
 # ``auto_error=False``: no lanzamos el 403 por defecto de FastAPI; gestionamos el
@@ -47,10 +49,3 @@ async def get_optional_user(
         return await AuthService(session).authenticate_token(user_id)
     except AuthError:
         return None
-
-
-async def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Exige que el usuario autenticado tenga rol ``admin``."""
-    if user.role != UserRole.ADMIN:
-        raise ForbiddenError("Requiere rol de administrador.")
-    return user

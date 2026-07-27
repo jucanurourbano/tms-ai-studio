@@ -1,11 +1,17 @@
-"""Esquemas de request/response de la API de autenticación."""
+"""Esquemas de request/response de la API de autenticación y permisos."""
 
 from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.core.permissions import DEFAULT_ROLE, UserRole
+from app.core.permissions import (
+    DEFAULT_ROLE,
+    AccessLevel,
+    Module,
+    UserRole,
+    effective_modules,
+)
 from app.models.user import User
 
 
@@ -37,8 +43,45 @@ class SetActiveRequest(BaseModel):
     is_active: bool
 
 
+class SetRoleRequest(BaseModel):
+    """Cambia el rol funcional de un usuario (solo admin)."""
+
+    role: UserRole
+
+
+class ModuleGrantIn(BaseModel):
+    """Acceso adicional a un módulo, tal como lo envía el panel."""
+
+    module: Module
+    level: AccessLevel
+
+
+class SetGrantsRequest(BaseModel):
+    """Reemplaza el conjunto COMPLETO de accesos adicionales de un usuario.
+
+    Semántica de *replace*: lo que no venga en la lista se elimina. Enviar
+    ``{"grants": []}`` deja al usuario solo con los permisos de su rol.
+    """
+
+    grants: list[ModuleGrantIn] = Field(default_factory=list)
+
+
+class ModuleGrantOut(BaseModel):
+    """Acceso adicional concedido a un usuario (fila de ``user_module_grants``)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    module: Module
+    level: AccessLevel
+
+
 class UserOut(BaseModel):
-    """Representación pública de un usuario (NUNCA incluye el hash)."""
+    """Representación pública de un usuario (NUNCA incluye el hash).
+
+    Incluye ``modules``: los permisos **efectivos** ya resueltos (rol + grants).
+    El frontend los consume tal cual para decidir qué navegación y qué acciones
+    muestra, sin reimplementar la matriz de ``core.permissions``.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,10 +91,14 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     created_at: Optional[datetime] = None
+    #: Accesos adicionales explícitos (para el editor del panel de usuarios).
+    grants: list[ModuleGrantOut] = Field(default_factory=list)
+    #: Módulos efectivos: ``{"ef": "full", "scrum": "read", ...}``.
+    modules: dict[str, AccessLevel] = Field(default_factory=dict)
 
     @classmethod
     def of(cls, user: User) -> "UserOut":
-        """Construye la vista pública desde el modelo ORM."""
+        """Construye la vista pública desde el modelo ORM (con permisos resueltos)."""
         return cls(
             id=user.id,
             email=user.email,
@@ -59,6 +106,15 @@ class UserOut(BaseModel):
             role=user.role,
             is_active=user.is_active,
             created_at=user.created_at,
+            grants=[
+                ModuleGrantOut(module=g.module, level=g.level) for g in user.grants
+            ],
+            modules={
+                module.value: level
+                for module, level in effective_modules(
+                    user.role, user.grant_pairs()
+                ).items()
+            },
         )
 
 

@@ -3,23 +3,30 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies.current_user import get_current_user
+from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
+from app.dependencies.permissions import require_module
 from app.schemas.scrum import CreatePlanRequest, ScrumValidationPatchRequest
 from app.services.scrum_service import ScrumPlanningService
 from shared.responses.api_response import ApiResponse
 
-# Todas las rutas del Agente Scrum exigen autenticación (401 sin token válido).
-router = APIRouter(
-    prefix="/scrum", tags=["Agente Scrum"], dependencies=[Depends(get_current_user)]
-)
+# Autenticación (401 sin token) + acceso de LECTURA al módulo Scrum en todas las
+# rutas; los endpoints de escritura añaden su propia exigencia de nivel FULL.
+_READ = Depends(require_module(Module.SCRUM, AccessLevel.READ))
+_WRITE = Depends(require_module(Module.SCRUM, AccessLevel.FULL))
+
+router = APIRouter(prefix="/scrum", tags=["Agente Scrum"], dependencies=[_READ])
 
 
 def _service(session: AsyncSession) -> ScrumPlanningService:
     return ScrumPlanningService(session)
 
 
-@router.post("/plans", summary="Generar un plan ágil desde un job EF listo")
+@router.post(
+    "/plans",
+    summary="Generar un plan ágil desde un job EF listo",
+    dependencies=[_WRITE],
+)
 async def create_plan(
     body: CreatePlanRequest,
     background_tasks: BackgroundTasks,
@@ -121,7 +128,11 @@ async def list_jobs(
     )
 
 
-@router.patch("/jobs/{job_id}/validations", summary="Registrar validación del PO")
+@router.patch(
+    "/jobs/{job_id}/validations",
+    summary="Registrar validación del PO",
+    dependencies=[_WRITE],
+)
 async def patch_validation(
     job_id: str,
     body: ScrumValidationPatchRequest,
@@ -168,7 +179,11 @@ async def export_clickup(
     return ApiResponse.ok(data=payload, message="Export generado")
 
 
-@router.post("/jobs/{job_id}/refine", summary="Crear job hijo de afinamiento (PO)")
+@router.post(
+    "/jobs/{job_id}/refine",
+    summary="Crear job hijo de afinamiento (PO)",
+    dependencies=[_WRITE],
+)
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,

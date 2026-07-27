@@ -11,24 +11,35 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.dependencies.current_user import (
-    get_current_user,
-    get_optional_user,
-    require_admin,
+from app.core.permissions import (
+    MODULE_LABELS,
+    ROLE_LABELS,
+    ROLE_MATRIX,
+    AccessLevel,
+    Module,
 )
+from app.dependencies.current_user import get_current_user, get_optional_user
 from app.dependencies.database import get_session
-from app.models.user import User, UserRole
+from app.dependencies.permissions import require_admin_role, require_module
+from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     LoginResult,
     RegisterRequest,
     SetActiveRequest,
+    SetGrantsRequest,
+    SetRoleRequest,
     UserOut,
 )
 from app.services.auth_service import AuthService
 from shared.responses.api_response import ApiResponse
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
+
+# El panel de usuarios/configuración se valida contra la matriz de permisos
+# (módulo ``config``), igual que los módulos de agentes.
+_CONFIG_READ = Depends(require_module(Module.CONFIG, AccessLevel.READ))
+_CONFIG_WRITE = Depends(require_module(Module.CONFIG, AccessLevel.FULL))
 
 
 @router.get(
@@ -63,7 +74,7 @@ async def register(
         email=body.email,
         full_name=body.full_name,
         password=body.password,
-        role=UserRole(body.role),
+        role=body.role,
         actor=actor,
     )
     return ApiResponse.ok(
@@ -89,15 +100,55 @@ async def login(
     )
 
 
-@router.get("/me", summary="Usuario autenticado actual")
+@router.get("/me", summary="Usuario autenticado actual (rol + módulos efectivos)")
 async def me(user: User = Depends(get_current_user)) -> ApiResponse:
-    """Devuelve el usuario correspondiente al token presentado."""
+    """Devuelve el usuario del token, su rol y sus **módulos efectivos**.
+
+    ``modules`` trae los permisos ya resueltos (rol + accesos adicionales), de
+    forma que el frontend decida navegación y acciones sin reimplementar la
+    matriz de permisos.
+    """
     return ApiResponse.ok(data=UserOut.of(user).model_dump(mode="json"))
 
 
-@router.get("/users", summary="Listado de usuarios (solo admin)")
+@router.get(
+    "/roles",
+    summary="Catálogo de roles y módulos (para el panel de administración)",
+    dependencies=[_CONFIG_READ],
+)
+async def list_roles() -> ApiResponse:
+    """Expone la matriz de permisos y las etiquetas legibles.
+
+    Permite que el panel de usuarios muestre qué concede cada rol sin
+    codificarlo de nuevo en el cliente.
+    """
+    return ApiResponse.ok(
+        data={
+            "roles": [
+                {
+                    "value": role.value,
+                    "label": ROLE_LABELS[role],
+                    "modules": {
+                        module.value: level.value for module, level in modules.items()
+                    },
+                }
+                for role, modules in ROLE_MATRIX.items()
+            ],
+            "modules": [
+                {"value": module.value, "label": MODULE_LABELS[module]}
+                for module in Module
+            ],
+            "levels": [level.value for level in AccessLevel],
+        }
+    )
+
+
+@router.get(
+    "/users",
+    summary="Listado de usuarios (requiere acceso a Configuración)",
+    dependencies=[_CONFIG_READ],
+)
 async def list_users(
-    _admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -114,18 +165,71 @@ async def list_users(
     )
 
 
-@router.patch("/users/{user_id}", summary="Activar/desactivar un usuario (solo admin)")
+@router.patch(
+    "/users/{user_id}",
+    summary="Activar/desactivar un usuario (requiere Configuración)",
+)
 async def set_user_active(
     user_id: str,
     body: SetActiveRequest,
-    admin: User = Depends(require_admin),
+    actor: User = _CONFIG_WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Activa o desactiva la cuenta de un usuario."""
     user = await AuthService(session).set_active(
-        user_id=user_id, is_active=body.is_active, actor=admin
+        user_id=user_id, is_active=body.is_active, actor=actor
     )
     return ApiResponse.ok(
         data=UserOut.of(user).model_dump(mode="json"),
         message="Usuario actualizado",
+    )
+
+
+@router.patch(
+    "/users/{user_id}/role",
+    summary="Cambiar el rol funcional de un usuario (solo rol admin)",
+)
+async def set_user_role(
+    user_id: str,
+    body: SetRoleRequest,
+    admin: User = Depends(require_admin_role),
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Cambia el rol de un usuario.
+
+    Exige **rol** ``admin`` estricto (no basta un acceso adicional a
+    ``config``): cambiar roles permite elevar privilegios.
+    """
+    user = await AuthService(session).set_role(
+        user_id=user_id, role=body.role, actor=admin
+    )
+    return ApiResponse.ok(
+        data=UserOut.of(user).model_dump(mode="json"),
+        message="Rol actualizado",
+    )
+
+
+@router.put(
+    "/users/{user_id}/grants",
+    summary="Reemplazar los accesos adicionales de un usuario (solo rol admin)",
+)
+async def set_user_grants(
+    user_id: str,
+    body: SetGrantsRequest,
+    admin: User = Depends(require_admin_role),
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Reemplaza el conjunto completo de accesos adicionales del usuario.
+
+    Los grants **suman** sobre el rol y nunca restan. Exige **rol** ``admin``
+    estricto por el mismo motivo que el cambio de rol.
+    """
+    user = await AuthService(session).replace_grants(
+        user_id=user_id,
+        grants=[(g.module, g.level) for g in body.grants],
+        actor=admin,
+    )
+    return ApiResponse.ok(
+        data=UserOut.of(user).model_dump(mode="json"),
+        message="Accesos adicionales actualizados",
     )

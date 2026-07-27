@@ -96,6 +96,31 @@ ROLE_MATRIX: dict[UserRole, dict[Module, AccessLevel]] = {
 }
 
 
+#: Nombre legible de cada módulo, para los mensajes de error de la API (403).
+MODULE_LABELS: dict[Module, str] = {
+    Module.EF: "Agente EF",
+    Module.SCRUM: "Agente Scrum",
+    Module.ARQUITECTURA: "Agente Arquitectura",
+    Module.BD: "Agente Base de Datos",
+    Module.API: "Agente API",
+    Module.BACKEND: "Agente Backend",
+    Module.FRONTEND: "Agente Frontend",
+    Module.QA: "Agente QA",
+    Module.DEVOPS: "Agente DevOps",
+    Module.CONFIG: "Configuración",
+}
+
+#: Nombre legible de cada rol (mensajes de error y panel de administración).
+ROLE_LABELS: dict[UserRole, str] = {
+    UserRole.ADMIN: "Administrador",
+    UserRole.PROCESOS: "Procesos",
+    UserRole.ANALISTA: "Analista",
+    UserRole.ARQUITECTO: "Arquitecto",
+    UserRole.DEVELOPER: "Developer",
+    UserRole.QA: "QA",
+}
+
+
 def satisfies(granted: AccessLevel, required: AccessLevel) -> bool:
     """``True`` si el nivel concedido alcanza el exigido (``FULL`` cubre ``READ``)."""
     return _RANK[granted] >= _RANK[required]

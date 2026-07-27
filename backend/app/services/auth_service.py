@@ -11,11 +11,11 @@ Orquesta el repositorio de usuarios y las utilidades de seguridad. Reglas:
 Las contraseñas en claro NUNCA se registran en logs ni se devuelven.
 """
 
-from typing import Optional
+from typing import Iterable, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import DEFAULT_ROLE
+from app.core.permissions import DEFAULT_ROLE, AccessLevel, Module, can
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -59,9 +59,17 @@ class AuthService:
         is_bootstrap = await self.repo.count() == 0
         if is_bootstrap:
             role = UserRole.ADMIN
-        elif actor is None or actor.role != UserRole.ADMIN:
+        elif actor is None or not can(
+            actor.role, actor.grant_pairs(), Module.CONFIG, AccessLevel.FULL
+        ):
             raise ForbiddenError(
                 "Solo un administrador puede registrar nuevos usuarios."
+            )
+        elif role is UserRole.ADMIN and actor.role is not UserRole.ADMIN:
+            # Crear un admin es escalada de privilegios: exige rol admin real,
+            # no un grant de `config` (ver ``require_admin_role``).
+            raise ForbiddenError(
+                "Solo un Administrador puede crear otra cuenta de Administrador."
             )
 
         normalized = self._normalize_email(email)
@@ -114,5 +122,47 @@ class AuthService:
         if user is None:
             raise NotFoundError("Usuario no encontrado.")
         await self.repo.set_active(user, is_active)
+        await self.session.commit()
+        return user
+
+    async def set_role(self, *, user_id: str, role: UserRole, actor: User) -> User:
+        """Cambia el rol funcional de un usuario (solo admin).
+
+        Un admin **no puede cambiar su propio rol**: sería la vía directa a
+        quedarse sin administradores (o sin acceso al propio panel). Mismo
+        criterio que la guarda de auto-desactivación.
+        """
+        if user_id == actor.id:
+            raise ForbiddenError(
+                "Un administrador no puede cambiar su propio rol. "
+                "Pide a otro administrador que lo haga."
+            )
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+        await self.repo.set_role(user, role)
+        await self.session.commit()
+        return user
+
+    async def replace_grants(
+        self,
+        *,
+        user_id: str,
+        grants: Iterable[tuple[Module, AccessLevel]],
+        actor: User,
+    ) -> User:
+        """Reemplaza los accesos adicionales de un usuario (solo admin).
+
+        Un admin no edita sus propios grants: no le aportan nada (su rol ya da
+        FULL en todo) y evita que se toque su propio nivel de acceso por error.
+        """
+        if user_id == actor.id:
+            raise ForbiddenError(
+                "Un administrador no edita sus propios accesos adicionales."
+            )
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+        await self.repo.replace_grants(user, grants)
         await self.session.commit()
         return user

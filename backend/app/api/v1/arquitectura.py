@@ -3,8 +3,9 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies.current_user import get_current_user
+from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
+from app.dependencies.permissions import require_module
 from app.schemas.arquitectura import (
     ArchitectValidationPatchRequest,
     CreateDesignRequest,
@@ -12,11 +13,15 @@ from app.schemas.arquitectura import (
 from app.services.arquitectura_service import ArquitecturaService
 from shared.responses.api_response import ApiResponse
 
-# Todas las rutas del Agente Arquitectura exigen autenticación (401 sin token).
+# Autenticación (401 sin token) + acceso de LECTURA al módulo Arquitectura en
+# todas las rutas; los de escritura añaden su exigencia de nivel FULL.
+_READ = Depends(require_module(Module.ARQUITECTURA, AccessLevel.READ))
+_WRITE = Depends(require_module(Module.ARQUITECTURA, AccessLevel.FULL))
+
 router = APIRouter(
     prefix="/arquitectura",
     tags=["Agente Arquitectura"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[_READ],
 )
 
 
@@ -24,7 +29,11 @@ def _service(session: AsyncSession) -> ArquitecturaService:
     return ArquitecturaService(session)
 
 
-@router.post("/designs", summary="Generar un diseño desde un plan Scrum listo")
+@router.post(
+    "/designs",
+    summary="Generar un diseño desde un plan Scrum listo",
+    dependencies=[_WRITE],
+)
 async def create_design(
     body: CreateDesignRequest,
     background_tasks: BackgroundTasks,
@@ -131,7 +140,9 @@ async def list_jobs(
 
 
 @router.patch(
-    "/jobs/{job_id}/validations", summary="Registrar validación del Arquitecto"
+    "/jobs/{job_id}/validations",
+    summary="Registrar validación del Arquitecto",
+    dependencies=[_WRITE],
 )
 async def patch_validation(
     job_id: str,
@@ -168,7 +179,11 @@ async def get_validation_summary(
     return ApiResponse.ok(data=summary)
 
 
-@router.post("/jobs/{job_id}/refine", summary="Crear job hijo de afinamiento")
+@router.post(
+    "/jobs/{job_id}/refine",
+    summary="Crear job hijo de afinamiento",
+    dependencies=[_WRITE],
+)
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,

@@ -5,16 +5,19 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai.errors import IngestError
-from app.dependencies.current_user import get_current_user
+from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
+from app.dependencies.permissions import require_module
 from app.schemas.ef import AnalyzeTextRequest, ValidationPatchRequest
 from app.services.ef_service import EFAnalysisService
 from shared.responses.api_response import ApiResponse
 
-# Todas las rutas del Agente EF exigen autenticación (401 sin token válido).
-router = APIRouter(
-    prefix="/ef", tags=["Agente EF"], dependencies=[Depends(get_current_user)]
-)
+# Autenticación (401 sin token) + acceso de LECTURA al módulo EF en todas las
+# rutas; los endpoints de escritura añaden su propia exigencia de nivel FULL.
+_READ = Depends(require_module(Module.EF, AccessLevel.READ))
+_WRITE = Depends(require_module(Module.EF, AccessLevel.FULL))
+
+router = APIRouter(prefix="/ef", tags=["Agente EF"], dependencies=[_READ])
 
 _MIN_TEXT = 100
 
@@ -23,7 +26,9 @@ def _service(session: AsyncSession) -> EFAnalysisService:
     return EFAnalysisService(session)
 
 
-@router.post("/analyze", summary="Analizar un documento o texto libre")
+@router.post(
+    "/analyze", summary="Analizar un documento o texto libre", dependencies=[_WRITE]
+)
 async def analyze(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -131,7 +136,9 @@ async def list_jobs(
     )
 
 
-@router.patch("/jobs/{job_id}/validations", summary="Registrar validación")
+@router.patch(
+    "/jobs/{job_id}/validations", summary="Registrar validación", dependencies=[_WRITE]
+)
 async def patch_validation(
     job_id: str,
     body: ValidationPatchRequest,
@@ -164,7 +171,11 @@ async def get_validation_summary(
     return ApiResponse.ok(data=summary)
 
 
-@router.post("/jobs/{job_id}/refine", summary="Crear job hijo de afinamiento")
+@router.post(
+    "/jobs/{job_id}/refine",
+    summary="Crear job hijo de afinamiento",
+    dependencies=[_WRITE],
+)
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,
