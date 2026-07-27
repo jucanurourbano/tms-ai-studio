@@ -55,6 +55,12 @@ export interface PanelTab {
   id: string;
   label: string;
   count?: number;
+  /**
+   * Cuántos ítems encajan con la búsqueda. Cuando se declara, al escribir en el
+   * buscador las pestañas muestran las COINCIDENCIAS en vez del total: así se ve
+   * de un golpe en qué pestaña está lo que se busca, sin ir tanteando una a una.
+   */
+  matchCount?: (query: string) => number;
   render: (ctx: PanelRenderCtx) => React.ReactNode;
 }
 
@@ -248,41 +254,53 @@ function PanelInner({
         )}
 
         {tabs && tabs.length > 0 && (
-          <div
-            className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5"
-            role="tablist"
-            aria-label={`Secciones de ${section.title}`}
-          >
-            {tabs.map((t) => {
-              const active = t.id === activeTab?.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => hub.setTab(t.id)}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors duration-150",
-                    active
-                      ? "border-primary/40 bg-primary/10 font-medium text-primary"
-                      : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  {t.label}
-                  {t.count !== undefined && (
-                    <span
-                      className={cn(
-                        "tabular-nums",
-                        t.count === 0 && "text-amber-600",
-                      )}
-                    >
-                      {t.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          // Barra de sub-pestañas con scroll horizontal y un degradado a la
+          // derecha que delata que hay más (el Modelo del EF tiene once).
+          <div className="relative -mx-1">
+            <div
+              className="flex gap-1 overflow-x-auto px-1 pb-0.5"
+              role="tablist"
+              aria-label={`Secciones de ${section.title}`}
+            >
+              {tabs.map((t) => {
+                const active = t.id === activeTab?.id;
+                const searching = query.trim().length > 0 && !!t.matchCount;
+                const n = searching ? t.matchCount!(query) : t.count;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => hub.setTab(t.id)}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors duration-150",
+                      active
+                        ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                        : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                      // Buscando: las pestañas sin coincidencias se apagan.
+                      searching && n === 0 && !active && "opacity-40",
+                    )}
+                  >
+                    {t.label}
+                    {n !== undefined && (
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          n === 0 && !searching && "text-amber-600",
+                        )}
+                      >
+                        {n}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <span
+              className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent"
+              aria-hidden
+            />
           </div>
         )}
       </SheetHeader>

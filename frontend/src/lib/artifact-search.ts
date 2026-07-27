@@ -31,6 +31,15 @@ export function matchesQuery(
   return terms.every((t) => haystack.includes(t));
 }
 
+/**
+ * Cantidad + sustantivo con el plural correcto: `plural(1, "proceso")` →
+ * "1 proceso". Las líneas de insight del hub las escribe el dato, no una
+ * plantilla fija, y "1 procesos" delata a la máquina.
+ */
+export function plural(n: number, singular: string, plural?: string): string {
+  return `${n} ${n === 1 ? singular : (plural ?? `${singular}s`)}`;
+}
+
 /** Filtra una lista con `matchesQuery` sobre los campos que devuelve `textOf`. */
 export function filterByQuery<T>(
   query: string,

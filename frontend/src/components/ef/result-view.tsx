@@ -1,13 +1,28 @@
 "use client";
 
+// CENTRO DE COMANDO del artefacto EF.
+//
+// La página del job NO es un documento con acordeones apilados: es un hub.
+// Cabecera con identidad, semáforo, mini-stats y acciones; debajo, un grid de
+// tarjetas-sección que ES el índice. Todo el contenido se explora en el panel
+// lateral universal (`ArtifactPanel`), donde el patrón de dos niveles sigue
+// vigente: filas compactas → detalle expandible por fila.
+//
+// El PDF es otra cosa a propósito: `ArtifactPrintDoc` reutiliza el MISMO `render`
+// de cada sección para componer el informe lineal completo.
+
 import {
-ClipboardCopy,
+  AlertTriangle,
+  Boxes,
+  ClipboardCopy,
   Clock,
   Coins,
   DollarSign,
   Download,
   Eye,
   Kanban,
+  Lightbulb,
+  ListChecks,
   MessagesSquare,
   Printer,
   Target,
@@ -24,31 +39,32 @@ import {
   Mono,
   OriginBadge,
 } from "@/components/ef/badges";
+import { ArtifactNavProvider } from "@/components/artifact/artifact-nav";
 import {
-  ArtifactIndexPanel,
-  type IndexSection,
-} from "@/components/artifact/artifact-index";
-import { ArtifactSection } from "@/components/artifact/artifact-section";
+  ArtifactPanel,
+  type HubSection,
+  type PanelRenderCtx,
+  type PanelTab,
+} from "@/components/artifact/artifact-panel";
+import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
+import { HubCard, HubGrid } from "@/components/artifact/hub-card";
 import {
-  QuestionSheet,
+  FocusedQuestionFlow,
   type SheetQuestion,
 } from "@/components/artifact/question-sheet";
 import {
   DataList,
   DataRow,
   EmptyHint,
-  GroupLabel,
   IdTag,
   PrintCover,
   PrintFooter,
-  PrintToc,
   PrintValidationState,
   RefChip,
   Stat,
   StatRow,
 } from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
-import { BackToTop } from "@/components/artifact/back-to-top";
 import { ValidationControls } from "@/components/ef/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -63,18 +79,69 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api/client";
 import { efApi } from "@/lib/api/ef";
+import { makeRefResolver, type RefRoute } from "@/lib/artifact-refs";
+import { filterByQuery, plural } from "@/lib/artifact-search";
 import type {
   EFArtifact,
   JobDetail,
   QuestionStatus,
   ValidationSummary,
 } from "@/lib/types/ef";
+import { useArtifactHub } from "@/lib/use-artifact-hub";
 import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
-import { useDisclosure } from "@/lib/use-disclosure";
-import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
 import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
+
+// --- secciones y rutas de referencia -----------------------------------------
+
+/**
+ * Ids de las secciones del hub. Constante de módulo (y no derivada del
+ * artefacto) porque el hook del panel las necesita antes de que cargue la API, y
+ * porque son las claves del deep-link (`#requisitos`).
+ */
+const SECTION_IDS = [
+  "interpretacion",
+  "preguntas",
+  "requisitos",
+  "modelo",
+  "analisis",
+] as const;
+
+/**
+ * Prefijo de id → sección (y sub-pestaña) que lo contiene. Es lo que convierte
+ * cada chip REQ-F-001 / BR-003 / FLD-005 en un salto navegable entre paneles.
+ */
+const REF_ROUTES: RefRoute[] = [
+  { prefix: "REQ-B-", sectionId: "requisitos", tabId: "negocio" },
+  { prefix: "REQ-F-", sectionId: "requisitos", tabId: "funcionales" },
+  { prefix: "REQ-N-", sectionId: "requisitos", tabId: "no-funcionales" },
+  { prefix: "ACT-", sectionId: "modelo", tabId: "actores" },
+  { prefix: "MOD-", sectionId: "modelo", tabId: "modulos" },
+  { prefix: "MEN-", sectionId: "modelo", tabId: "menus" },
+  { prefix: "PRO-", sectionId: "modelo", tabId: "procesos" },
+  { prefix: "BR-", sectionId: "modelo", tabId: "reglas" },
+  { prefix: "VAL-", sectionId: "modelo", tabId: "validaciones" },
+  { prefix: "FLD-", sectionId: "modelo", tabId: "campos" },
+  { prefix: "ENT-", sectionId: "modelo", tabId: "entidades" },
+  { prefix: "REL-", sectionId: "modelo", tabId: "relaciones" },
+  { prefix: "CRUD-", sectionId: "modelo", tabId: "crud" },
+  { prefix: "API-", sectionId: "modelo", tabId: "apis" },
+  { prefix: "SUP-", sectionId: "interpretacion" },
+  { prefix: "Q-", sectionId: "preguntas" },
+  { prefix: "AMB-", sectionId: "analisis", tabId: "ambiguedades" },
+  { prefix: "MISS-", sectionId: "analisis", tabId: "faltantes" },
+  { prefix: "INC-", sectionId: "analisis", tabId: "inconsistencias" },
+  { prefix: "OBS-", sectionId: "analisis", tabId: "observaciones" },
+];
+
+/** Campos por los que se busca un requisito (texto, evidencia e id). */
+const REQ_TEXT = (r: {
+  id: string;
+  text: string;
+  evidence?: string | null;
+  source_ref?: string | null;
+}) => [r.id, r.text, r.evidence, r.source_ref];
 
 // --- utilidades --------------------------------------------------------------
 
@@ -132,12 +199,16 @@ export function ResultView({ job }: { job: JobDetail }) {
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [refining, setRefining] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [indexCollapsed, setIndexCollapsed] = usePersistentState(
-    "artifact:index-collapsed",
-    false,
+  /**
+   * Modo de la sección Preguntas. `null` = automático: si queda alguna
+   * pendiente arranca en "una a una" (responder es la tarea), y si están todas
+   * resueltas en "lista" (repasar).
+   */
+  const [questionMode, setQuestionMode] = useState<"lista" | "enfocado" | null>(
+    null,
   );
-  const disc = useDisclosure(2);
+
+  const hub = useArtifactHub(SECTION_IDS);
   const { printMode, printNow } = usePrintExpand();
   // Modo lectura: con acceso de solo lectura al módulo «ef» se muestra
   // todo el contenido pero se retiran las acciones de escritura (responder,
@@ -183,28 +254,6 @@ export function ResultView({ job }: { job: JobDetail }) {
     }
   }, [job.job_id]);
 
-  const scrollToRef = useCallback((id: string) => {
-    const el = document.getElementById(`ref-${id}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ref-highlight");
-    window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
-  }, []);
-
-  const handleQuestionAnswered = useCallback(
-    async (answeredId: string) => {
-      const s = await reloadSummary();
-      if (!s || !artifact) return;
-      const statusIn = (id: string) =>
-        s.validations.find((v) => v.target_id === id)?.status ?? "pendiente";
-      const next = artifact.questions_for_analyst.find(
-        (q) => q.blocking && q.id !== answeredId && statusIn(q.id) === "pendiente",
-      );
-      if (next) scrollToRef(next.id);
-    },
-    [reloadSummary, artifact, scrollToRef],
-  );
-
   const statusOf = useCallback(
     (id: string): QuestionStatus => {
       const v = summary?.validations.find((x) => x.target_id === id);
@@ -218,6 +267,32 @@ export function ResultView({ job }: { job: JobDetail }) {
       summary?.validations.find((x) => x.target_id === id)?.respuesta,
     [summary],
   );
+
+  // Navegación entre paneles por chip de referencia.
+  const resolveRef = useMemo(() => makeRefResolver(REF_ROUTES), []);
+  const canNavigateToRef = useCallback(
+    (refId: string) => resolveRef(refId) !== null,
+    [resolveRef],
+  );
+  const navigateToRef = useCallback(
+    (refId: string) => {
+      const target = resolveRef(refId);
+      if (!target) {
+        toast.info(`La referencia ${refId} no forma parte de este análisis.`);
+        return;
+      }
+      // El modo enfocado muestra una pregunta a la vez: para resaltar una
+      // concreta hay que estar en la lista.
+      if (target.sectionId === "preguntas") setQuestionMode("lista");
+      hub.pushEntry({ ...target, refId });
+    },
+    [resolveRef, hub],
+  );
+
+  const openQuestions = useCallback(() => {
+    setQuestionMode(null);
+    hub.openSection("preguntas");
+  }, [hub]);
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -267,23 +342,7 @@ export function ResultView({ job }: { job: JobDetail }) {
   const a = artifact;
   const si = a.systems_interpretation;
   const assumptions = si.interpretation_assumptions ?? [];
-  const questions = onlyBlocking
-    ? a.questions_for_analyst.filter((q) => q.blocking)
-    : a.questions_for_analyst;
   const analysis = a.analysis ?? {};
-  const modelCounts: [string, number, string][] = [
-    ["Actores", a.actors.length, "m-actors"],
-    ["Módulos", a.modules.length, "m-modules"],
-    ["Menús", a.menus.length, "m-menus"],
-    ["Procesos", a.processes.length, "m-processes"],
-    ["Reglas", a.business_rules.length, "m-rules"],
-    ["Validaciones", a.validations.length, "m-validations"],
-    ["Campos", a.fields.length, "m-fields"],
-    ["Entidades", a.entities.length, "m-entities"],
-    ["Relaciones", a.relationships.length, "m-relationships"],
-    ["CRUD", a.crud.length, "m-crud"],
-    ["APIs", a.apis.length, "m-apis"],
-  ];
   const canRefine = progress.answered >= 1;
   const ready = summary?.ready_for_next_stage ?? false;
 
@@ -296,241 +355,744 @@ export function ResultView({ job }: { job: JobDetail }) {
     (analysis.missing_info?.length ?? 0) +
     (analysis.inconsistencies?.length ?? 0) +
     (analysis.observations?.length ?? 0);
-  const modelTotal = modelCounts.reduce((acc, [, n]) => acc + n, 0);
+  const modelTotal =
+    a.actors.length +
+    a.modules.length +
+    a.menus.length +
+    a.processes.length +
+    a.business_rules.length +
+    a.validations.length +
+    a.fields.length +
+    a.entities.length +
+    a.relationships.length +
+    a.crud.length +
+    a.apis.length;
   const blockingTotal = a.questions_for_analyst.filter((q) => q.blocking).length;
   const blockingRemaining = a.questions_for_analyst.filter(
     (q) => q.blocking && statusOf(q.id) === "pendiente",
   ).length;
   const blockingDone = blockingTotal > 0 && blockingRemaining === 0;
+  const pendingQuestions = a.questions_for_analyst.filter(
+    (q) => statusOf(q.id) === "pendiente",
+  ).length;
+  const assumptionsPending = assumptions.filter(
+    (s) => statusOf(s.id) === "pendiente",
+  ).length;
+  const mode = questionMode ?? (pendingQuestions > 0 ? "enfocado" : "lista");
 
-  const indexSections: IndexSection[] = [
-    { id: "sec-interpretation", label: "Interpretación" },
+  // --- secciones -------------------------------------------------------------
+
+  const sheetQuestions = a.questions_for_analyst.map(
+    (q): SheetQuestion => ({
+      id: q.id,
+      question: q.question,
+      reason: q.reason,
+      blocking: q.blocking,
+      audience: q.audience,
+      linked_to_ref: q.linked_to_ref,
+    }),
+  );
+
+  const questionControls = (id: string, onAnswered?: () => void) => (
+    <ValidationControls
+      readOnly={!puedeEditar}
+      jobId={job.job_id}
+      targetType="question"
+      targetId={id}
+      status={statusOf(id)}
+      respuesta={respuestaOf(id)}
+      onChanged={() => {
+        void reloadSummary();
+        onAnswered?.();
+      }}
+    />
+  );
+
+  const sections: HubSection[] = [
     {
-      id: "sec-questions",
-      label: "Preguntas",
+      id: "interpretacion",
+      title: "Interpretación",
+      printTitle: "Interpretación para Sistemas",
+      icon: <Lightbulb />,
+      metrics: `${plural(si.scope_for_systems?.length ?? 0, "ítem")} de alcance · ${si.apparent_out_of_scope?.length ?? 0} fuera`,
+      urgent: assumptionsPending > 0,
+      urgentLabel: assumptionsPending > 0 ? String(assumptionsPending) : undefined,
+      insight:
+        assumptions.length === 0 ? (
+          <span>Sin supuestos que validar</span>
+        ) : assumptionsPending > 0 ? (
+          <span>
+            {plural(assumptionsPending, "supuesto")} por validar
+          </span>
+        ) : (
+          <span>{plural(assumptions.length, "supuesto")} validados</span>
+        ),
+      render: ({ query }) => (
+        <div className="space-y-5">
+          <Block label="Qué pide Procesos">
+            <p className="prose-measure text-sm leading-relaxed">
+              {si.what_process_requests}
+            </p>
+          </Block>
+
+          <Block
+            label="Alcance para Sistemas"
+            count={si.scope_for_systems?.length ?? 0}
+          >
+            <ListOrEmpty
+              items={filterByQuery(query, si.scope_for_systems ?? [], (s) => [
+                s.description,
+                ...(s.requirement_refs ?? []),
+              ])}
+              empty="Sin alcance definido."
+              row={(s, i) => (
+                <DataRow
+                  key={s.id ?? i}
+                  index={i + 1}
+                  right={s.requirement_refs?.map((r) => (
+                    <RefChip key={r} refId={r} />
+                  ))}
+                >
+                  {s.description}
+                </DataRow>
+              )}
+            />
+          </Block>
+
+          <Block
+            label="Aparentemente fuera de alcance"
+            count={si.apparent_out_of_scope?.length ?? 0}
+          >
+            <ListOrEmpty
+              items={filterByQuery(query, si.apparent_out_of_scope ?? [], (s) => [
+                s.description,
+                s.reason,
+              ])}
+              empty="Nada marcado fuera de alcance."
+              warnOnEmpty={false}
+              row={(s, i) => (
+                <DataRow key={s.id ?? i} index={i + 1}>
+                  {s.description}
+                  {s.reason ? (
+                    <span className="text-muted-foreground"> — {s.reason}</span>
+                  ) : null}
+                </DataRow>
+              )}
+            />
+          </Block>
+
+          <Block label="Supuestos de interpretación" count={assumptions.length}>
+            {(() => {
+              const items = filterByQuery(query, assumptions, (s) => [
+                s.id,
+                s.assumption,
+                s.rationale,
+              ]);
+              if (items.length === 0)
+                return <EmptyHint>Sin supuestos que mostrar.</EmptyHint>;
+              return (
+                <div className="space-y-2">
+                  {items.map((s) => (
+                    <div
+                      key={s.id}
+                      id={`ref-${s.id}`}
+                      className="print-atom rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <IdTag id={s.id} />
+                        <OriginBadge origin={s.origin} />
+                        <ConfidenceBadge value={s.confidence} />
+                      </div>
+                      <p className="mt-1.5 text-sm">{s.assumption}</p>
+                      {s.rationale && (
+                        <p className="text-xs text-muted-foreground">
+                          {s.rationale}
+                        </p>
+                      )}
+                      <div className="print:hidden">
+                        <ValidationControls
+                          readOnly={!puedeEditar}
+                          jobId={job.job_id}
+                          targetType="assumption"
+                          targetId={s.id}
+                          status={statusOf(s.id)}
+                          respuesta={respuestaOf(s.id)}
+                          onChanged={reloadSummary}
+                        />
+                      </div>
+                      <PrintValidationState
+                        status={statusOf(s.id)}
+                        respuesta={respuestaOf(s.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </Block>
+        </div>
+      ),
+    },
+
+    {
+      id: "preguntas",
+      title: "Preguntas",
+      printTitle: "Preguntas al analista",
+      icon: <MessagesSquare />,
       count: a.questions_for_analyst.length,
-      meta: `${blockingTotal} bloq.`,
+      metrics: `${a.questions_for_analyst.length} · ${plural(blockingTotal, "bloqueante")}`,
+      urgent: blockingRemaining > 0,
+      urgentLabel: blockingRemaining > 0 ? String(blockingRemaining) : undefined,
+      insight:
+        blockingRemaining > 0 ? (
+          <span>{plural(blockingRemaining, "bloqueante")} sin responder</span>
+        ) : (
+          <span>
+            {blockingTotal > 0
+              ? "Bloqueantes resueltas"
+              : "Sin preguntas bloqueantes"}{" "}
+            · {progress.answered} de {progress.total} respondidas
+          </span>
+        ),
+      searchable: mode === "lista",
+      actions: (
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            value={mode}
+            onChange={setQuestionMode}
+            options={[
+              { value: "enfocado", label: "Una a una" },
+              { value: "lista", label: "Lista" },
+            ]}
+          />
+          {mode === "lista" && (
+            <Segmented
+              value={onlyBlocking ? "bloq" : "todas"}
+              onChange={(v) => setOnlyBlocking(v === "bloq")}
+              options={[
+                { value: "todas", label: "Todas" },
+                { value: "bloq", label: "Bloqueantes" },
+              ]}
+            />
+          )}
+        </div>
+      ),
+      render: ({ query, forPrint }) => {
+        // En el PDF siempre la lista completa: un informe no se lee de una en una.
+        if (!forPrint && mode === "enfocado") {
+          return (
+            <FocusedQuestionFlow
+              questions={sheetQuestions}
+              statusOf={statusOf}
+              renderControls={(q, onAnswered) =>
+                questionControls(q.id, onAnswered)
+              }
+            />
+          );
+        }
+        const base = forPrint
+          ? a.questions_for_analyst
+          : onlyBlocking
+            ? a.questions_for_analyst.filter((q) => q.blocking)
+            : a.questions_for_analyst;
+        const items = filterByQuery(query, base, (q) => [
+          q.id,
+          q.question,
+          q.reason,
+          q.linked_to_ref,
+        ]);
+        if (items.length === 0) {
+          return (
+            <EmptyHint warn={!onlyBlocking && !query}>
+              {query
+                ? "Ninguna pregunta coincide con la búsqueda."
+                : onlyBlocking
+                  ? "Sin preguntas bloqueantes."
+                  : "Sin preguntas."}
+            </EmptyHint>
+          );
+        }
+        return (
+          <div className="space-y-2">
+            {items.map((q) => (
+              <div
+                key={q.id}
+                id={`ref-${q.id}`}
+                className={cn(
+                  "print-atom rounded-lg border p-3",
+                  q.blocking && "border-red-300 bg-red-50/40",
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <IdTag id={q.id} />
+                  <AudienceBadge audience={q.audience} />
+                  {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
+                  {q.linked_to_ref && (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      ligada a <RefChip refId={q.linked_to_ref} />
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-sm font-medium">{q.question}</p>
+                <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
+                <div className="print:hidden">{questionControls(q.id)}</div>
+                <PrintValidationState
+                  status={statusOf(q.id)}
+                  respuesta={respuestaOf(q.id)}
+                />
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
-    { id: "sec-requirements", label: "Requisitos", count: reqTotal },
+
     {
-      id: "sec-model",
-      label: "Modelo",
-      children: modelCounts.map(([label, n, id]) => ({ id, label, count: n })),
+      id: "requisitos",
+      title: "Requisitos",
+      icon: <ListChecks />,
+      count: reqTotal,
+      metrics: `${reqTotal} · ${a.requirements.functional.length} funcionales`,
+      insight: (
+        <span>
+          {a.requirements.business.length} de negocio ·{" "}
+          {a.requirements.non_functional.length} no funcionales ·{" "}
+          {plural(
+            a.requirements.functional.filter((r) => r.origin === "derived").length,
+            "derivado",
+          )}
+        </span>
+      ),
+      tabs: (
+        [
+          ["negocio", "Negocio", a.requirements.business],
+          ["funcionales", "Funcionales", a.requirements.functional],
+          ["no-funcionales", "No funcionales", a.requirements.non_functional],
+        ] as const
+      ).map(
+        ([id, label, list]): PanelTab => ({
+          id,
+          label,
+          count: list.length,
+          matchCount: (q) => filterByQuery(q, list, REQ_TEXT).length,
+          render: (ctx) => (
+            <RequirementList
+              list={list}
+              ctx={ctx}
+              expanded={expanded}
+              onToggle={toggle}
+            />
+          ),
+        }),
+      ),
     },
-    { id: "sec-analysis", label: "Análisis crítico", count: analysisTotal },
+
+    {
+      id: "modelo",
+      title: "Modelo",
+      icon: <Boxes />,
+      count: modelTotal,
+      metrics: `${plural(modelTotal, "ítem")} · ${plural(a.entities.length, "entidad", "entidades")}`,
+      insight: (
+        <span>
+          {plural(a.processes.length, "proceso")} ·{" "}
+          {plural(a.business_rules.length, "regla")} ·{" "}
+          {plural(a.apis.length, "API")}
+        </span>
+      ),
+      tabs: [
+        itemTab("actores", "Actores", a.actors, (x) => [x.id, x.name, x.description], (x) => x.name),
+        itemTab("modulos", "Módulos", a.modules, (x) => [x.id, x.name, x.description], (x) => x.name),
+        itemTab(
+          "menus",
+          "Menús",
+          a.menus,
+          (x) => [x.id, x.name, x.path],
+          (x) => (
+            <>
+              {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "procesos",
+          "Procesos",
+          a.processes,
+          (x) => [x.id, x.name, x.description, ...(x.steps ?? [])],
+          (x) => (
+            <>
+              {x.name}
+              {x.steps && x.steps.length > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {" "}
+                  · {x.steps.join(" → ")}
+                </span>
+              ) : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "reglas",
+          "Reglas",
+          a.business_rules,
+          (x) => [x.id, x.statement],
+          (x) => x.statement,
+        ),
+        itemTab(
+          "validaciones",
+          "Validaciones",
+          a.validations,
+          (x) => [x.id, x.rule, x.field_ref],
+          (x) => (
+            <>
+              {x.rule}{" "}
+              {x.field_ref ? (
+                <span className="text-xs">
+                  (<RefChip refId={x.field_ref} />)
+                </span>
+              ) : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "campos",
+          "Campos",
+          a.fields,
+          (x) => [x.id, x.name, x.data_type, x.entity_ref],
+          (x) => (
+            <>
+              <Mono>{x.name}</Mono>
+              <span className="text-xs text-muted-foreground">
+                {" "}
+                {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
+                {x.entity_ref ? " · " : ""}
+              </span>
+              {x.entity_ref ? <RefChip refId={x.entity_ref} /> : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "entidades",
+          "Entidades",
+          a.entities,
+          (x) => [x.id, x.name, x.description],
+          (x) => x.name,
+        ),
+        itemTab(
+          "relaciones",
+          "Relaciones",
+          a.relationships,
+          (x) => [x.id, x.source_entity_ref, x.target_entity_ref, x.cardinality],
+          (x) => (
+            <>
+              <RefChip refId={x.source_entity_ref} /> <Mono>{x.cardinality}</Mono>{" "}
+              <RefChip refId={x.target_entity_ref} />
+            </>
+          ),
+        ),
+        itemTab(
+          "crud",
+          "CRUD",
+          a.crud,
+          (x) => [x.id, x.entity_ref],
+          (x) => (
+            <>
+              <RefChip refId={x.entity_ref} />
+              <span className="ml-2 font-mono text-xs">
+                {x.create ? "C" : "-"}
+                {x.read ? "R" : "-"}
+                {x.update ? "U" : "-"}
+                {x.delete ? "D" : "-"}
+              </span>
+            </>
+          ),
+        ),
+        itemTab(
+          "apis",
+          "APIs",
+          a.apis,
+          (x) => [x.id, x.method, x.path, x.description],
+          (x) => (
+            <Mono>
+              {x.method} {x.path}
+            </Mono>
+          ),
+        ),
+      ],
+    },
+
+    {
+      id: "analisis",
+      title: "Análisis crítico",
+      icon: <AlertTriangle />,
+      count: analysisTotal,
+      metrics: plural(analysisTotal, "hallazgo"),
+      insight: (
+        <span>
+          {plural(analysis.ambiguities?.length ?? 0, "ambigüedad", "ambigüedades")}{" "}
+          · {plural(analysis.missing_info?.length ?? 0, "faltante")} ·{" "}
+          {plural(
+            analysis.inconsistencies?.length ?? 0,
+            "inconsistencia",
+          )}
+        </span>
+      ),
+      tabs: [
+        itemTab(
+          "ambiguedades",
+          "Ambigüedades",
+          analysis.ambiguities ?? [],
+          (x) => [x.id, x.description],
+          (x) => x.description,
+        ),
+        itemTab(
+          "faltantes",
+          "Faltantes",
+          analysis.missing_info ?? [],
+          (x) => [x.id, x.description, x.expected_where],
+          (x) => (
+            <>
+              {x.description}
+              {x.expected_where ? (
+                <span className="text-xs text-muted-foreground">
+                  {" "}
+                  — esperado en: {x.expected_where}
+                </span>
+              ) : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "inconsistencias",
+          "Inconsistencias",
+          analysis.inconsistencies ?? [],
+          (x) => [x.id, x.description, ...(x.conflicting_refs ?? [])],
+          (x) => (
+            <>
+              {x.description}
+              {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
+                <span className="ml-1 inline-flex flex-wrap gap-1">
+                  {x.conflicting_refs.map((r) => (
+                    <RefChip key={r} refId={r} />
+                  ))}
+                </span>
+              ) : null}
+            </>
+          ),
+        ),
+        itemTab(
+          "observaciones",
+          "Observaciones",
+          analysis.observations ?? [],
+          (x) => [x.id, x.description, x.reason],
+          (x) => (
+            <>
+              {x.description}
+              {x.reason ? (
+                <span className="text-xs text-muted-foreground"> — {x.reason}</span>
+              ) : null}
+            </>
+          ),
+        ),
+      ],
+    },
   ];
 
   return (
-    <div className="flex h-full flex-col">
-      <PrintCover
-        kind="Análisis de Especificación Funcional"
-        title={a.source.filename || "Análisis EF"}
-        subtitle={a.summary}
-        version="1.2.0"
-        stats={[
-          { label: "requisitos", value: String(reqTotal) },
-          { label: "preguntas", value: String(a.questions_for_analyst.length) },
-          { label: "cobertura", value: `${Math.round(a.metrics.coverage * 100)}%` },
-          { label: "costo", value: `$${a.metrics.cost.toFixed(4)}` },
-        ]}
-      />
-      <PrintToc
-        items={[
-          "Interpretación para Sistemas",
-          "Preguntas al analista",
-          "Requisitos",
-          "Modelo",
-          "Análisis crítico",
-        ]}
-      />
-      <PrintFooter title="Análisis de Especificación Funcional" />
+    <ArtifactNavProvider
+      navigateToRef={navigateToRef}
+      canNavigateToRef={canNavigateToRef}
+    >
+      <div className="flex h-full flex-col">
+        <PrintCover
+          kind="Análisis de Especificación Funcional"
+          title={a.source.filename || "Análisis EF"}
+          subtitle={a.summary}
+          version="1.2.0"
+          stats={[
+            { label: "requisitos", value: String(reqTotal) },
+            { label: "preguntas", value: String(a.questions_for_analyst.length) },
+            {
+              label: "cobertura",
+              value: `${Math.round(a.metrics.coverage * 100)}%`,
+            },
+            { label: "costo", value: `$${a.metrics.cost.toFixed(4)}` },
+          ]}
+        />
+        <PrintFooter title="Análisis de Especificación Funcional" />
 
-      {/* Barra superior de afinamiento */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-heading font-semibold">EF v1.2.0</span>
-          <Badge variant="outline">
-            {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
-          </Badge>
-          {job.parent_job_id && (
-            <Link
-              href={`/agents/ef/jobs/${job.parent_job_id}`}
-              className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
-            >
-              ver original (<Mono>{job.parent_job_id}</Mono>)
-            </Link>
-          )}
-          <span className="text-xs text-muted-foreground">
-            {progress.answered} de {progress.total} respondidas
-          </span>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
-              ready
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-slate-300 bg-slate-50 text-slate-600",
-              ready && celebrate && "animate-celebrate",
+        {/* Barra superior de afinamiento */}
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="font-heading font-semibold">EF v1.2.0</span>
+            <Badge variant="outline">
+              {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
+            </Badge>
+            {job.parent_job_id && (
+              <Link
+                href={`/agents/ef/jobs/${job.parent_job_id}`}
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+              >
+                ver original (<Mono>{job.parent_job_id}</Mono>)
+              </Link>
             )}
-          >
+            <span className="text-xs text-muted-foreground">
+              {progress.answered} de {progress.total} respondidas
+            </span>
             <span
               className={cn(
-                "h-2 w-2 rounded-full",
-                ready ? "bg-emerald-500" : "bg-slate-400",
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+                ready
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-slate-300 bg-slate-50 text-slate-600",
+                ready && celebrate && "animate-celebrate",
               )}
-            />
-            {ready ? "Listo para el Agente Scrum" : "Pendiente de afinamiento"}
-          </span>
-
-          {!puedeEditar && (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
-              title="Tu rol permite consultar este módulo, no modificarlo"
             >
-              <Eye className="h-3 w-3" />
-              Modo lectura
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  ready ? "bg-emerald-500" : "bg-slate-400",
+                )}
+              />
+              {ready ? "Listo para el Agente Scrum" : "Pendiente de afinamiento"}
             </span>
-          )}
 
-          <div className="ml-auto flex flex-wrap gap-2">
-            {puedeEditar && a.questions_for_analyst.length > 0 && (
+            {!puedeEditar && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
+                title="Tu rol permite consultar este módulo, no modificarlo"
+              >
+                <Eye className="h-3 w-3" />
+                Modo lectura
+              </span>
+            )}
+
+            <div className="ml-auto flex flex-wrap gap-2">
+              {puedeEditar && a.questions_for_analyst.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={openQuestions}
+                >
+                  <MessagesSquare className="h-3.5 w-3.5" />
+                  Responder preguntas
+                  {blockingRemaining > 0 && (
+                    <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                      {blockingRemaining}
+                    </span>
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(buildProcesosText(a, statusOf))
+                    .then(() => toast.success("Copiado para Procesos"))
+                }
+              >
+                <ClipboardCopy className="h-3.5 w-3.5" />
+                Copiar
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => setSheetOpen(true)}
+                onClick={printNow}
               >
-                <MessagesSquare className="h-3.5 w-3.5" />
-                Responder preguntas
-                {blockingRemaining > 0 && (
-                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
-                    {blockingRemaining}
-                  </span>
-                )}
+                <Printer className="h-3.5 w-3.5" />
+                Exportar PDF
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              onClick={() =>
-                void navigator.clipboard
-                  .writeText(buildProcesosText(a, statusOf))
-                  .then(() => toast.success("Copiado para Procesos"))
-              }
-            >
-              <ClipboardCopy className="h-3.5 w-3.5" />
-              Copiar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={printNow}
-            >
-              <Printer className="h-3.5 w-3.5" />
-              Exportar PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => downloadJson(a, job.job_id)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              JSON
-            </Button>
-            {puedeEditar && (
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button size="sm" disabled={!canRefine}>
-                      Regenerar EF afinada
-                    </Button>
-                  }
-                />
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Regenerar EF afinada</DialogTitle>
-                    <DialogDescription>
-                      Se creará un análisis hijo reinyectando tus respuestas y se
-                      ejecutará el modelo real.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                    Costo estimado: ~$
-                    {a.metrics.cost.toFixed(4)} (similar al análisis anterior).
-                    Esta acción consume tokens de la API.
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={doRefine} disabled={refining || !canRefine}>
-                      {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => downloadJson(a, job.job_id)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                JSON
+              </Button>
+              {puedeEditar && (
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button size="sm" disabled={!canRefine}>
+                        Regenerar EF afinada
+                      </Button>
+                    }
+                  />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Regenerar EF afinada</DialogTitle>
+                      <DialogDescription>
+                        Se creará un análisis hijo reinyectando tus respuestas y se
+                        ejecutará el modelo real.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                      Costo estimado: ~$
+                      {a.metrics.cost.toFixed(4)} (similar al análisis anterior).
+                      Esta acción consume tokens de la API.
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={doRefine} disabled={refining || !canRefine}>
+                        {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Cabecera: estado, fuente y mini-stats */}
-      <div className="border-b px-6 py-4">
-        <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
-          <JobStatusBadge status={job.status} />
-          <span className="text-xs text-muted-foreground">
-            Fuente: {a.source.type} · {a.source.fidelity}
-            {a.source.filename ? ` · ${a.source.filename}` : ""}
-          </span>
-        </div>
-        <StatRow>
-          <Stat
-            icon={<Coins />}
-            value={a.metrics.tokens.total.toLocaleString("es-PE")}
-            label="tokens"
-          />
-          <Stat
-            icon={<DollarSign />}
-            value={`$${a.metrics.cost.toFixed(4)}`}
-            label="costo"
-          />
-          <Stat icon={<Clock />} value={`${a.metrics.duration}s`} label="duración" />
-          <Stat
-            icon={<Target />}
-            value={`${Math.round(a.metrics.coverage * 100)}%`}
-            label="cobertura"
-          />
-        </StatRow>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {a.summary}
-        </p>
-      </div>
-
-      {/* Dos columnas: índice (plegable) + contenido */}
-      <div
-        className={cn(
-          "grid grid-cols-1 gap-6 px-4 py-5 md:px-6 print:block!",
-          indexCollapsed
-            ? "md:grid-cols-[2.75rem_1fr]"
-            : "md:grid-cols-[13rem_1fr]",
-        )}
-      >
-        <div className="md:sticky md:top-24 md:self-start print:hidden">
-          <ArtifactIndexPanel
-            sections={indexSections}
-            collapsed={indexCollapsed}
-            onToggle={() => setIndexCollapsed((v) => !v)}
-            onNavigate={disc.openOnly}
-            openIds={disc.openIds}
-          />
+        {/* Cabecera: estado, fuente y mini-stats */}
+        <div className="border-b px-6 py-3 print:hidden">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <StatRow>
+              <Stat
+                icon={<Coins />}
+                value={a.metrics.tokens.total.toLocaleString("es-PE")}
+                label="tokens"
+              />
+              <Stat
+                icon={<DollarSign />}
+                value={`$${a.metrics.cost.toFixed(4)}`}
+                label="costo"
+              />
+              <Stat
+                icon={<Clock />}
+                value={`${a.metrics.duration}s`}
+                label="duración"
+              />
+              <Stat
+                icon={<Target />}
+                value={`${Math.round(a.metrics.coverage * 100)}%`}
+                label="cobertura"
+              />
+            </StatRow>
+            <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+              <JobStatusBadge status={job.status} />
+              <span>
+                {a.source.type} · {a.source.fidelity}
+                {a.source.filename ? ` · ${a.source.filename}` : ""}
+              </span>
+            </div>
+          </div>
+          <p className="prose-measure mt-2 line-clamp-2 text-sm text-muted-foreground">
+            {a.summary}
+          </p>
         </div>
 
-        {/* Contenido */}
-        <div className="min-w-0 space-y-6 stagger-children">
-          {/* Banner de éxito al resolver todas las bloqueantes */}
+        {/* EL HUB: el grid de tarjetas ES el índice del artefacto. */}
+        <div className="px-4 py-5 md:px-6 print:hidden">
           {blockingDone && (
             <div
               className={cn(
-                "rounded-xl border p-4 print:hidden",
+                "mb-4 rounded-xl border p-4",
                 // En verde, el rim-light esmeralda sustituye al borde plano (de
                 // ahí `border-transparent`: si no, doble anillo).
                 ready
@@ -572,628 +1134,254 @@ export function ResultView({ job }: { job: JobDetail }) {
             </div>
           )}
 
-          {/* 1. Interpretación para Sistemas */}
-          <ArtifactSection
-            id="sec-interpretation"
-            index="1"
-            title="Interpretación para Sistemas"
-            meta={`${si.scope_for_systems?.length ?? 0} alcance · ${assumptions.length} supuestos`}
-            open={disc.isOpen("sec-interpretation")}
-            onToggle={() => disc.toggle("sec-interpretation")}
-            forceRender={printMode}
-            preview={<span className="line-clamp-2">{si.what_process_requests}</span>}
-          >
-            {() => (
-              <>
-                <div className="space-y-4">
-                  <div>
-                    <GroupLabel>Qué pide Procesos</GroupLabel>
-                    <p className="prose-measure text-sm leading-relaxed">
-                      {si.what_process_requests}
-                    </p>
-                  </div>
-
-                  <div>
-                    <GroupLabel count={si.scope_for_systems?.length}>
-                      Alcance para Sistemas
-                    </GroupLabel>
-                    {si.scope_for_systems && si.scope_for_systems.length > 0 ? (
-                      <DataList>
-                        {si.scope_for_systems.map((s, i) => (
-                          <DataRow
-                            key={s.id ?? i}
-                            index={i + 1}
-                            right={s.requirement_refs?.map((r) => (
-                              <RefChip key={r} refId={r} />
-                            ))}
-                          >
-                            {s.description}
-                          </DataRow>
-                        ))}
-                      </DataList>
-                    ) : (
-                      <EmptyHint>Sin alcance definido.</EmptyHint>
-                    )}
-                  </div>
-
-                  <div>
-                    <GroupLabel count={si.apparent_out_of_scope?.length}>
-                      Aparentemente fuera de alcance
-                    </GroupLabel>
-                    {si.apparent_out_of_scope &&
-                    si.apparent_out_of_scope.length > 0 ? (
-                      <DataList>
-                        {si.apparent_out_of_scope.map((s, i) => (
-                          <DataRow key={s.id ?? i} index={i + 1}>
-                            {s.description}
-                            {s.reason ? (
-                              <span className="text-muted-foreground"> — {s.reason}</span>
-                            ) : null}
-                          </DataRow>
-                        ))}
-                      </DataList>
-                    ) : (
-                      <EmptyHint warn={false}>Nada marcado fuera de alcance.</EmptyHint>
-                    )}
-                  </div>
-
-                  <div>
-                    <GroupLabel count={assumptions.length}>
-                      Supuestos de interpretación (validables)
-                    </GroupLabel>
-                    {assumptions.length > 0 ? (
-                      <div className="space-y-2">
-                        {assumptions.map((s) => (
-                          <div
-                            key={s.id}
-                            id={`ref-${s.id}`}
-                            className="print-atom rounded-lg border p-3"
-                          >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <IdTag id={s.id} />
-                              <OriginBadge origin={s.origin} />
-                              <ConfidenceBadge value={s.confidence} />
-                            </div>
-                            <p className="mt-1.5 text-sm">{s.assumption}</p>
-                            {s.rationale && (
-                              <p className="text-xs text-muted-foreground">
-                                {s.rationale}
-                              </p>
-                            )}
-                            <div className="print:hidden">
-                              <ValidationControls
-                            readOnly={!puedeEditar}
-                                jobId={job.job_id}
-                                targetType="assumption"
-                                targetId={s.id}
-                                status={statusOf(s.id)}
-                                respuesta={respuestaOf(s.id)}
-                                onChanged={reloadSummary}
-                              />
-                            </div>
-                            <PrintValidationState
-                              status={statusOf(s.id)}
-                              respuesta={respuestaOf(s.id)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyHint>Sin supuestos.</EmptyHint>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 2. Preguntas al analista */}
-          <ArtifactSection
-            id="sec-questions"
-            index="2"
-            title="Preguntas al analista"
-            count={a.questions_for_analyst.length}
-            meta={`${blockingTotal} bloq.`}
-            open={disc.isOpen("sec-questions")}
-            onToggle={() => disc.toggle("sec-questions")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {blockingRemaining > 0 ? (
-                  <span className="font-medium text-red-600">
-                    {blockingRemaining} bloqueante
-                    {blockingRemaining !== 1 ? "s" : ""} sin responder
-                  </span>
-                ) : blockingTotal > 0 ? (
-                  <span className="font-medium text-emerald-600">
-                    Bloqueantes resueltas
-                  </span>
-                ) : (
-                  "Sin preguntas bloqueantes"
-                )}
-                {" · "}
-                {progress.answered} de {progress.total} respondidas
-              </span>
-            }
-            actions={
-              <FilterToggle
-                onlyBlocking={onlyBlocking}
-                onChange={setOnlyBlocking}
+          <HubGrid>
+            {sections.map((s) => (
+              <HubCard
+                key={s.id}
+                module="ef"
+                icon={s.icon}
+                title={s.title}
+                metrics={s.metrics}
+                insight={s.insight}
+                urgent={s.urgent}
+                urgentLabel={s.urgentLabel}
+                onOpen={() =>
+                  s.id === "preguntas" ? openQuestions() : hub.openSection(s.id)
+                }
               />
-            }
-          >
-            {() => (
-              <>
-                {questions.length > 0 ? (
-                  <div className="space-y-2">
-                    {questions.map((q) => (
-                      <div
-                        key={q.id}
-                        id={`ref-${q.id}`}
-                        className={cn(
-                          "print-atom rounded-lg border p-3",
-                          q.blocking && "border-red-300 bg-red-50/40",
-                        )}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <IdTag id={q.id} />
-                          <AudienceBadge audience={q.audience} />
-                          {q.blocking && (
-                            <Badge className="bg-red-600">bloqueante</Badge>
-                          )}
-                          {q.linked_to_ref && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              ligada a <RefChip refId={q.linked_to_ref} />
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1.5 text-sm font-medium">{q.question}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Motivo: {q.reason}
-                        </p>
-                        <div className="print:hidden">
-                          <ValidationControls
-                            readOnly={!puedeEditar}
-                            jobId={job.job_id}
-                            targetType="question"
-                            targetId={q.id}
-                            status={statusOf(q.id)}
-                            respuesta={respuestaOf(q.id)}
-                            onChanged={() => void handleQuestionAnswered(q.id)}
-                          />
-                        </div>
-                        <PrintValidationState
-                          status={statusOf(q.id)}
-                          respuesta={respuestaOf(q.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyHint warn={!onlyBlocking}>
-                    {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
-                  </EmptyHint>
-                )}
-              </>
-            )}
-          </ArtifactSection>
+            ))}
+          </HubGrid>
 
-          {/* 3. Requisitos */}
-          <ArtifactSection
-            id="sec-requirements"
-            index="3"
-            title="Requisitos"
-            count={reqTotal}
-            open={disc.isOpen("sec-requirements")}
-            onToggle={() => disc.toggle("sec-requirements")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {a.requirements.business.length} de negocio ·{" "}
-                {a.requirements.functional.length} funcionales ·{" "}
-                {a.requirements.non_functional.length} no funcionales
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-4">
-                  {(
-                    [
-                      ["Negocio", a.requirements.business],
-                      ["Funcionales", a.requirements.functional],
-                      ["No funcionales", a.requirements.non_functional],
-                    ] as const
-                  ).map(([label, list]) => (
-                    <div key={label}>
-                      <GroupLabel count={list.length}>{label}</GroupLabel>
-                      {list.length > 0 ? (
-                        <DataList>
-                          {list.map((r, i) => (
-                            <div key={r.id} id={`ref-${r.id}`} className="print-atom">
-                              <button
-                                type="button"
-                                onClick={() => toggle(r.id)}
-                                className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
-                              >
-                                <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
-                                  {i + 1}
-                                </span>
-                                <span className="min-w-0 flex-1 text-sm">{r.text}</span>
-                                <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
-                                  <OriginBadge origin={r.origin} />
-                                  <ConfidenceBadge value={r.confidence} />
-                                  <IdTag id={r.id} />
-                                </span>
-                              </button>
-                              {expanded.has(r.id) && (
-                                <div className="space-y-1 px-3 pb-3 pl-11 text-xs">
-                                  <div>
-                                    source_ref: <Mono>{r.source_ref ?? "—"}</Mono>
-                                  </div>
-                                  <div className="text-muted-foreground">evidence:</div>
-                                  <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
-                                    {r.evidence ?? "— sin evidencia —"}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </DataList>
-                      ) : (
-                        <EmptyHint>Sin requisitos de {label.toLowerCase()}.</EmptyHint>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 4. Modelo */}
-          <ArtifactSection
-            id="sec-model"
-            index="4"
-            title="Modelo"
-            count={modelTotal}
-            open={disc.isOpen("sec-model")}
-            onToggle={() => disc.toggle("sec-model")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {a.entities.length} entidades · {a.processes.length} procesos ·{" "}
-                {a.business_rules.length} reglas · {a.apis.length} APIs
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-4">
-                  <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
-                    {a.actors.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.name}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-modules" title="Módulos" n={a.modules.length}>
-                    {a.modules.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.name}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-menus" title="Menús" n={a.menus.length}>
-                    {a.menus.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-processes" title="Procesos" n={a.processes.length}>
-                    {a.processes.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.name}
-                        {x.steps && x.steps.length > 0 ? (
-                          <span className="text-xs text-muted-foreground">
-                            {" "}
-                            · {x.steps.join(" → ")}
-                          </span>
-                        ) : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-rules" title="Reglas" n={a.business_rules.length}>
-                    {a.business_rules.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.statement}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock
-                    id="m-validations"
-                    title="Validaciones"
-                    n={a.validations.length}
-                  >
-                    {a.validations.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.rule}{" "}
-                        {x.field_ref ? (
-                          <span className="text-xs">
-                            (<RefChip refId={x.field_ref} />)
-                          </span>
-                        ) : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-fields" title="Campos" n={a.fields.length}>
-                    {a.fields.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        <Mono>{x.name}</Mono>
-                        <span className="text-xs text-muted-foreground">
-                          {" "}
-                          {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
-                          {x.entity_ref ? " · " : ""}
-                        </span>
-                        {x.entity_ref ? <RefChip refId={x.entity_ref} /> : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-entities" title="Entidades" n={a.entities.length}>
-                    {a.entities.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        {x.name}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock
-                    id="m-relationships"
-                    title="Relaciones"
-                    n={a.relationships.length}
-                  >
-                    {a.relationships.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        <RefChip refId={x.source_entity_ref} />{" "}
-                        <Mono>{x.cardinality}</Mono>{" "}
-                        <RefChip refId={x.target_entity_ref} />
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-crud" title="CRUD" n={a.crud.length}>
-                    {a.crud.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        <RefChip refId={x.entity_ref} />
-                        <span className="ml-2 font-mono text-xs">
-                          {x.create ? "C" : "-"}
-                          {x.read ? "R" : "-"}
-                          {x.update ? "U" : "-"}
-                          {x.delete ? "D" : "-"}
-                        </span>
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock id="m-apis" title="APIs" n={a.apis.length}>
-                    {a.apis.map((x) => (
-                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                        <Mono>
-                          {x.method} {x.path}
-                        </Mono>
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 5. Análisis crítico */}
-          <ArtifactSection
-            id="sec-analysis"
-            index="5"
-            title="Análisis crítico"
-            count={analysisTotal}
-            open={disc.isOpen("sec-analysis")}
-            onToggle={() => disc.toggle("sec-analysis")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {analysis.ambiguities?.length ?? 0} ambigüedades ·{" "}
-                {analysis.missing_info?.length ?? 0} faltantes ·{" "}
-                {analysis.inconsistencies?.length ?? 0} inconsistencias ·{" "}
-                {analysis.observations?.length ?? 0} observaciones
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-4">
-                  <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
-                    {(analysis.ambiguities ?? []).map((x) => (
-                      <ItemRow key={x.id} id={x.id}>
-                        {x.description}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock title="Faltantes" n={analysis.missing_info?.length ?? 0}>
-                    {(analysis.missing_info ?? []).map((x) => (
-                      <ItemRow key={x.id} id={x.id}>
-                        {x.description}
-                        {x.expected_where ? (
-                          <span className="text-xs text-muted-foreground">
-                            {" "}
-                            — esperado en: {x.expected_where}
-                          </span>
-                        ) : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock
-                    title="Inconsistencias"
-                    n={analysis.inconsistencies?.length ?? 0}
-                  >
-                    {(analysis.inconsistencies ?? []).map((x) => (
-                      <ItemRow key={x.id} id={x.id}>
-                        {x.description}
-                        {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
-                          <span className="ml-1 inline-flex flex-wrap gap-1">
-                            {x.conflicting_refs.map((r) => (
-                              <RefChip key={r} refId={r} />
-                            ))}
-                          </span>
-                        ) : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                  <ModelBlock
-                    title="Observaciones"
-                    n={analysis.observations?.length ?? 0}
-                  >
-                    {(analysis.observations ?? []).map((x) => (
-                      <ItemRow key={x.id} id={x.id}>
-                        {x.description}
-                        {x.reason ? (
-                          <span className="text-xs text-muted-foreground">
-                            {" "}
-                            — {x.reason}
-                          </span>
-                        ) : null}
-                      </ItemRow>
-                    ))}
-                  </ModelBlock>
-                </div>
-              </>
-            )}
-          </ArtifactSection>
+          <p className="mt-4 text-[11px] text-meta-foreground">
+            Cada tarjeta abre su sección en el panel lateral. Dentro:{" "}
+            <Kbd>←</Kbd> <Kbd>→</Kbd> cambian de sección, <Kbd>Esc</Kbd> cierra y
+            los chips de referencia saltan a la sección que los define.
+          </p>
         </div>
+
+        <ArtifactPanel hub={hub} sections={sections} module="ef" />
+        <ArtifactPrintDoc sections={sections} active={printMode} />
       </div>
-
-      {/* Contador flotante de bloqueantes → abre el modo enfocado */}
-      {puedeEditar && blockingRemaining > 0 && (
-        <button
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur transition-colors hover:border-primary/40 hover:text-primary print:hidden"
-        >
-          <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
-          bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
-          {blockingRemaining !== 1 ? "s" : ""} · responder
-        </button>
-      )}
-
-      <QuestionSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        title="Responder preguntas al analista"
-        questions={a.questions_for_analyst.map(
-          (q): SheetQuestion => ({
-            id: q.id,
-            question: q.question,
-            reason: q.reason,
-            blocking: q.blocking,
-            audience: q.audience,
-            linked_to_ref: q.linked_to_ref,
-          }),
-        )}
-        statusOf={statusOf}
-        renderControls={(q, onAnswered) => (
-          <ValidationControls
-                            readOnly={!puedeEditar}
-            jobId={job.job_id}
-            targetType="question"
-            targetId={q.id}
-            status={statusOf(q.id)}
-            respuesta={respuestaOf(q.id)}
-            onChanged={() => {
-              void reloadSummary();
-              onAnswered();
-            }}
-          />
-        )}
-      />
-
-      <BackToTop />
-    </div>
+    </ArtifactNavProvider>
   );
 }
 
 // --- subcomponentes ----------------------------------------------------------
 
-function FilterToggle({
-  onlyBlocking,
-  onChange,
+/** Tecla en la pista de atajos del hub. */
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border bg-muted px-1 font-mono text-[10px] text-foreground/70">
+      {children}
+    </kbd>
+  );
+}
+
+/** Sub-bloque con etiqueta dentro del cuerpo del panel. */
+function Block({
+  label,
+  count,
+  children,
 }: {
-  onlyBlocking: boolean;
-  onChange: (v: boolean) => void;
+  label: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-meta-foreground">
+        {label}
+        {count !== undefined && (
+          <span
+            className={cn(
+              "tabular-nums",
+              count === 0 ? "text-amber-600" : "text-foreground/70",
+            )}
+          >
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Lista hairline o estado vacío explícito. */
+function ListOrEmpty<T>({
+  items,
+  row,
+  empty,
+  warnOnEmpty = true,
+}: {
+  items: T[];
+  row: (item: T, index: number) => React.ReactNode;
+  empty: string;
+  warnOnEmpty?: boolean;
+}) {
+  if (items.length === 0) return <EmptyHint warn={warnOnEmpty}>{empty}</EmptyHint>;
+  return <DataList>{items.map((item, i) => row(item, i))}</DataList>;
+}
+
+/**
+ * Fábrica de sub-pestañas de lista: conteo total, conteo de coincidencias para
+ * el buscador y filas con id. Evita repetir once veces la misma estructura en el
+ * Modelo del EF.
+ */
+function itemTab<T extends { id: string; origin?: "stated" | "derived" | null }>(
+  id: string,
+  label: string,
+  items: readonly T[],
+  text: (item: T) => (string | number | null | undefined)[],
+  row: (item: T) => React.ReactNode,
+): PanelTab {
+  return {
+    id,
+    label,
+    count: items.length,
+    matchCount: (q) => filterByQuery(q, items, text).length,
+    render: (ctx) => <ItemList items={items} ctx={ctx} text={text} row={row} />,
+  };
+}
+
+/** Filas del modelo y del análisis: id + badge de origen a la derecha. */
+function ItemList<
+  T extends { id: string; origin?: "stated" | "derived" | null },
+>({
+  items,
+  ctx,
+  text,
+  row,
+}: {
+  items: readonly T[];
+  ctx: PanelRenderCtx;
+  text: (item: T) => (string | number | null | undefined)[];
+  row: (item: T) => React.ReactNode;
+}) {
+  const shown = filterByQuery(ctx.query, items, text);
+  if (shown.length === 0) {
+    return (
+      <EmptyHint warn={!ctx.query}>
+        {ctx.query ? "Nada coincide con la búsqueda." : "Vacío."}
+      </EmptyHint>
+    );
+  }
+  return (
+    <DataList>
+      {shown.map((x) => (
+        <DataRow
+          key={x.id}
+          id={x.id}
+          right={
+            <>
+              {x.origin === "derived" ? <OriginBadge origin={x.origin} /> : null}
+              <IdTag id={x.id} />
+            </>
+          }
+        >
+          {row(x)}
+        </DataRow>
+      ))}
+    </DataList>
+  );
+}
+
+/**
+ * Requisitos: fila compacta con el detalle (source_ref + evidencia verbatim)
+ * plegado. En impresión el detalle se muestra siempre — el informe no se pliega.
+ */
+function RequirementList({
+  list,
+  ctx,
+  expanded,
+  onToggle,
+}: {
+  list: EFArtifact["requirements"]["business"];
+  ctx: PanelRenderCtx;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const shown = filterByQuery(ctx.query, list, (r) => [
+    r.id,
+    r.text,
+    r.evidence,
+    r.source_ref,
+  ]);
+  if (shown.length === 0) {
+    return (
+      <EmptyHint warn={!ctx.query}>
+        {ctx.query ? "Nada coincide con la búsqueda." : "Sin requisitos."}
+      </EmptyHint>
+    );
+  }
+  return (
+    <DataList>
+      {shown.map((r, i) => {
+        const open = ctx.forPrint || expanded.has(r.id);
+        return (
+          <div key={r.id} id={`ref-${r.id}`} className="print-atom">
+            <button
+              type="button"
+              onClick={() => onToggle(r.id)}
+              aria-expanded={open}
+              className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
+            >
+              <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 text-sm">{r.text}</span>
+              <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                <OriginBadge origin={r.origin} />
+                <ConfidenceBadge value={r.confidence} />
+                <IdTag id={r.id} />
+              </span>
+            </button>
+            {open && (
+              <div className="space-y-1 px-3 pb-3 pl-11 text-xs">
+                <div>
+                  source_ref: <Mono>{r.source_ref ?? "—"}</Mono>
+                </div>
+                <div className="text-muted-foreground">evidence:</div>
+                <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
+                  {r.evidence ?? "— sin evidencia —"}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </DataList>
+  );
+}
+
+/** Conmutador segmentado compacto (modo de preguntas, filtros del panel). */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
 }) {
   return (
     <div className="flex rounded-lg border bg-muted/40 p-0.5 text-xs">
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={cn(
-          "rounded-md px-2 py-0.5 transition-colors",
-          !onlyBlocking
-            ? "bg-background font-medium text-foreground shadow-sm"
-            : "text-muted-foreground",
-        )}
-      >
-        Todas
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={cn(
-          "rounded-md px-2 py-0.5 transition-colors",
-          onlyBlocking
-            ? "bg-background font-medium text-foreground shadow-sm"
-            : "text-muted-foreground",
-        )}
-      >
-        Bloqueantes
-      </button>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={cn(
+            "rounded-md px-2 py-1 transition-colors duration-150",
+            value === o.value
+              ? "bg-background font-medium text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
-  );
-}
-
-function ModelBlock({
-  id,
-  title,
-  n,
-  children,
-}: {
-  id?: string;
-  title: string;
-  n: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div id={id} className="scroll-mt-28">
-      <GroupLabel count={n}>{title}</GroupLabel>
-      {n > 0 ? <DataList>{children}</DataList> : <EmptyHint>Vacío.</EmptyHint>}
-    </div>
-  );
-}
-
-function ItemRow({
-  id,
-  origin,
-  children,
-}: {
-  id: string;
-  origin?: "stated" | "derived" | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <DataRow
-      id={id}
-      right={
-        <>
-          {origin === "derived" ? <OriginBadge origin={origin} /> : null}
-          <IdTag id={id} />
-        </>
-      }
-    >
-      {children}
-    </DataRow>
   );
 }
