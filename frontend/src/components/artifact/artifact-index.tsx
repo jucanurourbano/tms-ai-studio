@@ -265,7 +265,7 @@ export function ArtifactIndexPanel({
         )}
       >
         {!collapsed && (
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-meta-foreground">
             Índice
           </span>
         )}

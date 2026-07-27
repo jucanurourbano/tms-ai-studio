@@ -608,7 +608,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                           key={sid}
                           className="odd:bg-muted/20 hover:bg-primary/[0.04] [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
                         >
-                          <td className="text-right font-mono text-[11px] tabular-nums text-muted-foreground/70">
+                          <td className="text-right font-mono text-[11px] tabular-nums text-meta-foreground">
                             {i + 1}
                           </td>
                           <td>

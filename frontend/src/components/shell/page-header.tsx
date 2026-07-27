@@ -74,7 +74,7 @@ export function PageHeader({
         )}
         <div>
           {eyebrow && (
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-meta-foreground">
               {eyebrow}
             </div>
           )}

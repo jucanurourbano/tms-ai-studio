@@ -781,7 +781,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                             onClick={() => toggle(r.id)}
                             className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
                           >
-                            <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-muted-foreground/70">
+                            <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
                               {i + 1}
                             </span>
                             <span className="min-w-0 flex-1 text-sm">{r.text}</span>

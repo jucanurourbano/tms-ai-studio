@@ -16,7 +16,7 @@ export function AgentsGrid() {
   const agents = flatAgents();
   return (
     <section className="mb-6">
-      <h2 className="mb-3 font-heading text-lg font-semibold tracking-tight">
+      <h2 className="mb-3 font-heading text-base font-semibold tracking-tight">
         Agentes
       </h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -52,7 +52,7 @@ function AgentCard({ agent }: { agent: FlatAgent }) {
           <AgentIconView icon={agent.icon} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-meta-foreground">
             {agent.phase}
           </div>
           <CardTitle

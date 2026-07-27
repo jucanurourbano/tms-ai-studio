@@ -83,11 +83,11 @@ function ActivityItem({ row }: { row: ActivityRow }) {
           <span className="truncate text-sm font-medium">
             {row.title?.trim() || "(sin título)"}
           </span>
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-meta-foreground">
             {row.agent === "ef" ? "EF" : "Scrum"}
           </span>
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-meta-foreground">
           {relativeTime(row.created_at)}
         </div>
       </div>
@@ -110,7 +110,7 @@ function MetricTile({
 }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
+      <div className="flex items-center gap-1.5 text-xs text-meta-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
         {icon}
         {label}
       </div>
@@ -182,7 +182,7 @@ export function ActivityStrip() {
 
   return (
     <section>
-      <h2 className="mb-3 font-heading text-lg font-semibold tracking-tight">
+      <h2 className="mb-3 font-heading text-base font-semibold tracking-tight">
         Actividad reciente
       </h2>
 

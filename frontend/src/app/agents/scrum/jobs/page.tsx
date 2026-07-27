@@ -49,7 +49,7 @@ export default function ScrumJobsHistoryPage() {
   const to = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="animate-rise p-6 max-w-full">
       <PageHeader
         icon="kanban"
         eyebrow="Gestionar"
@@ -67,7 +67,7 @@ export default function ScrumJobsHistoryPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -79,7 +79,7 @@ export default function ScrumJobsHistoryPage() {
         emptyLabel="No hay planes todavía."
       />
 
-      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between text-xs text-meta-foreground">
         <span>
           {from}–{to} de {total}
         </span>
@@ -103,7 +103,7 @@ export default function ScrumJobsHistoryPage() {
         </div>
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-xs text-meta-foreground">
         El título y la fuente se heredan del EF de origen. El buscador filtra por
         título dentro de la página actual.
       </p>

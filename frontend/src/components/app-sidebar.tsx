@@ -170,7 +170,7 @@ function ConfigSection({ collapsed, pathname, onNavigate }: ConfigSectionProps) 
   return (
     <div className="mt-1 border-t border-sidebar-border/60 pt-2">
       {!collapsed && (
-        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-meta-foreground">
           Configuración
         </div>
       )}
@@ -296,7 +296,7 @@ function SidebarGroup({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80 transition-colors hover:text-foreground"
+        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-meta-foreground transition-colors hover:text-foreground"
       >
         <span>{phase.phase}</span>
         <ChevronRight
@@ -354,7 +354,7 @@ function SidebarItem({ agent, collapsed, pathname, onNavigate }: SidebarItemProp
           {!collapsed && (
             <>
               <span className="flex-1">{agent.name}</span>
-              <span className="rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground/70">
+              <span className="rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-meta-foreground">
                 pronto
               </span>
             </>

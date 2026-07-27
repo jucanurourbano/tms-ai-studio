@@ -52,7 +52,7 @@ export default function JobsHistoryPage() {
   const to = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="animate-rise p-6 max-w-full">
       <PageHeader
         icon="file-search"
         eyebrow="Especificar"
@@ -70,7 +70,7 @@ export default function JobsHistoryPage() {
       />
 
       {error && (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -82,7 +82,7 @@ export default function JobsHistoryPage() {
         emptyLabel="No hay análisis todavía."
       />
 
-      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between text-xs text-meta-foreground">
         <span>
           {from}–{to} de {total}
         </span>
@@ -106,7 +106,7 @@ export default function JobsHistoryPage() {
         </div>
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-xs text-meta-foreground">
         El buscador filtra por título dentro de la página actual.
       </p>
     </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { JobStatusBadge, Mono } from "@/components/ef/badges";
+import { TableShell, TH_META } from "@/components/shell/table-shell";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,7 @@ import {
   sourceLabel,
 } from "@/lib/format";
 import type { JobStatus, SourceType } from "@/lib/types/ef";
+import { cn } from "@/lib/utils";
 
 /** Fila del historial (subconjunto común a EF y Scrum). */
 export interface HistoryRow {
@@ -114,15 +116,15 @@ export function JobsHistoryTable({
         />
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
+      <TableShell>
         <Table className="min-w-[42rem]">
-          <TableHeader className="bg-muted/60">
+          <TableHeader className="bg-muted/30">
             <TableRow className="hover:bg-transparent">
-              <TableHead>Título</TableHead>
-              <TableHead>Fuente</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Versión</TableHead>
-              <TableHead className="text-right">Fecha</TableHead>
+              <TableHead className={TH_META}>Título</TableHead>
+              <TableHead className={TH_META}>Fuente</TableHead>
+              <TableHead className={TH_META}>Estado</TableHead>
+              <TableHead className={TH_META}>Versión</TableHead>
+              <TableHead className={cn(TH_META, "text-right")}>Fecha</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
@@ -164,9 +166,7 @@ export function JobsHistoryTable({
                       {row.title?.trim() || "(sin título)"}
                     </Link>
                     <div>
-                      <Mono className="text-muted-foreground">
-                        {row.job_id}
-                      </Mono>
+                      <Mono className="text-meta-foreground">{row.job_id}</Mono>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -179,7 +179,7 @@ export function JobsHistoryTable({
                     <VersionCell row={row} basePath={basePath} />
                   </TableCell>
                   <TableCell
-                    className="whitespace-nowrap text-right text-xs text-muted-foreground"
+                    className="whitespace-nowrap text-right text-xs text-meta-foreground"
                     title={absoluteTime(row.created_at)}
                   >
                     {relativeTime(row.created_at)}
@@ -189,7 +189,7 @@ export function JobsHistoryTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableShell>
     </div>
   );
 }

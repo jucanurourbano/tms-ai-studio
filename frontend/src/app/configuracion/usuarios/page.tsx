@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shell/page-header";
+import { TableShell, TH_META } from "@/components/shell/table-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { absoluteTime, relativeTime } from "@/lib/format";
 import type { AuthUser, UserRole } from "@/lib/types/auth";
+import { cn } from "@/lib/utils";
 
 function RoleBadge({ role }: { role: UserRole }) {
   return role === "admin" ? (
@@ -144,7 +146,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="animate-rise mx-auto max-w-5xl p-6">
       <PageHeader
         eyebrow="Configuración"
         title="Usuarios"
@@ -230,21 +232,21 @@ export default function UsuariosPage() {
 
       {/* Listado */}
       {error && (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-md border">
+      <TableShell>
         <Table className="min-w-[46rem]">
-          <TableHeader className="bg-muted/60">
+          <TableHeader className="bg-muted/30">
             <TableRow className="hover:bg-transparent">
-              <TableHead>Nombre</TableHead>
-              <TableHead>Correo</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Registrado</TableHead>
-              <TableHead className="text-right">Acción</TableHead>
+              <TableHead className={TH_META}>Nombre</TableHead>
+              <TableHead className={TH_META}>Correo</TableHead>
+              <TableHead className={TH_META}>Rol</TableHead>
+              <TableHead className={TH_META}>Estado</TableHead>
+              <TableHead className={TH_META}>Registrado</TableHead>
+              <TableHead className={cn(TH_META, "text-right")}>Acción</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
@@ -285,7 +287,7 @@ export default function UsuariosPage() {
                     <TableCell className="font-medium">
                       {u.full_name}
                       {isSelf && (
-                        <span className="ml-2 text-[11px] text-muted-foreground">
+                        <span className="ml-2 text-[11px] text-meta-foreground">
                           (tú)
                         </span>
                       )}
@@ -300,7 +302,7 @@ export default function UsuariosPage() {
                       <ActiveBadge active={u.is_active} />
                     </TableCell>
                     <TableCell
-                      className="whitespace-nowrap text-xs text-muted-foreground"
+                      className="whitespace-nowrap text-xs text-meta-foreground"
                       title={absoluteTime(u.created_at)}
                     >
                       {relativeTime(u.created_at)}
@@ -332,7 +334,7 @@ export default function UsuariosPage() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableShell>
     </div>
   );
 }
