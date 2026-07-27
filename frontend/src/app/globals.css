@@ -270,6 +270,23 @@
   }
 }
 
+/*
+ * OBJETIVOS TÁCTILES. Por debajo de `md` todo control interactivo alcanza 44px,
+ * el mínimo recomendado para el dedo. En escritorio se mantienen compactos: con
+ * ratón, 44px de alto en una barra de herramientas es desperdicio.
+ *
+ * Se aplica por `data-slot` en vez de retocar cada `size` del botón para no tener
+ * que acordarse en cada sitio nuevo.
+ */
+@media (max-width: 767px) {
+  [data-slot="button"],
+  [data-slot="dropdown-menu-trigger"],
+  [data-slot="dropdown-menu-item"] {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}
+
 /* Resaltado temporal al navegar a una referencia (linked_to_ref / conflicting_refs). */
 .ref-highlight {
   outline: 2px solid var(--color-amber-400, #fbbf24);
