@@ -275,53 +275,57 @@ function PanelInner({
         )}
 
         {tabs && tabs.length > 0 && (
-          // Barra de sub-pestañas con scroll horizontal y un degradado a la
-          // derecha que delata que hay más (el Modelo del EF tiene once).
-          <div className="relative -mx-1">
-            <div
-              className="flex gap-1 overflow-x-auto px-1 pb-0.5"
-              role="tablist"
-              aria-label={`Secciones de ${section.title}`}
-            >
-              {tabs.map((t) => {
-                const active = t.id === activeTab?.id;
-                const searching = query.trim().length > 0 && !!t.matchCount;
-                const n = searching ? t.matchCount!(query) : t.count;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => hub.setTab(t.id)}
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors duration-150",
-                      active
-                        ? "border-primary/40 bg-primary/10 font-medium text-primary"
-                        : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-                      // Buscando: las pestañas sin coincidencias se apagan.
-                      searching && n === 0 && !active && "opacity-40",
-                    )}
-                  >
-                    {t.label}
-                    {n !== undefined && (
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          n === 0 && !searching && "text-amber-600",
-                        )}
-                      >
-                        {n}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <span
-              className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent"
-              aria-hidden
-            />
+          // Sub-pestañas como PILLS QUE ENVUELVEN, no una fila con scroll.
+          //
+          // El Modelo del EF tiene once categorías: en una sola fila desbordaban
+          // y había que arrastrar para descubrir que existían "Relaciones" o
+          // "APIs". Se descartó el patrón "5 visibles + Más ▾" porque esconde
+          // media sección tras un clic extra y reintroduce el mismo problema de
+          // descubrimiento; con etiquetas cortas, dos filas de pills muestran
+          // TODO de un vistazo y dejan ver dónde hay contenido y dónde no.
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="tablist"
+            aria-label={`Secciones de ${section.title}`}
+          >
+            {tabs.map((t) => {
+              const active = t.id === activeTab?.id;
+              const searching = query.trim().length > 0 && !!t.matchCount;
+              const n = searching ? t.matchCount!(query) : t.count;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => hub.setTab(t.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors duration-150",
+                    active
+                      ? cn("font-medium ring-1 ring-inset", accent.soft, accent.ring)
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    // Buscando: las pestañas sin coincidencias se apagan.
+                    searching && n === 0 && !active && "opacity-40",
+                  )}
+                >
+                  {t.label}
+                  {n !== undefined && (
+                    <span
+                      className={cn(
+                        "rounded-full px-1 text-[10px] tabular-nums",
+                        active
+                          ? "bg-background/70"
+                          : n === 0 && !searching
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-muted text-meta-foreground",
+                      )}
+                    >
+                      {n}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </SheetHeader>

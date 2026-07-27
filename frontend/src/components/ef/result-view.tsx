@@ -47,7 +47,13 @@ import {
   type PanelTab,
 } from "@/components/artifact/artifact-panel";
 import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
-import { HubCard, HubGrid, HubHint } from "@/components/artifact/hub-card";
+import {
+  ActionGroup,
+  HeaderActions,
+  HubCard,
+  HubGrid,
+  HubHint,
+} from "@/components/artifact/hub-card";
 import {
   FocusedQuestionFlow,
   type SheetQuestion,
@@ -922,8 +928,9 @@ export function ResultView({ job }: { job: JobDetail }) {
         <PrintFooter title="Análisis de Especificación Funcional" />
 
         {/* Barra superior de afinamiento */}
-        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur print:hidden">
+          {/* (a) Identidad: qué artefacto es y en qué estado está. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="font-heading font-semibold">EF v1.2.0</span>
             <Badge variant="outline">
               {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
@@ -967,91 +974,103 @@ export function ResultView({ job }: { job: JobDetail }) {
               </span>
             )}
 
-            <div className="ml-auto flex flex-wrap gap-2">
-              {puedeEditar && a.questions_for_analyst.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={openQuestions}
-                >
-                  <MessagesSquare className="h-3.5 w-3.5" />
-                  Responder preguntas
-                  {blockingRemaining > 0 && (
-                    <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
-                      {blockingRemaining}
-                    </span>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(buildProcesosText(a, statusOf))
-                    .then(() => toast.success("Copiado para Procesos"))
-                }
-              >
-                <ClipboardCopy className="h-3.5 w-3.5" />
-                Copiar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => printNow()}
-              >
-                <Printer className="h-3.5 w-3.5" />
-                Exportar PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => downloadJson(a, job.job_id)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                JSON
-              </Button>
-              {puedeEditar && (
-                <Dialog>
-                  <DialogTrigger
-                    render={
-                      <Button size="sm" disabled={!canRefine}>
-                        Regenerar EF afinada
-                      </Button>
+            {/* Acciones agrupadas por intención: preguntas | exportes | regenerar. */}
+            <div className="ml-auto">
+              <HeaderActions>
+                {puedeEditar && a.questions_for_analyst.length > 0 && (
+                  <ActionGroup>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={openQuestions}
+                    >
+                      <MessagesSquare className="h-3.5 w-3.5" />
+                      Responder preguntas
+                      {blockingRemaining > 0 && (
+                        <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                          {blockingRemaining}
+                        </span>
+                      )}
+                    </Button>
+                  </ActionGroup>
+                )}
+                <ActionGroup>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() =>
+                      void navigator.clipboard
+                        .writeText(buildProcesosText(a, statusOf))
+                        .then(() => toast.success("Copiado para Procesos"))
                     }
-                  />
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Regenerar EF afinada</DialogTitle>
-                      <DialogDescription>
-                        Se creará un análisis hijo reinyectando tus respuestas y se
-                        ejecutará el modelo real.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                      Costo estimado: ~$
-                      {a.metrics.cost.toFixed(4)} (similar al análisis anterior).
-                      Esta acción consume tokens de la API.
-                    </div>
-                    <DialogFooter>
-                      <Button onClick={doRefine} disabled={refining || !canRefine}>
-                        {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
+                  >
+                    <ClipboardCopy className="h-3.5 w-3.5" />
+                    Copiar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => printNow()}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Exportar PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => downloadJson(a, job.job_id)}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    JSON
+                  </Button>
+                </ActionGroup>
+                {puedeEditar && (
+                  <ActionGroup>
+                    <Dialog>
+                      <DialogTrigger
+                        render={
+                          <Button size="sm" disabled={!canRefine}>
+                            Regenerar EF afinada
+                          </Button>
+                        }
+                      />
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Regenerar EF afinada</DialogTitle>
+                          <DialogDescription>
+                            Se creará un análisis hijo reinyectando tus respuestas
+                            y se ejecutará el modelo real.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                          Costo estimado: ~$
+                          {a.metrics.cost.toFixed(4)} (similar al análisis
+                          anterior). Esta acción consume tokens de la API.
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={doRefine}
+                            disabled={refining || !canRefine}
+                          >
+                            {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </ActionGroup>
+                )}
+              </HeaderActions>
             </div>
           </div>
         </div>
 
-        {/* Cabecera: estado, fuente y mini-stats */}
-        <div className="border-b px-6 py-3 print:hidden">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* (b) Mini-stats, con el estado y la fuente separados a la derecha. */}
+        <div className="border-b px-6 py-5 print:hidden">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <StatRow>
               <Stat
                 icon={<Coins />}
@@ -1074,7 +1093,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                 label="cobertura"
               />
             </StatRow>
-            <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground md:ml-auto md:border-l md:border-border/70 md:pl-8">
               <JobStatusBadge status={job.status} />
               <span>
                 {a.source.type} · {a.source.fidelity}
@@ -1082,9 +1101,15 @@ export function ResultView({ job }: { job: JobDetail }) {
               </span>
             </div>
           </div>
-          <p className="prose-measure mt-2 line-clamp-2 text-sm text-muted-foreground">
-            {a.summary}
-          </p>
+
+          {/* (c) El resumen, como bloque propio. El hairline cruza toda la franja
+              (separa bandas, no párrafos) y el texto se acota a la medida de
+              lectura. */}
+          <div className="mt-5 border-t pt-4">
+            <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">
+              {a.summary}
+            </p>
+          </div>
         </div>
 
         {/* EL HUB: el grid de tarjetas ES el índice del artefacto. */}

@@ -43,7 +43,13 @@ import {
   type PanelRenderCtx,
 } from "@/components/artifact/artifact-panel";
 import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
-import { HubCard, HubGrid, HubHint } from "@/components/artifact/hub-card";
+import {
+  ActionGroup,
+  HeaderActions,
+  HubCard,
+  HubGrid,
+  HubHint,
+} from "@/components/artifact/hub-card";
 import {
   FocusedQuestionFlow,
   type SheetQuestion,
@@ -1086,8 +1092,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         <PrintFooter title="Plan Scrum" />
 
         {/* Barra superior de afinamiento + semáforo */}
-        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur print:hidden">
+          {/* (a) Identidad: qué plan es, de qué EF sale y en qué estado está. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="font-heading font-semibold">Plan Scrum v1.0.0</span>
             <Badge variant="outline">
               {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
@@ -1163,8 +1170,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </label>
             )}
 
-            <div className="ml-auto flex flex-wrap gap-2">
+            {/* Acciones agrupadas: preguntas | exportes | regenerar. */}
+            <div className="ml-auto">
+              <HeaderActions>
               {puedeEditar && a.questions_for_po.length > 0 && (
+                <ActionGroup>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1179,7 +1189,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                     </span>
                   )}
                 </Button>
+                </ActionGroup>
               )}
+              <ActionGroup>
               <Button
                 variant="outline"
                 size="sm"
@@ -1251,7 +1263,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 <Download className="h-3.5 w-3.5" />
                 Artefacto
               </Button>
+              </ActionGroup>
               {puedeEditar && (
+                <ActionGroup>
                 <Dialog>
                   <DialogTrigger
                     render={
@@ -1278,8 +1292,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                       </Button>
                     </DialogFooter>
                   </DialogContent>
-                </Dialog>
+                  </Dialog>
+                </ActionGroup>
               )}
+              </HeaderActions>
             </div>
           </div>
           {checks && (
@@ -1292,9 +1308,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           )}
         </div>
 
-        {/* Cabecera: estado y mini-stats */}
-        <div className="border-b px-6 py-3 print:hidden">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* (b) Mini-stats, con el estado separado a la derecha. */}
+        <div className="border-b px-6 py-5 print:hidden">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <StatRow>
               <Stat
                 icon={<ListChecks />}
@@ -1323,7 +1339,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                 label="costo"
               />
             </StatRow>
-            <div className="ml-auto">
+            <div className="md:ml-auto md:border-l md:border-border/70 md:pl-8">
               <JobStatusBadge status={job.status} />
             </div>
           </div>

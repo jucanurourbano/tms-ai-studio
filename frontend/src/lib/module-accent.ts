@@ -21,6 +21,10 @@ export interface ModuleAccent {
   /** Texto en el tono al hacer hover en la tarjeta (clase literal: Tailwind
    *  necesita verla escrita para incluirla en el CSS). */
   groupHoverText: string;
+  /** Degradado suave para el contenedor del icono de la tarjeta del hub. */
+  iconGradient: string;
+  /** Anillo del tono al pasar por encima de la tarjeta. */
+  hoverRing: string;
 }
 
 const VIOLETA: ModuleAccent = {
@@ -28,6 +32,8 @@ const VIOLETA: ModuleAccent = {
   text: "text-violet-600",
   ring: "ring-violet-200",
   groupHoverText: "group-hover:text-violet-600",
+  iconGradient: "bg-gradient-to-br from-violet-100 to-violet-50 text-violet-700",
+  hoverRing: "hover:ring-violet-300",
 };
 
 /**
@@ -44,12 +50,16 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     text: "text-teal-600",
     ring: "ring-teal-200",
     groupHoverText: "group-hover:text-teal-600",
+    iconGradient: "bg-gradient-to-br from-teal-100 to-teal-50 text-teal-700",
+    hoverRing: "hover:ring-teal-300",
   },
   bd: {
     soft: "bg-cyan-100 text-cyan-700",
     text: "text-cyan-600",
     ring: "ring-cyan-200",
     groupHoverText: "group-hover:text-cyan-600",
+    iconGradient: "bg-gradient-to-br from-cyan-100 to-cyan-50 text-cyan-700",
+    hoverRing: "hover:ring-cyan-300",
   },
   // CONSTRUIR — la familia índigo/azul, que se lee como "una misma fase".
   api: {
@@ -57,18 +67,24 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     text: "text-indigo-600",
     ring: "ring-indigo-200",
     groupHoverText: "group-hover:text-indigo-600",
+    iconGradient: "bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-700",
+    hoverRing: "hover:ring-indigo-300",
   },
   backend: {
     soft: "bg-sky-100 text-sky-700",
     text: "text-sky-600",
     ring: "ring-sky-200",
     groupHoverText: "group-hover:text-sky-600",
+    iconGradient: "bg-gradient-to-br from-sky-100 to-sky-50 text-sky-700",
+    hoverRing: "hover:ring-sky-300",
   },
   frontend: {
     soft: "bg-blue-100 text-blue-700",
     text: "text-blue-600",
     ring: "ring-blue-200",
     groupHoverText: "group-hover:text-blue-600",
+    iconGradient: "bg-gradient-to-br from-blue-100 to-blue-50 text-blue-700",
+    hoverRing: "hover:ring-blue-300",
   },
   // VERIFICAR — ámbar: el color con el que ya se marcan las advertencias.
   qa: {
@@ -76,6 +92,8 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     text: "text-amber-600",
     ring: "ring-amber-200",
     groupHoverText: "group-hover:text-amber-600",
+    iconGradient: "bg-gradient-to-br from-amber-100 to-amber-50 text-amber-700",
+    hoverRing: "hover:ring-amber-300",
   },
   // GESTIONAR — azul para Scrum, esmeralda para DevOps (entrega).
   scrum: {
@@ -83,12 +101,16 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     text: "text-blue-600",
     ring: "ring-blue-200",
     groupHoverText: "group-hover:text-blue-600",
+    iconGradient: "bg-gradient-to-br from-blue-100 to-blue-50 text-blue-700",
+    hoverRing: "hover:ring-blue-300",
   },
   devops: {
     soft: "bg-emerald-100 text-emerald-700",
     text: "text-emerald-600",
     ring: "ring-emerald-200",
     groupHoverText: "group-hover:text-emerald-600",
+    iconGradient: "bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-700",
+    hoverRing: "hover:ring-emerald-300",
   },
   // Configuración: neutro a propósito, no es una fase del ISDF.
   config: {
@@ -96,6 +118,8 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     text: "text-slate-600",
     ring: "ring-slate-200",
     groupHoverText: "group-hover:text-slate-600",
+    iconGradient: "bg-gradient-to-br from-slate-100 to-slate-50 text-slate-700",
+    hoverRing: "hover:ring-slate-300",
   },
 };
 
