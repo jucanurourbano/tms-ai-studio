@@ -121,21 +121,36 @@ LOAD_EF → EPICS → STORIES → CRITERIA → ESTIMATE → PRIORITIZE
 - Tabla **`story_assignments`** (`job_id`, `story_id`, `user_id`, `assigned_at`,
   `assigned_by`; migración `0008`), **única por `(job_id, story_id)`**: una
   historia tiene como máximo un responsable y reasignar actualiza la fila.
+- Tabla **`sprint_assignments`** (migración `0009`, única por
+  `(job_id, sprint_id)`): responsable de un **sprint completo**.
+- **Cascada `historia > sprint`, DERIVADA no materializada.** Asignar un sprint
+  hace que sus historias sin responsable propio se muestren a su nombre, pero NO
+  se escriben filas en `story_assignments`: se resuelve al leer, y cada historia
+  informa en `source` si su responsable es explícito (`story`) o heredado
+  (`sprint`). Así retirar la asignación del sprint deshace la cascada sin dejar
+  filas huérfanas, y una asignación por historia sigue siendo una **excepción**
+  que ni reasignar ni desasignar el sprint puede pisar.
 - Vive **FUERA del `ScrumArtifact`**, igual que las validaciones: el artefacto es
   la salida del agente y **no se muta**; quién ejecuta cada historia es una
   decisión del equipo, posterior e independiente, revisable sin regenerar el plan.
 - Endpoints: `GET /scrum/team` (colaboradores asignables: activos, vigentes y
-  `available_for_assignment`), `GET /scrum/jobs/{id}/assignments` y
-  `PATCH /scrum/jobs/{id}/assignments` (`user_id: null` desasigna). El equipo vive
+  `available_for_assignment`), `GET /scrum/jobs/{id}/assignments` (devuelve
+  `{items, sprints}` con las asignaciones **efectivas**),
+  `PATCH /scrum/jobs/{id}/assignments` y
+  `PATCH /scrum/jobs/{id}/sprint-assignments` (`user_id: null` desasigna). El equipo vive
   bajo `/scrum` (nivel READ) y no bajo `/auth` para no abrir el panel de usuarios
   a quien no tiene `config`. **Asignar exige Scrum FULL** → `analista` y `admin`.
 - Al asignar se valida que el plan exista, que la historia pertenezca a su
   artefacto y que el destinatario sea asignable.
 - **Export ClickUp**: columna `Assignee` (CSV) / `assignee_email` (JSON) con el
-  correo institucional del responsable (fallback al de acceso). Las asignaciones
-  se inyectan en el mapeo (`story_rows(artifact, assignees=…)`), no en el
-  artefacto. Lo que falta para la fase (b) está en
-  `docs/diseno-agente-scrum.md` §7.
+  correo institucional del responsable **efectivo** (incluidas las historias que
+  lo heredan del sprint; fallback al correo de acceso). Las asignaciones se
+  inyectan en el mapeo (`story_rows(artifact, assignees=…)`), no en el artefacto.
+- **UI preparada para la fase (b), sin implementar:** el plan tiene el botón
+  "Enviar a ClickUp" *visible pero deshabilitado* con tooltip, para comunicar que
+  la asignación de hoy quedará vinculada. Lo que falta para (b) está en
+  `docs/diseno-agente-scrum.md` §7 (resolver correo → id de miembro del
+  workspace, dentro del guard fail-closed del espacio de Sistemas).
 
 ### Restricción de seguridad ClickUp (crítica)
 
@@ -252,9 +267,10 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   `0005_users`): `id` (ULID), `email` **único**, `full_name`, `password_hash`,
   `role`, `is_active`, timestamps. Más:
   - `deleted_at` (**baja lógica**, migración `0007`).
-  - **Perfil de equipo** (migración `0008`): `institutional_email` (el que se
-    exporta a ClickUp; puede diferir del de acceso), `position`
-    (cargo/especialidad) y `available_for_assignment`.
+  - **Perfil de equipo** (migraciones `0008`/`0009`): `institutional_email` (el
+    que se exporta a ClickUp; puede diferir del de acceso), `specialty` (**enum
+    cerrado**: `backend|frontend|db|qa|fullstack|otro`) y
+    `available_for_assignment`.
 - **Baja lógica, NO borrado físico ni anonimización.** Los jobs
   (`agent_jobs.created_by`) y las validaciones (`agent_validations.answered_by`)
   referencian a su autor: anonimizar dejaría el historial sin respuesta a "¿quién
@@ -321,9 +337,10 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   **Panel de usuarios** (`/configuracion/usuarios`, módulo `config`): alta,
   búsqueda por nombre/correo, filtros por rol y estado, contador, y por usuario
   un menú **kebab (⋮)** con Editar (identidad + rol + perfil de equipo), Accesos
-  adicionales, Restablecer contraseña, Activar/Desactivar y Eliminar — las tres
-  últimas con confirmación, y la baja exigiendo escribir el nombre y avisando de
-  la actividad registrada. **Responsive**: tabla en `md+`, una card por usuario
+  adicionales (**checkboxes múltiples** + atajo **Full stack** =
+  Backend+Frontend+BD+API), Restablecer contraseña, Activar/Desactivar y Eliminar
+  — las tres últimas con confirmación, y la baja exigiendo escribir el nombre y
+  avisando de la actividad registrada. **Responsive**: tabla en `md+`, una card por usuario
   por debajo. Todos los campos de contraseña de la app (login, bootstrap, alta y
   restablecimiento) usan `PasswordInput`, con toggle mostrar/ocultar.
 
