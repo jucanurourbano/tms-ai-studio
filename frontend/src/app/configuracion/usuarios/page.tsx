@@ -1,10 +1,10 @@
 "use client";
 
-import { Loader2, ShieldAlert, UserPlus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Loader2, Search, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { GrantsEditor } from "@/components/configuracion/grants-editor";
+import { UserActionsMenu } from "@/components/configuracion/user-actions-menu";
 import { PageHeader } from "@/components/shell/page-header";
 import { TableShell, TH_META } from "@/components/shell/table-shell";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -28,6 +29,22 @@ import { absoluteTime, relativeTime } from "@/lib/format";
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/permissions";
 import type { AuthUser, RolesCatalog, UserRole } from "@/lib/types/auth";
 import { cn } from "@/lib/utils";
+
+type EstadoFiltro = "todos" | "activos" | "inactivos";
+
+const FILTER_CLASS =
+  "h-8 rounded-lg border border-input bg-background px-2 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+/** Iniciales para el avatar de las cards (máximo dos). */
+function initials(fullName: string): string {
+  return (
+    fullName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((p) => p.charAt(0).toUpperCase())
+      .join("") || "?"
+  );
+}
 
 function RoleBadge({ role }: { role: UserRole }) {
   // El admin se distingue en violeta (permisos totales); el resto de roles
@@ -78,7 +95,27 @@ export default function UsuariosPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("analista");
   const [submitting, setSubmitting] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Filtros del listado (client-side sobre la página cargada, como el historial).
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<UserRole | "todos">("todos");
+  const [statusFilter, setStatusFilter] = useState<EstadoFiltro>("todos");
+
+  const filtrando =
+    query.trim() !== "" || roleFilter !== "todos" || statusFilter !== "todos";
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return users.filter((u) => {
+      if (q && !`${u.full_name} ${u.email}`.toLowerCase().includes(q)) {
+        return false;
+      }
+      if (roleFilter !== "todos" && u.role !== roleFilter) return false;
+      if (statusFilter === "activos" && !u.is_active) return false;
+      if (statusFilter === "inactivos" && u.is_active) return false;
+      return true;
+    });
+  }, [users, query, roleFilter, statusFilter]);
 
   // El estado se actualiza solo en callbacks async (convención del proyecto:
   // nunca setState síncrono dentro de un efecto). ``loading`` arranca en true.
@@ -138,38 +175,7 @@ export default function UsuariosPage() {
     }
   }
 
-  async function onChangeRole(u: AuthUser, role: UserRole) {
-    if (role === u.role) return;
-    setBusyId(u.id);
-    try {
-      await authApi.setRole(u.id, role);
-      toast.success(`Rol actualizado: ${ROLE_LABELS[role]}`);
-      fetchUsers();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "No se pudo cambiar el rol.",
-      );
-      // Recarga para descartar la selección optimista del <select>.
-      fetchUsers();
-    } finally {
-      setBusyId(null);
-    }
-  }
 
-  async function onToggleActive(u: AuthUser) {
-    setBusyId(u.id);
-    try {
-      await authApi.setActive(u.id, !u.is_active);
-      toast.success(u.is_active ? "Usuario desactivado" : "Usuario reactivado");
-      fetchUsers();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "No se pudo actualizar el usuario.",
-      );
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (!puedeVerPanel) {
     return (
@@ -233,13 +239,13 @@ export default function UsuariosPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="newPassword">Contraseña</Label>
-              <Input
+              <PasswordInput
                 id="newPassword"
-                type="password"
                 required
                 minLength={8}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
+                autoComplete="new-password"
                 placeholder="Mínimo 8 caracteres"
                 disabled={submitting}
               />
@@ -278,61 +284,93 @@ export default function UsuariosPage() {
         </div>
       </Card>
 
-      {/* Listado */}
+      {/* Listado: filtros + contador */}
       {error && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <TableShell>
-        <Table className="min-w-[46rem]">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-meta-foreground" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre o correo…"
+            aria-label="Buscar usuarios"
+            className="pl-8"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as UserRole | "todos")}
+          aria-label="Filtrar por rol"
+          className={FILTER_CLASS}
+        >
+          <option value="todos">Todos los roles</option>
+          {ALL_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as EstadoFiltro)}
+          aria-label="Filtrar por estado"
+          className={FILTER_CLASS}
+        >
+          <option value="todos">Activos e inactivos</option>
+          <option value="activos">Solo activos</option>
+          <option value="inactivos">Solo inactivos</option>
+        </select>
+
+        {/* Contador: refleja el filtro y, cuando filtra, también el total. */}
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-meta-foreground">
+          <Users className="h-3.5 w-3.5" />
+          {filtrando
+            ? `${filtered.length} de ${users.length} usuarios`
+            : `${users.length} ${users.length === 1 ? "usuario" : "usuarios"}`}
+        </span>
+      </div>
+
+      {/* Escritorio: tabla completa */}
+      <TableShell className="hidden md:block">
+        <Table className="min-w-[52rem]">
           <TableHeader className="bg-muted/30">
             <TableRow className="hover:bg-transparent">
               <TableHead className={TH_META}>Nombre</TableHead>
               <TableHead className={TH_META}>Correo</TableHead>
               <TableHead className={TH_META}>Rol</TableHead>
-              <TableHead className={TH_META}>Accesos extra</TableHead>
+              <TableHead className={TH_META}>Cargo</TableHead>
               <TableHead className={TH_META}>Estado</TableHead>
               <TableHead className={TH_META}>Registrado</TableHead>
-              <TableHead className={cn(TH_META, "text-right")}>Acción</TableHead>
+              <TableHead className={cn(TH_META, "text-right")}>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={`sk-${i}`} className="hover:bg-transparent">
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-48" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-7 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-16" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-3 w-20" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Skeleton className="ml-auto h-7 w-24" />
-                  </TableCell>
+                  {Array.from({ length: 7 }).map((__, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full max-w-28" />
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
-            ) : users.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                  No hay usuarios.
+                  {filtrando
+                    ? "Ningún usuario coincide con los filtros."
+                    : "No hay usuarios."}
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((u) => {
+              filtered.map((u) => {
                 const isSelf = u.id === current?.id;
                 return (
                   <TableRow key={u.id}>
@@ -348,47 +386,10 @@ export default function UsuariosPage() {
                       {u.email}
                     </TableCell>
                     <TableCell>
-                      {/* Un admin no cambia su propio rol (guarda anti-bloqueo
-                          del backend): se muestra el badge, sin selector. */}
-                      {isAdmin && !isSelf ? (
-                        <select
-                          aria-label={`Rol de ${u.full_name}`}
-                          value={u.role}
-                          disabled={busyId === u.id}
-                          onChange={(e) =>
-                            onChangeRole(u, e.target.value as UserRole)
-                          }
-                          className="h-7 rounded-md border border-input bg-background px-2 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                        >
-                          {ALL_ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {ROLE_LABELS[r]}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <RoleBadge role={u.role} />
-                      )}
+                      <RoleBadge role={u.role} />
                     </TableCell>
-                    <TableCell>
-                      {isAdmin && !isSelf ? (
-                        <GrantsEditor
-                          user={u}
-                          catalog={catalog}
-                          onSaved={() => {
-                            fetchUsers();
-                            // Si se tocaron los accesos del usuario en sesión,
-                            // su navegación debe reflejarlo al instante.
-                            if (u.id === current?.id) void refresh();
-                          }}
-                        />
-                      ) : (
-                        <span className="text-xs text-meta-foreground">
-                          {u.grants.length > 0
-                            ? `${u.grants.length} módulo(s)`
-                            : "—"}
-                        </span>
-                      )}
+                    <TableCell className="text-xs text-meta-foreground">
+                      {u.position || "—"}
                     </TableCell>
                     <TableCell>
                       <ActiveBadge active={u.is_active} />
@@ -400,25 +401,16 @@ export default function UsuariosPage() {
                       {relativeTime(u.created_at)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busyId === u.id || isSelf}
-                        title={
-                          isSelf
-                            ? "No puedes desactivar tu propia cuenta"
-                            : undefined
-                        }
-                        onClick={() => onToggleActive(u)}
-                      >
-                        {busyId === u.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : u.is_active ? (
-                          "Desactivar"
-                        ) : (
-                          "Reactivar"
-                        )}
-                      </Button>
+                      <UserActionsMenu
+                        user={u}
+                        catalog={catalog}
+                        isAdmin={isAdmin}
+                        isSelf={isSelf}
+                        onChanged={() => {
+                          fetchUsers();
+                          if (isSelf) void refresh();
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -427,6 +419,71 @@ export default function UsuariosPage() {
           </TableBody>
         </Table>
       </TableShell>
+
+      {/* Móvil y tablet: una card por usuario (la tabla no cabe sin scroll) */}
+      <div className="space-y-2 md:hidden">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={`skc-${i}`} className="h-24 rounded-xl" />
+          ))
+        ) : filtered.length === 0 ? (
+          <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+            {filtrando
+              ? "Ningún usuario coincide con los filtros."
+              : "No hay usuarios."}
+          </p>
+        ) : (
+          filtered.map((u) => {
+            const isSelf = u.id === current?.id;
+            return (
+              <div
+                key={u.id}
+                className="rounded-xl bg-card p-3 ring-1 ring-foreground/10"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/20">
+                    {initials(u.full_name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">
+                        {u.full_name}
+                      </span>
+                      {isSelf && (
+                        <span className="shrink-0 text-[11px] text-meta-foreground">
+                          (tú)
+                        </span>
+                      )}
+                    </div>
+                    <div className="truncate text-xs text-meta-foreground">
+                      {u.email}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <RoleBadge role={u.role} />
+                      <ActiveBadge active={u.is_active} />
+                      {u.position && (
+                        <span className="text-[11px] text-meta-foreground">
+                          {u.position}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <UserActionsMenu
+                    user={u}
+                    catalog={catalog}
+                    isAdmin={isAdmin}
+                    isSelf={isSelf}
+                    onChanged={() => {
+                      fetchUsers();
+                      if (isSelf) void refresh();
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -219,13 +220,12 @@ function LoginForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="password">Contraseña</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             required
             value={password}
-            onChange={(e) => onPassword(e.target.value)}
+            onChange={onPassword}
             placeholder="••••••••"
             disabled={submitting}
           />
@@ -322,14 +322,13 @@ function BootstrapForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="bPassword">Contraseña</Label>
-          <Input
+          <PasswordInput
             id="bPassword"
-            type="password"
             autoComplete="new-password"
             required
             minLength={8}
             value={password}
-            onChange={(e) => onPassword(e.target.value)}
+            onChange={onPassword}
             placeholder="Mínimo 8 caracteres"
             disabled={submitting}
           />
@@ -337,13 +336,12 @@ function BootstrapForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="bConfirm">Confirmar contraseña</Label>
-          <Input
+          <PasswordInput
             id="bConfirm"
-            type="password"
             autoComplete="new-password"
             required
             value={confirm}
-            onChange={(e) => onConfirm(e.target.value)}
+            onChange={onConfirm}
             placeholder="Repite la contraseña"
             disabled={submitting}
           />

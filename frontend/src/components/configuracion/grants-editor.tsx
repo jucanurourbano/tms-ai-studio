@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
@@ -43,14 +42,17 @@ const SELECT_CLASS =
 export function GrantsEditor({
   user,
   catalog,
+  open,
+  onOpenChange,
   onSaved,
 }: {
   user: AuthUser;
   /** Catálogo del backend, para mostrar qué concede el rol. `null` si no cargó. */
   catalog: RolesCatalog | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
 
@@ -68,7 +70,7 @@ export function GrantsEditor({
       for (const g of user.grants) inicial[g.module] = g.level;
       setChoices(inicial);
     }
-    setOpen(abierto);
+    onOpenChange(abierto);
   }
 
   async function guardar() {
@@ -79,7 +81,7 @@ export function GrantsEditor({
       ).map((m) => ({ module: m, level: choices[m] as AccessLevel }));
       await authApi.setGrants(user.id, grants);
       toast.success("Accesos adicionales actualizados");
-      setOpen(false);
+      onOpenChange(false);
       onSaved();
     } catch (err) {
       toast.error("No se pudieron guardar los accesos", {
@@ -90,23 +92,8 @@ export function GrantsEditor({
     }
   }
 
-  const total = user.grants.length;
-
   return (
     <Dialog open={open} onOpenChange={abrir}>
-      <DialogTrigger
-        render={
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <KeyRound className="h-3.5 w-3.5" />
-            Accesos
-            {total > 0 && (
-              <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-semibold tabular-nums text-primary">
-                {total}
-              </span>
-            )}
-          </Button>
-        }
-      />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Accesos adicionales · {user.full_name}</DialogTitle>

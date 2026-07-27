@@ -46,8 +46,29 @@ export interface AuthUser {
   role: UserRole;
   is_active: boolean;
   created_at?: string | null;
+  /** Perfil de equipo (asignación de historias del Agente Scrum). */
+  institutional_email?: string | null;
+  position?: string | null;
+  available_for_assignment: boolean;
   grants: ModuleGrant[];
   modules: EffectiveModules;
+}
+
+/** Huella del usuario: decide si conviene desactivar en vez de eliminar. */
+export interface UserActivity {
+  jobs: number;
+  validations: number;
+  total: number;
+  recommend_deactivate: boolean;
+}
+
+/** Campos editables del usuario. Solo se envía lo que se quiere cambiar. */
+export interface UpdateProfileInput {
+  full_name?: string;
+  email?: string;
+  institutional_email?: string;
+  position?: string;
+  available_for_assignment?: boolean;
 }
 
 export interface LoginResult {

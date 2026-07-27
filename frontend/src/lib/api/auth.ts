@@ -6,6 +6,8 @@ import type {
   ModuleGrant,
   RegisterInput,
   RolesCatalog,
+  UpdateProfileInput,
+  UserActivity,
   UserList,
   UserRole,
 } from "@/lib/types/auth";
@@ -71,6 +73,34 @@ export const authApi = {
       headers: JSON_HEADERS,
       body: JSON.stringify({ grants }),
     });
+  },
+
+  /** Edita identidad y perfil de equipo (solo lo informado). */
+  updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
+    return apiRequest<AuthUser>(`/auth/users/${userId}/profile`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Restablece la contraseña (la define un administrador). */
+  resetPassword(userId: string, password: string): Promise<AuthUser> {
+    return apiRequest<AuthUser>(`/auth/users/${userId}/password`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  /** Huella del usuario, para avisar antes de darlo de baja. */
+  userActivity(userId: string): Promise<UserActivity> {
+    return apiRequest<UserActivity>(`/auth/users/${userId}/activity`);
+  },
+
+  /** Baja LÓGICA: la ficha se conserva para no romper la trazabilidad. */
+  deleteUser(userId: string): Promise<AuthUser> {
+    return apiRequest<AuthUser>(`/auth/users/${userId}`, { method: "DELETE" });
   },
 
   /** Catálogo de roles/módulos/niveles con la matriz del backend. */
