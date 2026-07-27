@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
+from app.models.agent import JobStatusGroup
 from app.models.user import User
 from app.schemas.arquitectura import (
     ArchitectValidationPatchRequest,
@@ -112,14 +113,29 @@ async def list_jobs(
     session: AsyncSession = Depends(get_session),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    estado: JobStatusGroup = Query(
+        JobStatusGroup.TODOS,
+        description="Grupo de estado: completados | avisos | en_proceso | fallidos | todos.",
+    ),
 ) -> ApiResponse:
-    """Lista los jobs de Arquitectura (más recientes primero) con total."""
-    jobs, total = await _service(session).list_jobs(limit=limit, offset=offset)
+    """Lista los jobs de Arquitectura (más recientes primero) con total.
+
+    ``estado`` filtra por grupo (el filtro se aplica en la consulta, no sobre la
+    página, para que la paginación de cada pestaña sea real). ``total`` es el
+    total DEL FILTRO; ``status_counts`` trae el recuento de los cinco grupos sobre
+    todos los jobs del agente, que es lo que necesitan los tabs del historial.
+    """
+    service = _service(session)
+    jobs, total = await service.list_jobs(
+        limit=limit, offset=offset, status_group=estado
+    )
     return ApiResponse.ok(
         data={
             "total": total,
             "limit": limit,
             "offset": offset,
+            "estado": estado.value,
+            "status_counts": await service.count_jobs_by_group(),
             "items": [
                 {
                     "job_id": j.id,

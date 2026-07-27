@@ -7,7 +7,7 @@ usan el servicio, el seed y los tests del EF.
 
 from typing import Optional
 
-from app.models.agent import AgentJob, AgentType
+from app.models.agent import AgentJob, AgentType, JobStatusGroup
 from app.repositories.agent_job_repository import AgentJobRepository
 
 
@@ -42,9 +42,19 @@ class EFRepository(AgentJobRepository):
         return await super().find_completed_job_by_hash(content_hash, AgentType.EF)
 
     async def list_jobs(
-        self, limit: int = 20, offset: int = 0
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        status_group: JobStatusGroup = JobStatusGroup.TODOS,
     ) -> tuple[list[AgentJob], int]:
-        """Listado paginado de jobs EF (más recientes primero) + total."""
+        """Listado paginado de jobs EF (más recientes primero) + total del filtro."""
         return await super().list_jobs(
-            agent_type=AgentType.EF, limit=limit, offset=offset
+            agent_type=AgentType.EF,
+            limit=limit,
+            offset=offset,
+            status_group=status_group,
         )
+
+    async def count_jobs_by_group(self) -> dict[str, int]:
+        """Contadores por grupo de estado de los jobs EF."""
+        return await super().count_jobs_by_group(agent_type=AgentType.EF)

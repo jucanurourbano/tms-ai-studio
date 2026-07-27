@@ -62,6 +62,49 @@ class JobStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class JobStatusGroup(str, Enum):
+    """Agrupación de estados para el filtro del historial.
+
+    Los seis estados de :class:`JobStatus` son demasiados para una fila de tabs y
+    algunos son transitorios. Se agrupan por **lo que el usuario quiere hacer**:
+    abrir un resultado utilizable, revisar avisos, esperar algo en curso o
+    diagnosticar un fallo.
+
+    Vive junto a ``JobStatus`` (y no en la API o el frontend) para que el mapeo
+    sea único: la clave del grupo es la misma en el query param, en la respuesta
+    y en la URL del historial.
+    """
+
+    COMPLETADOS = "completados"
+    AVISOS = "avisos"
+    EN_PROCESO = "en_proceso"
+    FALLIDOS = "fallidos"
+    TODOS = "todos"
+
+
+#: Estados que componen cada grupo. ``TODOS`` no filtra (ausente a propósito).
+JOB_STATUS_GROUPS: dict[JobStatusGroup, tuple[JobStatus, ...]] = {
+    JobStatusGroup.COMPLETADOS: (JobStatus.COMPLETED,),
+    JobStatusGroup.AVISOS: (JobStatus.COMPLETED_WITH_WARNINGS,),
+    # ``NEEDS_INPUT`` cuenta como "en proceso": el trabajo no terminó, está
+    # esperando algo del usuario.
+    JobStatusGroup.EN_PROCESO: (
+        JobStatus.PENDING,
+        JobStatus.RUNNING,
+        JobStatus.NEEDS_INPUT,
+    ),
+    JobStatusGroup.FALLIDOS: (JobStatus.FAILED,),
+}
+
+
+def group_of_status(status: JobStatus) -> JobStatusGroup:
+    """Grupo al que pertenece un estado (para agregar contadores)."""
+    for grupo, estados in JOB_STATUS_GROUPS.items():
+        if status in estados:
+            return grupo
+    return JobStatusGroup.TODOS
+
+
 class EFSourceDocType(str, Enum):
     """Tipo de fuente (familia EF)."""
 

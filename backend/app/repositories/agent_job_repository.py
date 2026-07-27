@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import (
+    JOB_STATUS_GROUPS,
     AgentArtifactRow,
     AgentExternalLink,
     AgentJob,
@@ -20,8 +21,10 @@ from app.models.agent import (
     EFSourceDoc,
     EFSourceDocType,
     JobStatus,
+    JobStatusGroup,
     ValidationStatus,
     ValidationTargetType,
+    group_of_status,
 )
 
 _COMPLETED = (JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS)
@@ -154,16 +157,27 @@ class AgentJobRepository:
         agent_type: Optional[AgentType] = None,
         limit: int = 20,
         offset: int = 0,
+        status_group: JobStatusGroup = JobStatusGroup.TODOS,
     ) -> tuple[list[AgentJob], int]:
-        """Listado paginado de jobs (más recientes primero) + total.
+        """Listado paginado de jobs (más recientes primero) + total del filtro.
 
         Si se pasa ``agent_type`` filtra por ese agente; si no, devuelve todos.
+        ``status_group`` filtra por grupo de estado (ver ``JOB_STATUS_GROUPS``).
+
+        El filtro se aplica **en la consulta**, no sobre la página ya traída: si
+        no, la paginación de cada pestaña mentiría (una página de 20 podría
+        quedarse en 3 filas tras filtrar en el cliente).
         """
         base = select(AgentJob)
         count_stmt = select(func.count()).select_from(AgentJob)
         if agent_type is not None:
             base = base.where(AgentJob.agent_type == agent_type)
             count_stmt = count_stmt.where(AgentJob.agent_type == agent_type)
+
+        estados = JOB_STATUS_GROUPS.get(status_group)
+        if estados:
+            base = base.where(AgentJob.status.in_(estados))
+            count_stmt = count_stmt.where(AgentJob.status.in_(estados))
 
         total = await self.session.scalar(count_stmt) or 0
         # ``id`` (ULID, ordenable por tiempo) desempata cuando dos jobs comparten
@@ -193,6 +207,26 @@ class AgentJobRepository:
         self.session.add(row)
         await self.session.flush()
         return row
+
+    async def count_jobs_by_group(
+        self, *, agent_type: Optional[AgentType] = None
+    ) -> dict[str, int]:
+        """Contadores por grupo de estado, en **una sola consulta** agregada.
+
+        Cuenta sobre TODOS los jobs del agente (no sobre la página actual), que es
+        lo que necesitan los tabs del historial para no mentir. Devuelve siempre
+        las cinco claves, con 0 cuando no hay nada, para que el cliente no tenga
+        que rellenar huecos.
+        """
+        stmt = select(AgentJob.status, func.count()).group_by(AgentJob.status)
+        if agent_type is not None:
+            stmt = stmt.where(AgentJob.agent_type == agent_type)
+
+        counts: dict[str, int] = {g.value: 0 for g in JobStatusGroup}
+        for status, cantidad in (await self.session.execute(stmt)).all():
+            counts[group_of_status(status).value] += cantidad
+            counts[JobStatusGroup.TODOS.value] += cantidad
+        return counts
 
     async def get_artifact(self, job_id: str) -> Optional[AgentArtifactRow]:
         """Recupera el artefacto de un job."""

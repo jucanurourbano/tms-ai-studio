@@ -12,6 +12,7 @@ from ai.agents.base.refine import build_authoritative_context
 from ai.errors import IngestError
 from ai.tools.ingest import LocalStorage, compute_hash, ingest
 from app.config.settings import settings
+from app.models.agent import JobStatusGroup
 from app.models.ef import (
     EFJob,
     EFSourceDoc,
@@ -129,8 +130,19 @@ class EFAnalysisService:
         row = await self.repo.get_artifact(job_id)
         return row.data if row is not None else None
 
-    async def list_jobs(self, limit: int, offset: int) -> tuple[list[EFJob], int]:
-        return await self.repo.list_jobs(limit=limit, offset=offset)
+    async def list_jobs(
+        self,
+        limit: int,
+        offset: int,
+        status_group: JobStatusGroup = JobStatusGroup.TODOS,
+    ) -> tuple[list[EFJob], int]:
+        return await self.repo.list_jobs(
+            limit=limit, offset=offset, status_group=status_group
+        )
+
+    async def count_jobs_by_group(self) -> dict[str, int]:
+        """Contadores por grupo de estado (para los tabs del historial)."""
+        return await self.repo.count_jobs_by_group()
 
     async def register_validation(
         self,

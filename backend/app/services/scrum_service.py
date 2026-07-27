@@ -18,6 +18,7 @@ from app.config.settings import settings
 from app.models.agent import (
     AgentJob,
     AgentType,
+    JobStatusGroup,
     ValidationStatus,
     ValidationTargetType,
 )
@@ -136,10 +137,22 @@ class ScrumPlanningService:
         row = await self.repo.get_artifact(job_id)
         return row.data if row is not None else None
 
-    async def list_jobs(self, limit: int, offset: int) -> tuple[list[AgentJob], int]:
+    async def list_jobs(
+        self,
+        limit: int,
+        offset: int,
+        status_group: JobStatusGroup = JobStatusGroup.TODOS,
+    ) -> tuple[list[AgentJob], int]:
         return await self.repo.list_jobs(
-            agent_type=AgentType.SCRUM, limit=limit, offset=offset
+            agent_type=AgentType.SCRUM,
+            limit=limit,
+            offset=offset,
+            status_group=status_group,
         )
+
+    async def count_jobs_by_group(self) -> dict[str, int]:
+        """Contadores por grupo de estado (para los tabs del historial)."""
+        return await self.repo.count_jobs_by_group(agent_type=AgentType.SCRUM)
 
     # --- Equipo y asignación de historias -----------------------------------
 
