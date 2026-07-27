@@ -15,6 +15,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import DEFAULT_ROLE
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -46,7 +47,7 @@ class AuthService:
         email: str,
         full_name: str,
         password: str,
-        role: UserRole = UserRole.MEMBER,
+        role: UserRole = DEFAULT_ROLE,
         actor: Optional[User] = None,
     ) -> User:
         """Registra un usuario aplicando la regla de autorización + bootstrap.

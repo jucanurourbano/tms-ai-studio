@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.core.permissions import DEFAULT_ROLE, UserRole
 from app.models.user import User
 
 
@@ -18,7 +19,9 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=8, max_length=128)
-    role: Literal["admin", "member"] = "member"
+    # Se tipa con el enum (no con un ``Literal`` duplicado) para que añadir un
+    # rol en ``core.permissions`` no exija tocar este esquema.
+    role: UserRole = DEFAULT_ROLE
 
 
 class LoginRequest(BaseModel):
@@ -42,7 +45,7 @@ class UserOut(BaseModel):
     id: str
     email: str
     full_name: str
-    role: Literal["admin", "member"]
+    role: UserRole
     is_active: bool
     created_at: Optional[datetime] = None
 
@@ -53,7 +56,7 @@ class UserOut(BaseModel):
             id=user.id,
             email=user.email,
             full_name=user.full_name,
-            role=user.role.value,
+            role=user.role,
             is_active=user.is_active,
             created_at=user.created_at,
         )

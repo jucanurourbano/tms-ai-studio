@@ -70,7 +70,7 @@ async def test_bootstrap_primer_usuario_nace_admin(client):
             "email": "PRIMERO@urbano.com.pe",
             "full_name": "Primero",
             "password": "superseguro1",
-            "role": "member",  # se ignora en el bootstrap
+            "role": "analista",  # se ignora en el bootstrap
         },
     )
     assert r.status_code == 200
@@ -105,11 +105,11 @@ async def test_admin_registra_member(client):
             "email": "member@urbano.com.pe",
             "full_name": "Miembro",
             "password": "superseguro1",
-            "role": "member",
+            "role": "analista",
         },
     )
     assert r.status_code == 200
-    assert r.json()["data"]["role"] == "member"
+    assert r.json()["data"]["role"] == "analista"
 
 
 async def test_registro_email_duplicado_409(client):
@@ -202,7 +202,7 @@ async def test_panel_usuarios_solo_admin(client):
             "email": "member@urbano.com.pe",
             "full_name": "Miembro",
             "password": "superseguro1",
-            "role": "member",
+            "role": "analista",
         },
     )
     member_token = (
@@ -233,7 +233,7 @@ async def test_desactivar_usuario_impide_login(client):
                 "email": "member@urbano.com.pe",
                 "full_name": "Miembro",
                 "password": "superseguro1",
-                "role": "member",
+                "role": "analista",
             },
         )
     ).json()["data"]
