@@ -14,7 +14,9 @@ import { useEffect } from "react";
 
 import { useAuth } from "@/lib/auth/auth-context";
 import { AgentIconView } from "@/lib/agent-icons";
-import { defaultOpenGroups, ISDF_NAV, type PhaseNav } from "@/lib/isdf";
+import { defaultOpenGroups, navForModules, type PhaseNav } from "@/lib/isdf";
+import { ROLE_LABELS } from "@/lib/permissions";
+import type { UserRole } from "@/lib/types/auth";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +29,10 @@ interface AppSidebarProps {
 
 export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProps) {
   const pathname = usePathname();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, modules, can, logout } = useAuth();
+  // Navegación consciente de permisos: los módulos sin acceso NO aparecen
+  // (invisibles, no deshabilitados) y una fase sin agentes visibles desaparece.
+  const nav = navForModules(modules);
   const [collapsedPref, setCollapsed] = usePersistentState<boolean>(
     "sidebar:collapsed",
     false,
@@ -122,7 +127,7 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-2 py-4">
-        {ISDF_NAV.map((phase) => (
+        {nav.map((phase) => (
           <SidebarGroup
             key={phase.key}
             phase={phase}
@@ -134,8 +139,8 @@ export function AppSidebar({ onNavigate, forceExpanded = false }: AppSidebarProp
           />
         ))}
 
-        {/* Configuración (solo admin) */}
-        {isAdmin && (
+        {/* Configuración (solo con acceso al módulo `config`) */}
+        {can("config") && (
           <ConfigSection
             collapsed={collapsed}
             pathname={pathname}
@@ -195,12 +200,12 @@ function ConfigSection({ collapsed, pathname, onNavigate }: ConfigSectionProps) 
 }
 
 interface UserFooterProps {
-  user: { full_name: string; email: string; role: "admin" | "member" } | null;
+  user: { full_name: string; email: string; role: UserRole } | null;
   collapsed: boolean;
   onLogout: () => void;
 }
 
-/** Pie de la sidebar: identidad del usuario (nombre + rol) y cerrar sesión. */
+/** Pie de la sidebar: identidad del usuario (nombre + badge de rol) y cerrar sesión. */
 function UserFooter({ user, collapsed, onLogout }: UserFooterProps) {
   if (!user) return null;
   const initials = user.full_name
@@ -208,7 +213,7 @@ function UserFooter({ user, collapsed, onLogout }: UserFooterProps) {
     .slice(0, 2)
     .map((p) => p.charAt(0).toUpperCase())
     .join("");
-  const roleLabel = user.role === "admin" ? "Administrador" : "Miembro";
+  const roleLabel = ROLE_LABELS[user.role] ?? user.role;
 
   if (collapsed) {
     return (
@@ -236,9 +241,14 @@ function UserFooter({ user, collapsed, onLogout }: UserFooterProps) {
           <div className="truncate text-sm font-medium" title={user.full_name}>
             {user.full_name}
           </div>
-          <div className="truncate text-[11px] text-muted-foreground" title={user.email}>
+          {/* Badge del rol: el usuario debe poder saber de un vistazo con qué
+              permisos está trabajando (por qué ve unos módulos y no otros). */}
+          <span
+            className="mt-0.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary ring-1 ring-primary/20"
+            title={user.email}
+          >
             {roleLabel}
-          </div>
+          </span>
         </div>
       </div>
       <button

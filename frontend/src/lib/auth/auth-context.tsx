@@ -15,7 +15,13 @@ import {
   setAuthToken,
   setUnauthorizedHandler,
 } from "@/lib/api/client";
-import type { AuthUser } from "@/lib/types/auth";
+import { canAccess } from "@/lib/permissions";
+import type {
+  AccessLevel,
+  AuthUser,
+  EffectiveModules,
+  ModuleKey,
+} from "@/lib/types/auth";
 
 // Clave de persistencia del token. El token vive en memoria (lo adjunta el
 // cliente API) y se guarda en localStorage para sobrevivir recargas.
@@ -27,6 +33,12 @@ interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   isAdmin: boolean;
+  /** Módulos efectivos resueltos por el backend (rol + accesos adicionales). */
+  modules: EffectiveModules;
+  /** ¿El usuario alcanza `level` en `module`? Fuente única: `user.modules`. */
+  can: (module: ModuleKey, level?: AccessLevel) => boolean;
+  /** Refresca el usuario desde `/auth/me` (tras cambiarle rol o accesos). */
+  refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -114,16 +126,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }, [clearSession, router]);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  // Relee el usuario (y con él sus permisos). El backend resuelve los módulos en
+  // cada respuesta de /auth/me, así que un cambio de rol o de accesos se aplica
+  // sin necesidad de volver a iniciar sesión: el JWT identifica, no autoriza.
+  const refresh = useCallback(async () => {
+    try {
+      setUser(await authApi.me());
+    } catch {
+      /* un 401 ya lo gestiona el handler global */
+    }
+  }, []);
+
+  const value = useMemo<AuthContextValue>(() => {
+    const modules = user?.modules ?? {};
+    return {
       status,
       user,
       isAdmin: user?.role === "admin",
+      modules,
+      can: (module: ModuleKey, level: AccessLevel = "read") =>
+        canAccess(modules, module, level),
+      refresh,
       login,
       logout,
-    }),
-    [status, user, login, logout],
-  );
+    };
+  }, [status, user, refresh, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

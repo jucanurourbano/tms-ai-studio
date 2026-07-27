@@ -8,6 +8,7 @@ import { JobStatusBadge } from "@/components/ef/badges";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AgentIconView } from "@/lib/agent-icons";
+import { useAuth } from "@/lib/auth/auth-context";
 import { efApi } from "@/lib/api/ef";
 import { scrumApi } from "@/lib/api/scrum";
 import {
@@ -25,6 +26,9 @@ import { cn } from "@/lib/utils";
 
 const LIST_LIMIT = 20;
 const RECENT_COUNT = 5;
+
+/** Listado vacío para los módulos que el usuario no puede consultar. */
+const VACIO = { total: 0, limit: 0, offset: 0, items: [] };
 
 /** Estados cuyo costo real ya está consolidado (vale la pena sumar). */
 const COSTED_STATUSES = new Set(["COMPLETED", "COMPLETED_WITH_WARNINGS"]);
@@ -127,6 +131,9 @@ function MetricTile({
  * acumulado, sumando `metrics.cost` de los jobs del mes).
  */
 export function ActivityStrip() {
+  const { can } = useAuth();
+  const puedeEf = can("ef");
+  const puedeScrum = can("scrum");
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [metrics, setMetrics] = useState<MonthMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,9 +144,11 @@ export function ActivityStrip() {
 
     async function load() {
       try {
+        // Solo se consultan los módulos que el usuario puede leer: pedir uno sin
+        // permiso devolvería 403 y tumbaría la franja entera.
         const [ef, scrum] = await Promise.all([
-          efApi.listJobs(LIST_LIMIT),
-          scrumApi.listJobs(LIST_LIMIT),
+          puedeEf ? efApi.listJobs(LIST_LIMIT) : Promise.resolve(VACIO),
+          puedeScrum ? scrumApi.listJobs(LIST_LIMIT) : Promise.resolve(VACIO),
         ]);
         if (cancelled) return;
 
@@ -178,7 +187,10 @@ export function ActivityStrip() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [puedeEf, puedeScrum]);
+
+  // Sin acceso a ninguno de los dos módulos con historial, la franja no aplica.
+  if (!puedeEf && !puedeScrum) return null;
 
   return (
     <section>
@@ -209,14 +221,20 @@ export function ActivityStrip() {
               </p>
             ) : rows.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Aún no hay análisis. Empieza con un{" "}
-                <Link
-                  href="/agents/ef/new"
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  nuevo análisis EF
-                </Link>
-                .
+                Aún no hay análisis.
+                {can("ef", "full") && (
+                  <>
+                    {" "}
+                    Empieza con un{" "}
+                    <Link
+                      href="/agents/ef/new"
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      nuevo análisis EF
+                    </Link>
+                    .
+                  </>
+                )}
               </p>
             ) : (
               <div className="-mx-2 divide-y divide-border/60">

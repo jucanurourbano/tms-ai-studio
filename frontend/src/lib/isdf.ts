@@ -4,6 +4,9 @@
 // Los iconos se referencian por clave (string) y se resuelven a componentes lucide
 // en la sidebar, para mantener este módulo libre de dependencias de UI.
 
+import { canAccess } from "@/lib/permissions";
+import type { EffectiveModules, ModuleKey } from "@/lib/types/auth";
+
 export type AgentIcon =
   | "file-search"
   | "kanban"
@@ -18,6 +21,11 @@ export type AgentIcon =
 export interface AgentNav {
   key: string;
   name: string;
+  /**
+   * Módulo de permisos al que pertenece (ver `lib/permissions.ts`). La sidebar y
+   * el dashboard solo muestran los agentes cuyo módulo el usuario puede ver.
+   */
+  module: ModuleKey;
   href?: string;
   enabled: boolean;
   icon: AgentIcon;
@@ -39,6 +47,7 @@ export const ISDF_NAV: PhaseNav[] = [
     agents: [
       {
         key: "ef",
+        module: "ef",
         name: "Agente EF",
         href: "/agents/ef",
         enabled: true,
@@ -54,6 +63,7 @@ export const ISDF_NAV: PhaseNav[] = [
     agents: [
       {
         key: "arquitectura",
+        module: "arquitectura",
         name: "Arquitectura",
         href: "/agents/arquitectura",
         enabled: true,
@@ -63,6 +73,7 @@ export const ISDF_NAV: PhaseNav[] = [
       },
       {
         key: "bd",
+        module: "bd",
         name: "Base de Datos",
         enabled: false,
         icon: "database",
@@ -77,6 +88,7 @@ export const ISDF_NAV: PhaseNav[] = [
     agents: [
       {
         key: "api",
+        module: "api",
         name: "API",
         enabled: false,
         icon: "plug",
@@ -84,6 +96,7 @@ export const ISDF_NAV: PhaseNav[] = [
       },
       {
         key: "backend",
+        module: "backend",
         name: "Backend",
         enabled: false,
         icon: "server",
@@ -91,6 +104,7 @@ export const ISDF_NAV: PhaseNav[] = [
       },
       {
         key: "frontend",
+        module: "frontend",
         name: "Frontend",
         enabled: false,
         icon: "monitor",
@@ -104,6 +118,7 @@ export const ISDF_NAV: PhaseNav[] = [
     agents: [
       {
         key: "qa",
+        module: "qa",
         name: "QA",
         enabled: false,
         icon: "shield-check",
@@ -117,6 +132,7 @@ export const ISDF_NAV: PhaseNav[] = [
     agents: [
       {
         key: "scrum",
+        module: "scrum",
         name: "Agente Scrum",
         href: "/agents/scrum",
         enabled: true,
@@ -126,6 +142,7 @@ export const ISDF_NAV: PhaseNav[] = [
       },
       {
         key: "devops",
+        module: "devops",
         name: "DevOps",
         enabled: false,
         icon: "rocket",
@@ -143,6 +160,29 @@ export interface FlatAgent extends AgentNav {
 /** Aplana `ISDF_NAV` a una única lista de agentes, con su fase, en orden ISDF. */
 export function flatAgents(): FlatAgent[] {
   return ISDF_NAV.flatMap((p) =>
+    p.agents.map((a) => ({ ...a, phase: p.phase })),
+  );
+}
+
+/**
+ * Navegación filtrada por permisos: solo las fases y agentes cuyo módulo el
+ * usuario puede al menos LEER. Los módulos sin acceso quedan **invisibles**, no
+ * deshabilitados; una fase sin agentes visibles desaparece entera.
+ *
+ * Ojo: "visible" y "activo" son cosas distintas. Un developer ve API/Backend/
+ * Frontend porque tiene permiso, y siguen mostrándose como "pronto" mientras el
+ * agente no exista (`enabled: false`).
+ */
+export function navForModules(modules: EffectiveModules): PhaseNav[] {
+  return ISDF_NAV.map((phase) => ({
+    ...phase,
+    agents: phase.agents.filter((a) => canAccess(modules, a.module)),
+  })).filter((phase) => phase.agents.length > 0);
+}
+
+/** Agentes visibles para esos permisos, aplanados (dashboard). */
+export function flatAgentsForModules(modules: EffectiveModules): FlatAgent[] {
+  return navForModules(modules).flatMap((p) =>
     p.agents.map((a) => ({ ...a, phase: p.phase })),
   );
 }

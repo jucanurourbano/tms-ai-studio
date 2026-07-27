@@ -3,8 +3,11 @@
 import type {
   AuthUser,
   LoginResult,
+  ModuleGrant,
   RegisterInput,
+  RolesCatalog,
   UserList,
+  UserRole,
 } from "@/lib/types/auth";
 
 import { apiRequest } from "./client";
@@ -47,5 +50,31 @@ export const authApi = {
       headers: JSON_HEADERS,
       body: JSON.stringify({ is_active: isActive }),
     });
+  },
+
+  /** Cambia el rol funcional de un usuario (solo rol admin). */
+  setRole(userId: string, role: UserRole): Promise<AuthUser> {
+    return apiRequest<AuthUser>(`/auth/users/${userId}/role`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  /**
+   * Reemplaza los accesos adicionales de un usuario (solo rol admin).
+   * Semántica de *replace*: lo que no venga en la lista se elimina.
+   */
+  setGrants(userId: string, grants: ModuleGrant[]): Promise<AuthUser> {
+    return apiRequest<AuthUser>(`/auth/users/${userId}/grants`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ grants }),
+    });
+  },
+
+  /** Catálogo de roles/módulos/niveles con la matriz del backend. */
+  roles(): Promise<RolesCatalog> {
+    return apiRequest<RolesCatalog>("/auth/roles");
   },
 };

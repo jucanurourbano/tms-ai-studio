@@ -1,5 +1,9 @@
+"use client";
+
 import { FileSearch, History, Sparkles } from "lucide-react";
 import Link from "next/link";
+
+import { useAuth } from "@/lib/auth/auth-context";
 
 /**
  * Hero del dashboard con identidad de producto IA: degradado violeta profundo y
@@ -7,6 +11,11 @@ import Link from "next/link";
  * dos CTAs (nuevo análisis EF / ver historial).
  */
 export function DashboardHero() {
+  // Los CTAs son de EF: se muestran solo si el usuario alcanza ese módulo, para
+  // no ofrecer atajos que terminarían en un aviso de "sin permiso".
+  const { can } = useAuth();
+  const puedeCrearEf = can("ef", "full");
+  const puedeVerEf = can("ef");
   return (
     <section className="hero-ai relative mb-6 overflow-hidden rounded-2xl px-6 py-10 text-white shadow-sm sm:px-10 sm:py-12">
       <div className="relative max-w-full">
@@ -29,22 +38,28 @@ export function DashboardHero() {
           trazabilidad de extremo a extremo.
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/agents/ef/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-violet-800 shadow-sm transition-all hover:bg-white/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-violet-800"
-          >
-            <FileSearch className="h-4 w-4" />
-            Nuevo análisis EF
-          </Link>
-          <Link
-            href="/agents/ef/jobs"
-            className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-violet-800"
-          >
-            <History className="h-4 w-4" />
-            Ver historial
-          </Link>
-        </div>
+        {(puedeCrearEf || puedeVerEf) && (
+          <div className="mt-6 flex flex-wrap gap-3">
+            {puedeCrearEf && (
+              <Link
+                href="/agents/ef/new"
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-violet-800 shadow-sm transition-all hover:bg-white/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-violet-800"
+              >
+                <FileSearch className="h-4 w-4" />
+                Nuevo análisis EF
+              </Link>
+            )}
+            {puedeVerEf && (
+              <Link
+                href="/agents/ef/jobs"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-violet-800"
+              >
+                <History className="h-4 w-4" />
+                Ver historial
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

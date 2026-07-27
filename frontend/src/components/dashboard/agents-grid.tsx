@@ -1,19 +1,27 @@
+"use client";
+
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AgentIconView } from "@/lib/agent-icons";
-import { type FlatAgent, flatAgents } from "@/lib/isdf";
+import { useAuth } from "@/lib/auth/auth-context";
+import { type FlatAgent, flatAgentsForModules } from "@/lib/isdf";
 import { cn } from "@/lib/utils";
 
 /**
  * Grid de agentes del ISDF: cada agente es una tarjeta con su icono (contenedor
  * con glow violeta), nombre, descripción y badge de estado. Los activos son
  * clicables con hover elevado; los próximos se muestran atenuados.
+ *
+ * Solo se muestran los agentes cuyo módulo el usuario puede ver: el dashboard
+ * refleja el mismo alcance que la sidebar, sin tarjetas que lleven a un 403.
  */
 export function AgentsGrid() {
-  const agents = flatAgents();
+  const { modules } = useAuth();
+  const agents = flatAgentsForModules(modules);
+  if (agents.length === 0) return null;
   return (
     <section className="mb-6">
       <h2 className="mb-3 font-heading text-base font-semibold tracking-tight">

@@ -1,6 +1,43 @@
-// Tipos de autenticación (espejo de los esquemas del backend).
+// Tipos de autenticación y permisos (espejo de los esquemas del backend).
+// La matriz rol → módulos vive SOLO en el backend (`app/core/permissions.py`);
+// aquí se consumen los módulos ya resueltos que envía `GET /auth/me`.
 
-export type UserRole = "admin" | "member";
+/** Roles funcionales por fase del ISDF. */
+export type UserRole =
+  | "admin"
+  | "procesos"
+  | "analista"
+  | "arquitecto"
+  | "developer"
+  | "qa";
+
+/** Módulos protegibles: un agente del ISDF, o la configuración. */
+export type ModuleKey =
+  | "ef"
+  | "scrum"
+  | "arquitectura"
+  | "bd"
+  | "api"
+  | "backend"
+  | "frontend"
+  | "qa"
+  | "devops"
+  | "config";
+
+/** Nivel de acceso a un módulo. `full` implica `read`. */
+export type AccessLevel = "read" | "full";
+
+/** Acceso adicional explícito concedido a un usuario. */
+export interface ModuleGrant {
+  module: ModuleKey;
+  level: AccessLevel;
+}
+
+/**
+ * Módulos efectivos: rol + accesos adicionales, ya resueltos por el backend.
+ * Un módulo ausente significa "sin acceso de ningún tipo".
+ */
+export type EffectiveModules = Partial<Record<ModuleKey, AccessLevel>>;
 
 export interface AuthUser {
   id: string;
@@ -9,6 +46,8 @@ export interface AuthUser {
   role: UserRole;
   is_active: boolean;
   created_at?: string | null;
+  grants: ModuleGrant[];
+  modules: EffectiveModules;
 }
 
 export interface LoginResult {
@@ -30,4 +69,15 @@ export interface RegisterInput {
   full_name: string;
   password: string;
   role: UserRole;
+}
+
+/** Catálogo de `GET /auth/roles`: la matriz del backend, para el panel. */
+export interface RolesCatalog {
+  roles: {
+    value: UserRole;
+    label: string;
+    modules: Record<string, AccessLevel>;
+  }[];
+  modules: { value: ModuleKey; label: string }[];
+  levels: AccessLevel[];
 }

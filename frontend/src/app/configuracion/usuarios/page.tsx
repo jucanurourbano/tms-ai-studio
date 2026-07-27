@@ -24,20 +24,23 @@ import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { absoluteTime, relativeTime } from "@/lib/format";
+import { ALL_ROLES, ROLE_LABELS } from "@/lib/permissions";
 import type { AuthUser, UserRole } from "@/lib/types/auth";
 import { cn } from "@/lib/utils";
 
 function RoleBadge({ role }: { role: UserRole }) {
-  return role === "admin" ? (
+  // El admin se distingue en violeta (permisos totales); el resto de roles
+  // funcionales comparten un badge neutro con su etiqueta.
+  return (
     <Badge
       variant="outline"
-      className="border-violet-300 bg-violet-50 text-violet-700"
+      className={
+        role === "admin"
+          ? "border-violet-300 bg-violet-50 text-violet-700"
+          : "text-muted-foreground"
+      }
     >
-      Administrador
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="text-muted-foreground">
-      Miembro
+      {ROLE_LABELS[role] ?? role}
     </Badge>
   );
 }
@@ -67,7 +70,7 @@ export default function UsuariosPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("member");
+  const [role, setRole] = useState<UserRole>("analista");
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -101,7 +104,7 @@ export default function UsuariosPage() {
       setFullName("");
       setEmail("");
       setPassword("");
-      setRole("member");
+      setRole("analista");
       fetchUsers();
     } catch (err) {
       toast.error(
@@ -208,8 +211,11 @@ export default function UsuariosPage() {
                 disabled={submitting}
                 className="flex h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
               >
-                <option value="member">Miembro</option>
-                <option value="admin">Administrador</option>
+                {ALL_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="sm:col-span-2 lg:col-span-4">
