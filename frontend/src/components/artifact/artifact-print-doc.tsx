@@ -25,7 +25,9 @@ export function ArtifactPrintDoc({
   if (!active) return null;
 
   return (
-    <div className="hidden print:block">
+    // El id permite comprobar desde fuera si el contenido asíncrono (diagramas)
+    // ya está dentro del documento antes de lanzar la impresión.
+    <div id="artifact-print-doc" className="hidden print:block">
       {/* Índice: se deriva de las secciones, así nunca queda desfasado. */}
       <div className="break-after-page">
         <h2 className="border-b-2 border-violet-800/70 pb-2 font-heading text-lg font-bold text-violet-800">

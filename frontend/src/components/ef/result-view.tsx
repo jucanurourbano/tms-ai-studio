@@ -1001,7 +1001,7 @@ export function ResultView({ job }: { job: JobDetail }) {
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={printNow}
+                onClick={() => printNow()}
               >
                 <Printer className="h-3.5 w-3.5" />
                 Exportar PDF
