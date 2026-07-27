@@ -50,6 +50,7 @@ import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
 import {
   ActionGroup,
   HeaderActions,
+  HUB_WIDTH,
   HubCard,
   HubGrid,
   HubHint,
@@ -943,6 +944,7 @@ export function ResultView({ job }: { job: JobDetail }) {
 
         {/* Barra superior de afinamiento */}
         <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur print:hidden">
+          <div className={HUB_WIDTH}>
           {/* (a) Identidad: qué artefacto es y en qué estado está. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="font-heading font-semibold">EF v1.2.0</span>
@@ -1080,10 +1082,12 @@ export function ResultView({ job }: { job: JobDetail }) {
               </HeaderActions>
             </div>
           </div>
+          </div>
         </div>
 
         {/* (b) Mini-stats, con el estado y la fuente separados a la derecha. */}
         <div className="border-b px-6 py-5 print:hidden">
+          <div className={HUB_WIDTH}>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <StatRow>
               <Stat
@@ -1123,6 +1127,7 @@ export function ResultView({ job }: { job: JobDetail }) {
             <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">
               {a.summary}
             </p>
+          </div>
           </div>
         </div>
 

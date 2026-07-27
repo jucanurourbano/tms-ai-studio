@@ -46,6 +46,7 @@ import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
 import {
   ActionGroup,
   HeaderActions,
+  HUB_WIDTH,
   HubCard,
   HubGrid,
   HubHint,
@@ -1115,6 +1116,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
 
         {/* Barra superior de afinamiento + semáforo */}
         <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur print:hidden">
+          <div className={HUB_WIDTH}>
           {/* (a) Identidad: qué plan es, de qué EF sale y en qué estado está. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="font-heading font-semibold">Plan Scrum v1.0.0</span>
@@ -1328,10 +1330,12 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               <StatusPill ok={checks.no_must_unassigned} label="Sin must sin asignar" />
             </div>
           )}
+          </div>
         </div>
 
         {/* (b) Mini-stats, con el estado separado a la derecha. */}
         <div className="border-b px-6 py-5 print:hidden">
+          <div className={HUB_WIDTH}>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <StatRow>
               <Stat
@@ -1364,6 +1368,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             <div className="md:ml-auto md:border-l md:border-border/70 md:pl-8">
               <JobStatusBadge status={job.status} />
             </div>
+          </div>
           </div>
         </div>
 

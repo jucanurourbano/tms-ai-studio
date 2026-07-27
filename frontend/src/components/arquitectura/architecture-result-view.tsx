@@ -41,6 +41,7 @@ import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
 import {
   ActionGroup,
   HeaderActions,
+  HUB_WIDTH,
   HubCard,
   HubGrid,
   HubHint,
@@ -1089,6 +1090,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
 
         {/* Barra superior de afinamiento + semáforo */}
         <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur print:hidden">
+          <div className={HUB_WIDTH}>
           {/* (a) Identidad: qué diseño es, de qué fuentes sale y en qué estado. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <span className="font-heading font-semibold">Arquitectura v1.0.0</span>
@@ -1225,10 +1227,12 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </HeaderActions>
             </div>
           </div>
+          </div>
         </div>
 
         {/* (b) Mini-stats, con el estado separado a la derecha. */}
         <div className="border-b px-6 py-5 print:hidden">
+          <div className={HUB_WIDTH}>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <StatRow>
               <Stat
@@ -1261,6 +1265,7 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
             <div className="md:ml-auto md:border-l md:border-border/70 md:pl-8">
               <JobStatusBadge status={job.status} />
             </div>
+          </div>
           </div>
         </div>
 

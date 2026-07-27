@@ -526,6 +526,39 @@
 }
 
 /*
+ * SILUETA DE LAS TARJETAS DEL HUB — rectángulo con una esquina biselada.
+ *
+ * Un solo recorte, siempre el mismo (superior derecha, 18px): da carácter de
+ * interfaz técnica sin caer en el origami. `clip-path` y `border-radius`
+ * COMPONEN —el navegador pinta el fondo redondeado y luego recorta—, así que la
+ * tarjeta conserva sus esquinas suaves y pierde solo la biselada.
+ *
+ * Lo que `clip-path` sí rompe es todo lo que se pinta FUERA de la caja:
+ *   · el anillo (`ring`, que es box-shadow) → se sustituye por una capa exterior
+ *     de 1px cuyo fondo hace de borde y que lleva la misma silueta;
+ *   · la sombra (`box-shadow`) → se sustituye por `filter: drop-shadow`, que sí
+ *     sigue el recorte. El color del glow lo pone `--tone-glow` (el tono de la
+ *     sección), con una sombra neutra debajo para dar profundidad real.
+ */
+.hub-bevel {
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+}
+/* 1px menos: la capa interior va embebida y su diagonal debe quedar paralela. */
+.hub-bevel-inner {
+  clip-path: polygon(0 0, calc(100% - 21px) 0, 100% 21px, 100% 100%, 0 100%);
+}
+.hub-card-lift {
+  transition:
+    transform var(--dur-mid) var(--ease-out),
+    filter var(--dur-mid) var(--ease-out),
+    background-color var(--dur-mid) var(--ease-out);
+}
+.hub-card-lift:hover {
+  filter: drop-shadow(0 12px 20px var(--tone-glow, rgba(0, 0, 0, 0.12)))
+    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.06));
+}
+
+/*
  * PATRÓN DECORATIVO de las tarjetas del hub. Un guiño a la naturaleza de la
  * sección —puntos = estructura (Modelo), diagonales = escrutinio (Análisis),
  * ondas = lenguaje (Interpretación)— al 6% de opacidad y confinado a la esquina

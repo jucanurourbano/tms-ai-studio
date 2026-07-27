@@ -19,18 +19,32 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
+ * RETÍCULA DEL HUB. Un único ancho para las tres franjas de la cabecera y para
+ * el grid, de modo que stats, resumen y tarjetas queden alineados al mismo eje.
+ *
+ * 96rem (1440px) es un tope, no un objetivo: por debajo el contenedor es fluido
+ * y las tarjetas crecen —a 1440px de ventana no sobra ni un margen (4%, que es el
+ * padding de la franja), y a 1920px sobra un 14%—, y por encima corta para que
+ * una tarjeta de tres columnas no acabe midiendo medio metro en un monitor de 27".
+ */
+export const HUB_WIDTH = "mx-auto w-full max-w-[96rem]";
+
+/**
  * Rejilla del hub: **flex con envoltura y centrado**, no `grid`.
  *
  * Con `grid-cols-3` y cinco secciones la última fila queda pegada a la izquierda
  * y con un hueco a la derecha que se lee como "falta algo". Envolviendo y
  * centrando, 5 tarjetas caen como 3 + 2 centradas, 6 como 3 + 3 y 9 como 3 × 3 —
  * equilibrado sea cual sea el agente, sin casos especiales por número.
- *
- * El `max-w-5xl` evita que cinco tarjetas naden en un monitor ancho.
  */
 export function HubGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="stagger-children mx-auto flex max-w-5xl flex-wrap justify-center gap-7">
+    <div
+      className={cn(
+        "stagger-children flex flex-wrap justify-center gap-7",
+        HUB_WIDTH,
+      )}
+    >
       {children}
     </div>
   );
@@ -43,7 +57,12 @@ export function HubGrid({ children }: { children: React.ReactNode }) {
  */
 export function HubHint() {
   return (
-    <p className="mx-auto mt-5 flex max-w-5xl items-center justify-center gap-1.5 text-[10px] text-meta-foreground/80">
+    <p
+      className={cn(
+        "mt-5 flex items-center justify-center gap-1.5 text-[10px] text-meta-foreground/80",
+        HUB_WIDTH,
+      )}
+    >
       <Keyboard className="h-3 w-3 shrink-0" aria-hidden />
       <span>
         <Kbd>←</Kbd> <Kbd>→</Kbd> cambian de sección · <Kbd>Esc</Kbd> cierra · los
@@ -97,92 +116,104 @@ export function HubCard({
   const t = toneOf(urgent ? "danger" : tone);
   const patternClass = patternClassOf(pattern);
   return (
+    // DOS CAPAS. La exterior es el borde: su fondo pinta el hairline (1px de
+    // padding) y lleva la silueta biselada. Hace falta porque `clip-path` recorta
+    // el `ring`, que es un box-shadow y se pinta fuera de la caja. Al enfocar,
+    // esa misma capa engorda a 2px y se vuelve violeta: el foco sigue el bisel
+    // en vez de dibujar un rectángulo por encima.
     <button
       type="button"
       onClick={onOpen}
       aria-haspopup="dialog"
+      style={{ "--tone-glow": t.glow } as React.CSSProperties}
       className={cn(
         // Anchos explícitos porque el contenedor es flex: 1 / 2 / 3 columnas.
         "w-full sm:w-[calc(50%-0.875rem)] lg:w-[calc(33.333%-1.167rem)]",
-        "group relative flex min-h-40 flex-col overflow-hidden rounded-2xl bg-card p-5 pt-6 text-left ring-1 transition-all duration-200 ease-out",
-        // Elevación + glow del tono: el hover confirma que la tarjeta es un botón.
-        "hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        t.hoverGlow,
-        urgent ? "ring-red-300" : "ring-foreground/10",
-        t.hoverRing,
-        // La fila de decisión respira un poco más (solo donde hay tres columnas).
-        prominent && "lg:min-h-48",
+        "hub-bevel hub-card-lift group flex rounded-2xl p-px text-left hover:-translate-y-0.5",
+        "focus-visible:bg-primary focus-visible:p-0.5 focus-visible:outline-none",
+        urgent ? "bg-red-300" : "bg-foreground/10",
+        t.edge,
       )}
     >
-      {/* (b) Barra de acento del canto superior: identifica la sección de lejos. */}
       <span
-        className={cn("absolute inset-x-0 top-0 h-[3px]", t.bar)}
-        aria-hidden
-      />
-      {/* Textura decorativa, confinada a la esquina y al 6% de opacidad. */}
-      {patternClass && (
-        <span className={cn("hub-pattern", patternClass, t.pattern)} aria-hidden />
-      )}
-
-      <div className="relative flex w-full items-center gap-3">
-        {/* (a) Icono con degradado del acento y una esquina distinta: un guiño
-            de forma dentro de la misma retícula, no una silueta. */}
-        <span
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl rounded-bl-md ring-1 ring-inset ring-foreground/5 transition-transform duration-200 ease-out group-hover:scale-105 [&_svg]:h-5 [&_svg]:w-5",
-            t.icon,
-          )}
-        >
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1 font-heading text-[15px] font-semibold tracking-tight">
-          {title}
-        </span>
-        {urgent && urgentLabel && (
-          <span className="inline-flex shrink-0 items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
-            {urgentLabel}
-          </span>
+        className={cn(
+          "hub-bevel-inner relative flex min-h-40 w-full flex-col rounded-2xl bg-card p-5 pt-6",
+          // La fila de decisión respira un poco más (solo con tres columnas).
+          prominent && "lg:min-h-48",
         )}
-        <ChevronRight className="h-4 w-4 shrink-0 text-meta-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-foreground/70" />
-      </div>
+      >
+        {/* (b) Barra de acento del canto superior: identifica la sección de lejos
+            y muere en la diagonal, que es lo que hace legible el bisel. */}
+        <span
+          className={cn("absolute inset-x-0 top-0 h-[3px]", t.bar)}
+          aria-hidden
+        />
+        {/* Textura decorativa, confinada a la esquina y al 6% de opacidad. */}
+        {patternClass && (
+          <span className={cn("hub-pattern", patternClass, t.pattern)} aria-hidden />
+        )}
 
-      {/* La cifra es el protagonista visual: se lee antes que el título. */}
-      {stat ? (
-        <span className="relative mt-3 block">
+        <span className="relative flex w-full items-center gap-3">
+          {/* (a) Icono con degradado del acento y una esquina distinta: un guiño
+              de forma dentro de la misma retícula, no una silueta. */}
           <span
             className={cn(
-              "block font-heading text-[22px] font-semibold leading-none tabular-nums",
-              t.number,
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl rounded-bl-md ring-1 ring-inset ring-foreground/5 transition-transform duration-200 ease-out group-hover:scale-105 [&_svg]:h-5 [&_svg]:w-5",
+              t.icon,
             )}
           >
-            {stat.value}
+            {icon}
           </span>
-          <span className="mt-1 block text-[11px] text-meta-foreground">
-            {stat.label}
+          <span className="min-w-0 flex-1 font-heading text-[15px] font-semibold tracking-tight">
+            {title}
           </span>
-        </span>
-      ) : (
-        metrics && (
-          <span className="relative mt-3 block text-xs text-muted-foreground">
-            {metrics}
-          </span>
-        )
-      )}
-
-      {insight && (
-        // Hairline: separa "cuánto hay" (arriba) de "qué me reclama" (abajo).
-        <span
-          className={cn(
-            "relative mt-auto flex items-start gap-1.5 border-t pt-3 text-xs leading-snug",
-            urgent
-              ? "border-red-200 font-medium text-red-600"
-              : "border-border/60 text-meta-foreground",
+          {urgent && urgentLabel && (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
+              {urgentLabel}
+            </span>
           )}
-        >
-          {urgent && <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />}
-          {insight}
+          {/* El chevron se aparta del bisel: la esquina cortada ya no es sitio. */}
+          <ChevronRight className="mr-2 h-4 w-4 shrink-0 text-meta-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-foreground/70" />
         </span>
-      )}
+
+        {/* La cifra es el protagonista visual: se lee antes que el título. */}
+        {stat ? (
+          <span className="relative mt-3 block">
+            <span
+              className={cn(
+                "block font-heading text-[22px] font-semibold leading-none tabular-nums",
+                t.number,
+              )}
+            >
+              {stat.value}
+            </span>
+            <span className="mt-1 block text-[11px] text-meta-foreground">
+              {stat.label}
+            </span>
+          </span>
+        ) : (
+          metrics && (
+            <span className="relative mt-3 block text-xs text-muted-foreground">
+              {metrics}
+            </span>
+          )
+        )}
+
+        {insight && (
+          // Hairline: separa "cuánto hay" (arriba) de "qué me reclama" (abajo).
+          <span
+            className={cn(
+              "relative mt-auto flex items-start gap-1.5 border-t pt-3 text-xs leading-snug",
+              urgent
+                ? "border-red-200 font-medium text-red-600"
+                : "border-border/60 text-meta-foreground",
+            )}
+          >
+            {urgent && <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />}
+            {insight}
+          </span>
+        )}
+      </span>
     </button>
   );
 }
