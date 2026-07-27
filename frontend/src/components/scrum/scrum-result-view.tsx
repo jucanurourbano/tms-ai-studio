@@ -628,7 +628,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       printTitle: "Backlog de producto",
       icon: <ListOrdered />,
       count: a.product_backlog.ordered_story_ids.length,
-      metrics: `${plural(a.product_backlog.ordered_story_ids.length, "historia")} · ${a.product_backlog.method}`,
+      tone: "blue",
+      stat: {
+        value: a.product_backlog.ordered_story_ids.length,
+        label: `historias priorizadas por ${a.product_backlog.method}`,
+      },
       insight: (
         <span>
           {plural(a.metrics.points_total, "punto")} · {mustCount} must
@@ -666,7 +670,13 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       title: "Sprints",
       icon: <Layers />,
       count: a.sprints.length,
-      metrics: `${plural(a.sprints.length, "sprint")} · ${a.metrics.points_total} pts`,
+      tone: "cyan",
+      // Puntos: el plan de sprints es capacidad y encaje, pura estructura.
+      pattern: "dots",
+      stat: {
+        value: a.sprints.length,
+        label: `sprints · ${a.metrics.points_total} puntos repartidos`,
+      },
       urgent: a.unassigned_story_ids.length > 0,
       urgentLabel:
         a.unassigned_story_ids.length > 0
@@ -758,7 +768,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       printTitle: "Historias de usuario",
       icon: <ListChecks />,
       count: a.stories.length,
-      metrics: `${a.stories.length} · ${estimated} estimadas`,
+      tone: "indigo",
+      stat: {
+        value: a.stories.length,
+        label: `historias · ${estimated} estimadas`,
+      },
       urgent: checks ? !checks.must_should_estimated : false,
       insight:
         unestimated > 0 ? (
@@ -780,7 +794,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       title: "Épicas",
       icon: <Hash />,
       count: a.epics.length,
-      metrics: plural(a.epics.length, "épica"),
+      tone: "violet",
+      stat: { value: a.epics.length, label: "épicas del backlog" },
       insight: (
         <span className="line-clamp-2">
           {a.epics.map((e) => e.title).join(" · ") || "Sin épicas"}
@@ -846,7 +861,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       printTitle: "Preguntas al Product Owner",
       icon: <MessagesSquare />,
       count: a.questions_for_po.length,
-      metrics: `${a.questions_for_po.length} · ${plural(blockingTotal, "bloqueante")}`,
+      tone: "rose",
+      stat: {
+        value: a.questions_for_po.length,
+        label: `preguntas al PO · ${plural(blockingTotal, "bloqueante")}`,
+      },
       urgent: blockingRemaining > 0,
       urgentLabel: blockingRemaining > 0 ? String(blockingRemaining) : undefined,
       insight:
@@ -957,10 +976,13 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       title: "Análisis",
       icon: <AlertTriangle />,
       count: a.analysis.risks.length + a.analysis.observations.length,
-      metrics: plural(
-        a.analysis.risks.length + a.analysis.observations.length,
-        "hallazgo",
-      ),
+      tone: "amber",
+      // Diagonales: escrutinio — riesgos y observaciones sobre el plan.
+      pattern: "lines",
+      stat: {
+        value: a.analysis.risks.length + a.analysis.observations.length,
+        label: "hallazgos sobre el plan",
+      },
       urgent: checks ? !checks.coverage_met : false,
       insight: (
         <span>
@@ -1384,16 +1406,19 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           )}
 
           <HubGrid>
-            {sections.map((s) => (
+            {sections.map((s, i) => (
               <HubCard
                 key={s.id}
-                module="scrum"
+                tone={s.tone}
+                pattern={s.pattern}
                 icon={s.icon}
                 title={s.title}
+                stat={s.stat}
                 metrics={s.metrics}
                 insight={s.insight}
                 urgent={s.urgent}
                 urgentLabel={s.urgentLabel}
+                prominent={i < 3}
                 onOpen={() =>
                   s.id === "preguntas" ? openQuestions() : hub.openSection(s.id)
                 }

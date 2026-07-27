@@ -10,8 +10,12 @@
 
 import { AlertCircle, ChevronRight, Keyboard } from "lucide-react";
 
-import { accentOf } from "@/lib/module-accent";
-import type { ModuleKey } from "@/lib/types/auth";
+import {
+  patternClassOf,
+  toneOf,
+  type SectionPattern,
+  type SectionTone,
+} from "@/lib/card-accent";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +30,7 @@ import { cn } from "@/lib/utils";
  */
 export function HubGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="stagger-children mx-auto flex max-w-5xl flex-wrap justify-center gap-4">
+    <div className="stagger-children mx-auto flex max-w-5xl flex-wrap justify-center gap-7">
       {children}
     </div>
   );
@@ -58,30 +62,40 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 export function HubCard({
-  module,
+  tone,
+  pattern,
   icon,
   title,
+  stat,
   metrics,
   insight,
   urgent = false,
   urgentLabel,
+  prominent = false,
   onOpen,
 }: {
-  /** Módulo del ISDF: de él sale el acento de color del icono. */
-  module: ModuleKey;
+  /** Tono propio de la sección; `urgent` lo sustituye por el rojo. */
+  tone?: SectionTone;
+  /** Textura de fondo, solo si dice algo de la naturaleza de la sección. */
+  pattern?: SectionPattern;
   icon: React.ReactNode;
   title: string;
-  /** Conteos clave, p. ej. "27 · 22 funcionales". */
+  /** La cifra protagonista y su etiqueta ("27" / "requisitos"). */
+  stat?: { value: React.ReactNode; label: string };
+  /** Alternativa a `stat` cuando la sección no se resume en un número. */
   metrics?: React.ReactNode;
   /** Una línea: lo que el usuario necesita saber sin abrir. */
   insight?: React.ReactNode;
   /** Hay algo que reclama acción (bloqueantes, must sin asignar…). */
   urgent?: boolean;
-  /** Texto del badge de urgencia (p. ej. "11 sin responder"). */
+  /** Texto del badge de urgencia (p. ej. "11"). */
   urgentLabel?: string;
+  /** Fila superior del hub: las secciones de decisión piden algo más de aire. */
+  prominent?: boolean;
   onOpen: () => void;
 }) {
-  const accent = accentOf(module);
+  const t = toneOf(urgent ? "danger" : tone);
+  const patternClass = patternClassOf(pattern);
   return (
     <button
       type="button"
@@ -89,56 +103,77 @@ export function HubCard({
       aria-haspopup="dialog"
       className={cn(
         // Anchos explícitos porque el contenedor es flex: 1 / 2 / 3 columnas.
-        "w-full sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)]",
-        "group relative flex min-h-32 flex-col rounded-2xl bg-card p-4 text-left ring-1 transition-all duration-200 ease-out",
-        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-foreground/5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        urgent
-          ? "ring-red-300 hover:ring-red-400"
-          : cn("ring-foreground/10", accent.hoverRing),
+        "w-full sm:w-[calc(50%-0.875rem)] lg:w-[calc(33.333%-1.167rem)]",
+        "group relative flex min-h-40 flex-col overflow-hidden rounded-2xl bg-card p-5 pt-6 text-left ring-1 transition-all duration-200 ease-out",
+        // Elevación + glow del tono: el hover confirma que la tarjeta es un botón.
+        "hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        t.hoverGlow,
+        urgent ? "ring-red-300" : "ring-foreground/10",
+        t.hoverRing,
+        // La fila de decisión respira un poco más (solo donde hay tres columnas).
+        prominent && "lg:min-h-48",
       )}
     >
-      {/* Barra de urgencia: el borde izquierdo grita antes que el texto. */}
-      {urgent && (
-        <span
-          className="absolute inset-y-4 left-0 w-0.5 rounded-full bg-red-500"
-          aria-hidden
-        />
+      {/* (b) Barra de acento del canto superior: identifica la sección de lejos. */}
+      <span
+        className={cn("absolute inset-x-0 top-0 h-[3px]", t.bar)}
+        aria-hidden
+      />
+      {/* Textura decorativa, confinada a la esquina y al 6% de opacidad. */}
+      {patternClass && (
+        <span className={cn("hub-pattern", patternClass, t.pattern)} aria-hidden />
       )}
 
-      <div className="flex w-full items-start gap-3">
+      <div className="relative flex w-full items-center gap-3">
+        {/* (a) Icono con degradado del acento y una esquina distinta: un guiño
+            de forma dentro de la misma retícula, no una silueta. */}
         <span
           className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-foreground/5 transition-transform duration-200 ease-out group-hover:scale-105 [&_svg]:h-5 [&_svg]:w-5",
-            urgent
-              ? "bg-gradient-to-br from-red-100 to-red-50 text-red-600"
-              : accent.iconGradient,
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl rounded-bl-md ring-1 ring-inset ring-foreground/5 transition-transform duration-200 ease-out group-hover:scale-105 [&_svg]:h-5 [&_svg]:w-5",
+            t.icon,
           )}
         >
           {icon}
         </span>
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              "block font-heading text-[15px] font-semibold tracking-tight transition-colors",
-              accent.groupHoverText,
-            )}
-          >
-            {title}
-          </span>
-          {metrics && (
-            <span className="mt-1 block text-xs tabular-nums text-muted-foreground">
-              {metrics}
-            </span>
-          )}
+        <span className="min-w-0 flex-1 font-heading text-[15px] font-semibold tracking-tight">
+          {title}
         </span>
+        {urgent && urgentLabel && (
+          <span className="inline-flex shrink-0 items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
+            {urgentLabel}
+          </span>
+        )}
         <ChevronRight className="h-4 w-4 shrink-0 text-meta-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-foreground/70" />
       </div>
+
+      {/* La cifra es el protagonista visual: se lee antes que el título. */}
+      {stat ? (
+        <span className="relative mt-3 block">
+          <span
+            className={cn(
+              "block font-heading text-[22px] font-semibold leading-none tabular-nums",
+              t.number,
+            )}
+          >
+            {stat.value}
+          </span>
+          <span className="mt-1 block text-[11px] text-meta-foreground">
+            {stat.label}
+          </span>
+        </span>
+      ) : (
+        metrics && (
+          <span className="relative mt-3 block text-xs text-muted-foreground">
+            {metrics}
+          </span>
+        )
+      )}
 
       {insight && (
         // Hairline: separa "cuánto hay" (arriba) de "qué me reclama" (abajo).
         <span
           className={cn(
-            "mt-auto flex items-start gap-1.5 border-t pt-2.5 text-xs leading-snug",
+            "relative mt-auto flex items-start gap-1.5 border-t pt-3 text-xs leading-snug",
             urgent
               ? "border-red-200 font-medium text-red-600"
               : "border-border/60 text-meta-foreground",
@@ -146,12 +181,6 @@ export function HubCard({
         >
           {urgent && <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />}
           {insight}
-        </span>
-      )}
-
-      {urgent && urgentLabel && (
-        <span className="absolute top-3.5 right-9 inline-flex items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
-          {urgentLabel}
         </span>
       )}
     </button>

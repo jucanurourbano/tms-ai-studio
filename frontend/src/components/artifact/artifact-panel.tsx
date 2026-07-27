@@ -37,6 +37,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  toneOf,
+  type SectionPattern,
+  type SectionTone,
+} from "@/lib/card-accent";
 import { accentOf } from "@/lib/module-accent";
 import type { ModuleKey } from "@/lib/types/auth";
 import type { ArtifactHub } from "@/lib/use-artifact-hub";
@@ -88,7 +93,13 @@ export interface HubSection {
   printTitle?: string;
   icon: React.ReactNode;
   count?: number;
-  /** Conteos de la tarjeta ("27 · 22 funcionales"). */
+  /** Tono propio de la sección: tiñe su tarjeta, su icono y su pill activa. */
+  tone?: SectionTone;
+  /** Textura de fondo de la tarjeta (solo si dice algo de la sección). */
+  pattern?: SectionPattern;
+  /** Cifra protagonista de la tarjeta y su etiqueta. */
+  stat?: { value: React.ReactNode; label: string };
+  /** Alternativa a `stat` cuando la sección no se resume en un número. */
   metrics?: React.ReactNode;
   /** Línea de insight de la tarjeta. */
   insight?: React.ReactNode;
@@ -172,7 +183,10 @@ function PanelInner({
 }) {
   const [query, setQuery] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
-  const accent = accentOf(module);
+  // La identidad de la sección viaja de la tarjeta al panel: el mismo tono
+  // tiñe el icono de la cabecera y la pill activa. Sin tono propio, manda el
+  // acento del módulo.
+  const accent = section.tone ? toneOf(section.tone) : accentOf(module);
 
   const tabs = section.tabs;
   const activeTab = tabs

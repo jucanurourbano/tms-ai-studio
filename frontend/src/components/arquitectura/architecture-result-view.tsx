@@ -327,9 +327,15 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Estilo arquitectónico",
       icon: <Layers />,
       searchable: false,
-      metrics: style
-        ? `${style.chosen} · tamaño ${a.context.size_class}`
-        : "Sin decidir",
+      tone: "teal",
+      // Ondas: el estilo es criterio y justificación, no inventario.
+      pattern: "waves",
+      stat: style
+        ? {
+            value: a.context.size_class,
+            label: `tamaño del alcance · ${style.chosen}`,
+          }
+        : { value: "—", label: "estilo sin decidir" },
       urgent: !style,
       insight: style ? (
         <span className="line-clamp-2">{style.rationale}</span>
@@ -395,7 +401,10 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       title: "Componentes",
       icon: <Boxes />,
       count: a.components.length,
-      metrics: plural(a.components.length, "componente"),
+      tone: "sky",
+      // Puntos: los componentes SON la estructura del sistema.
+      pattern: "dots",
+      stat: { value: a.components.length, label: "componentes del diseño" },
       insight: (
         <span className="line-clamp-2">
           {a.components.map((c) => c.name).join(" · ") || "Sin componentes"}
@@ -460,7 +469,8 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       title: "Diagramas",
       icon: <Network />,
       searchable: false,
-      metrics: `${plural(diagramCodes.length, "diagrama")} · Mermaid`,
+      tone: "blue",
+      stat: { value: diagramCodes.length, label: "diagramas Mermaid" },
       insight: <span>Componentes por capa y contexto del sistema</span>,
       tabs: [
         {
@@ -492,7 +502,8 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Stack tecnológico",
       icon: <Wrench />,
       count: a.stack.length,
-      metrics: plural(a.stack.length, "capa"),
+      tone: "indigo",
+      stat: { value: a.stack.length, label: "capas del stack de la casa" },
       insight: (
         <span className="line-clamp-2">
           {a.stack.map((s) => s.technology).join(" · ") ||
@@ -561,7 +572,8 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Decisiones de arquitectura (ADRs)",
       icon: <FileStack />,
       count: a.adrs.length,
-      metrics: plural(a.adrs.length, "decisión", "decisiones"),
+      tone: "violet",
+      stat: { value: a.adrs.length, label: "decisiones registradas" },
       insight: (
         <span className="line-clamp-2">
           {a.adrs.map((adr) => adr.title).join(" · ") || "Sin ADRs"}
@@ -628,7 +640,11 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Integraciones y contratos",
       icon: <Plug />,
       count: a.integrations.length + a.contracts.length,
-      metrics: `${plural(a.integrations.length, "integración", "integraciones")} · ${plural(a.contracts.length, "contrato")}`,
+      tone: "cyan",
+      stat: {
+        value: a.integrations.length,
+        label: `integraciones externas · ${plural(a.contracts.length, "contrato")}`,
+      },
       urgent: contractsPending > 0,
       urgentLabel: contractsPending > 0 ? String(contractsPending) : undefined,
       insight:
@@ -776,7 +792,8 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Requisitos transversales",
       icon: <ShieldCheck />,
       count: a.cross_cutting.length,
-      metrics: plural(a.cross_cutting.length, "requisito"),
+      tone: "emerald",
+      stat: { value: a.cross_cutting.length, label: "requisitos transversales" },
       urgent: nfrPending > 0,
       urgentLabel: nfrPending > 0 ? String(nfrPending) : undefined,
       insight:
@@ -838,7 +855,10 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       title: "Análisis",
       icon: <AlertTriangle />,
       count: a.analysis.risks.length,
-      metrics: plural(a.analysis.risks.length, "riesgo"),
+      tone: "amber",
+      // Diagonales: escrutinio — cobertura y riesgos del diseño.
+      pattern: "lines",
+      stat: { value: a.analysis.risks.length, label: "riesgos identificados" },
       urgent:
         cov.uncovered_epic_refs.length > 0 || cov.uncovered_entity_refs.length > 0,
       insight: (
@@ -934,7 +954,11 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
       printTitle: "Preguntas al Arquitecto",
       icon: <MessagesSquare />,
       count: a.questions_for_architect.length,
-      metrics: `${a.questions_for_architect.length} · ${plural(blockingTotal, "bloqueante")}`,
+      tone: "rose",
+      stat: {
+        value: a.questions_for_architect.length,
+        label: `preguntas al Arquitecto · ${plural(blockingTotal, "bloqueante")}`,
+      },
       urgent: blockingRemaining > 0,
       urgentLabel: blockingRemaining > 0 ? String(blockingRemaining) : undefined,
       insight:
@@ -1243,16 +1267,19 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
         {/* EL HUB */}
         <div className="px-4 py-5 md:px-6 print:hidden">
           <HubGrid>
-            {sections.map((s) => (
+            {sections.map((s, i) => (
               <HubCard
                 key={s.id}
-                module="arquitectura"
+                tone={s.tone}
+                pattern={s.pattern}
                 icon={s.icon}
                 title={s.title}
+                stat={s.stat}
                 metrics={s.metrics}
                 insight={s.insight}
                 urgent={s.urgent}
                 urgentLabel={s.urgentLabel}
+                prominent={i < 3}
                 onOpen={() =>
                   s.id === "preguntas" ? openQuestions() : hub.openSection(s.id)
                 }

@@ -526,6 +526,51 @@
 }
 
 /*
+ * PATRÓN DECORATIVO de las tarjetas del hub. Un guiño a la naturaleza de la
+ * sección —puntos = estructura (Modelo), diagonales = escrutinio (Análisis),
+ * ondas = lenguaje (Interpretación)— al 6% de opacidad y confinado a la esquina
+ * superior derecha con una máscara que lo desvanece. Es textura, no contenido:
+ * si compite con el texto, está mal calibrado.
+ *
+ * El color lo pone `currentColor` (la clase de tono de la tarjeta), así el mismo
+ * patrón sirve a cualquier acento sin duplicar reglas.
+ */
+.hub-pattern {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 45%;
+  height: 62%;
+  pointer-events: none;
+  opacity: 0.06;
+  border-top-right-radius: inherit;
+  -webkit-mask-image: radial-gradient(
+    120% 120% at 100% 0%,
+    black 20%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(120% 120% at 100% 0%, black 20%, transparent 72%);
+}
+.hub-pattern-dots {
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 9px 9px;
+}
+.hub-pattern-lines {
+  background-image: repeating-linear-gradient(
+    45deg,
+    currentColor 0 1px,
+    transparent 1px 7px
+  );
+}
+.hub-pattern-waves {
+  background-image: repeating-radial-gradient(
+    circle at 115% -15%,
+    currentColor 0 1px,
+    transparent 1px 10px
+  );
+}
+
+/*
  * Respeto a prefers-reduced-motion: neutraliza animaciones y transiciones (y el
  * scroll suave). El contenido aparece de inmediato, sin movimiento.
  */

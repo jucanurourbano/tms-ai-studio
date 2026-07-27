@@ -420,7 +420,13 @@ export function ResultView({ job }: { job: JobDetail }) {
       title: "Interpretación",
       printTitle: "Interpretación para Sistemas",
       icon: <Lightbulb />,
-      metrics: `${plural(si.scope_for_systems?.length ?? 0, "ítem")} de alcance · ${si.apparent_out_of_scope?.length ?? 0} fuera`,
+      tone: "violet",
+      // Ondas: la sección es lenguaje — qué pide Procesos y cómo se entiende.
+      pattern: "waves",
+      stat: {
+        value: si.scope_for_systems?.length ?? 0,
+        label: `ítems de alcance · ${si.apparent_out_of_scope?.length ?? 0} fuera`,
+      },
       urgent: assumptionsPending > 0,
       urgentLabel: assumptionsPending > 0 ? String(assumptionsPending) : undefined,
       insight:
@@ -546,7 +552,11 @@ export function ResultView({ job }: { job: JobDetail }) {
       printTitle: "Preguntas al analista",
       icon: <MessagesSquare />,
       count: a.questions_for_analyst.length,
-      metrics: `${a.questions_for_analyst.length} · ${plural(blockingTotal, "bloqueante")}`,
+      tone: "rose",
+      stat: {
+        value: a.questions_for_analyst.length,
+        label: `preguntas al analista · ${plural(blockingTotal, "bloqueante")}`,
+      },
       urgent: blockingRemaining > 0,
       urgentLabel: blockingRemaining > 0 ? String(blockingRemaining) : undefined,
       insight:
@@ -658,15 +668,13 @@ export function ResultView({ job }: { job: JobDetail }) {
       title: "Requisitos",
       icon: <ListChecks />,
       count: reqTotal,
-      metrics: `${reqTotal} · ${a.requirements.functional.length} funcionales`,
+      tone: "indigo",
+      stat: { value: reqTotal, label: "requisitos extraídos" },
       insight: (
         <span>
           {a.requirements.business.length} de negocio ·{" "}
-          {a.requirements.non_functional.length} no funcionales ·{" "}
-          {plural(
-            a.requirements.functional.filter((r) => r.origin === "derived").length,
-            "derivado",
-          )}
+          {a.requirements.functional.length} funcionales ·{" "}
+          {a.requirements.non_functional.length} no funcionales
         </span>
       ),
       tabs: (
@@ -698,10 +706,13 @@ export function ResultView({ job }: { job: JobDetail }) {
       title: "Modelo",
       icon: <Boxes />,
       count: modelTotal,
-      metrics: `${plural(modelTotal, "ítem")} · ${plural(a.entities.length, "entidad", "entidades")}`,
+      tone: "teal",
+      // Puntos: la sección es estructura — entidades, reglas, relaciones.
+      pattern: "dots",
+      stat: { value: modelTotal, label: "ítems del modelo funcional" },
       insight: (
         <span>
-          {plural(a.processes.length, "proceso")} ·{" "}
+          {plural(a.entities.length, "entidad", "entidades")} ·{" "}
           {plural(a.business_rules.length, "regla")} ·{" "}
           {plural(a.apis.length, "API")}
         </span>
@@ -832,7 +843,10 @@ export function ResultView({ job }: { job: JobDetail }) {
       title: "Análisis crítico",
       icon: <AlertTriangle />,
       count: analysisTotal,
-      metrics: plural(analysisTotal, "hallazgo"),
+      tone: "amber",
+      // Diagonales: la sección es escrutinio — lo que no cuadra.
+      pattern: "lines",
+      stat: { value: analysisTotal, label: "hallazgos del análisis crítico" },
       insight: (
         <span>
           {plural(analysis.ambiguities?.length ?? 0, "ambigüedad", "ambigüedades")}{" "}
@@ -1160,16 +1174,20 @@ export function ResultView({ job }: { job: JobDetail }) {
           )}
 
           <HubGrid>
-            {sections.map((s) => (
+            {sections.map((s, i) => (
               <HubCard
                 key={s.id}
-                module="ef"
+                tone={s.tone}
+                pattern={s.pattern}
                 icon={s.icon}
                 title={s.title}
+                stat={s.stat}
                 metrics={s.metrics}
                 insight={s.insight}
                 urgent={s.urgent}
                 urgentLabel={s.urgentLabel}
+                // La fila superior son las secciones de decisión: algo más alta.
+                prominent={i < 3}
                 onOpen={() =>
                   s.id === "preguntas" ? openQuestions() : hub.openSection(s.id)
                 }
