@@ -4,18 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { JobStatusBadge, Mono } from "@/components/ef/badges";
-import { TableShell, TH_META } from "@/components/shell/table-shell";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   absoluteTime,
   filterByTitle,
@@ -23,9 +14,8 @@ import {
   sourceLabel,
 } from "@/lib/format";
 import type { JobStatus, SourceType } from "@/lib/types/ef";
-import { cn } from "@/lib/utils";
 
-/** Fila del historial (subconjunto común a EF y Scrum). */
+/** Fila del historial (subconjunto común a EF, Scrum y Arquitectura). */
 export interface HistoryRow {
   job_id: string;
   title?: string | null;
@@ -38,7 +28,7 @@ export interface HistoryRow {
 
 function SourceBadge({ source }: { source?: SourceType | null }) {
   if (!source) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-xs text-meta-foreground">—</span>;
   }
   const cls =
     source === "document"
@@ -52,13 +42,7 @@ function SourceBadge({ source }: { source?: SourceType | null }) {
 }
 
 /** Versión del job. Para v2+ (refinada) es un enlace al job padre. */
-function VersionCell({
-  row,
-  basePath,
-}: {
-  row: HistoryRow;
-  basePath: string;
-}) {
+function VersionCell({ row, basePath }: { row: HistoryRow; basePath: string }) {
   const version = row.version ?? 1;
   const refined = version > 1 && !!row.parent_job_id;
 
@@ -85,111 +69,113 @@ function VersionCell({
 }
 
 /**
- * Tabla de historial reutilizable (EF y Scrum): columnas Título/Fuente/Estado/
- * Versión/Fecha, con buscador client-side por título sobre la página actual (v1).
- * El orden (más reciente primero) lo garantiza el backend.
+ * Historial de jobs, compartido por EF, Scrum y Arquitectura.
+ *
+ * Usa `DataTable`, así que en escritorio es tabla y en móvil una card por job
+ * (título = nombre del análisis, id como meta, badges de fuente/estado/versión y
+ * la fecha como par). El buscador va integrado en la cabecera del card.
  */
 export function JobsHistoryTable({
   rows,
   basePath,
   loading,
   emptyLabel,
+  footer,
 }: {
   rows: HistoryRow[];
   basePath: string;
   loading: boolean;
   emptyLabel: string;
+  footer?: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => filterByTitle(rows, query), [rows, query]);
 
-  return (
-    <div>
-      <div className="mb-3">
-        <Input
-          type="search"
-          placeholder="Buscar por título…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-xs"
-          aria-label="Buscar por título"
-        />
-      </div>
+  const columns: DataColumn<HistoryRow>[] = [
+    {
+      key: "title",
+      label: "Título",
+      cardRole: "title",
+      render: (row) => (
+        <Link
+          href={`${basePath}/${row.job_id}`}
+          className="font-medium underline-offset-4 hover:text-primary hover:underline"
+        >
+          {row.title?.trim() || "(sin título)"}
+        </Link>
+      ),
+    },
+    {
+      key: "job_id",
+      label: "Id",
+      cardRole: "meta",
+      render: (row) => <Mono className="text-meta-foreground">{row.job_id}</Mono>,
+    },
+    {
+      key: "source",
+      label: "Fuente",
+      width: "w-28",
+      cardRole: "badge",
+      render: (row) => <SourceBadge source={row.source_type} />,
+    },
+    {
+      key: "status",
+      label: "Estado",
+      width: "w-40",
+      cardRole: "badge",
+      render: (row) => <JobStatusBadge status={row.status} />,
+    },
+    {
+      key: "version",
+      label: "Versión",
+      width: "w-28",
+      cardRole: "badge",
+      render: (row) => <VersionCell row={row} basePath={basePath} />,
+    },
+    {
+      key: "created_at",
+      label: "Fecha",
+      numeric: true,
+      width: "w-32",
+      nowrap: true,
+      render: (row) => (
+        <span
+          className="text-xs text-meta-foreground"
+          title={absoluteTime(row.created_at)}
+        >
+          {relativeTime(row.created_at)}
+        </span>
+      ),
+    },
+  ];
 
-      <TableShell>
-        <Table className="min-w-[42rem]">
-          <TableHeader className="bg-muted/30">
-            <TableRow className="hover:bg-transparent">
-              <TableHead className={TH_META}>Título</TableHead>
-              <TableHead className={TH_META}>Fuente</TableHead>
-              <TableHead className={TH_META}>Estado</TableHead>
-              <TableHead className={TH_META}>Versión</TableHead>
-              <TableHead className={cn(TH_META, "text-right")}>Fecha</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={`sk-${i}`} className="hover:bg-transparent">
-                  <TableCell>
-                    <Skeleton className="h-4 w-48" />
-                    <Skeleton className="mt-1 h-3 w-32" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-16" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-10" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Skeleton className="ml-auto h-3 w-16" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-sm text-muted-foreground">
-                  {query ? "Sin resultados para la búsqueda." : emptyLabel}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((row) => (
-                <TableRow key={row.job_id}>
-                  <TableCell>
-                    <Link
-                      href={`${basePath}/${row.job_id}`}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      {row.title?.trim() || "(sin título)"}
-                    </Link>
-                    <div>
-                      <Mono className="text-meta-foreground">{row.job_id}</Mono>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <SourceBadge source={row.source_type} />
-                  </TableCell>
-                  <TableCell>
-                    <JobStatusBadge status={row.status} />
-                  </TableCell>
-                  <TableCell>
-                    <VersionCell row={row} basePath={basePath} />
-                  </TableCell>
-                  <TableCell
-                    className="whitespace-nowrap text-right text-xs text-meta-foreground"
-                    title={absoluteTime(row.created_at)}
-                  >
-                    {relativeTime(row.created_at)}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableShell>
-    </div>
+  return (
+    <DataTable
+      columns={columns}
+      rows={filtered}
+      rowKey={(row) => row.job_id}
+      loading={loading}
+      zebra
+      footer={footer}
+      empty={
+        query ? "Sin resultados para la búsqueda." : emptyLabel
+      }
+      toolbar={
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar por título…"
+            aria-label="Buscar por título"
+            className="sm:max-w-xs"
+          />
+          <span className="text-xs text-meta-foreground sm:ml-auto">
+            {filtered.length === rows.length
+              ? `${rows.length} en esta página`
+              : `${filtered.length} de ${rows.length} en esta página`}
+          </span>
+        </div>
+      }
+    />
   );
 }

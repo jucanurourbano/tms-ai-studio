@@ -1,51 +1,29 @@
 "use client";
 
-import { Loader2, Search, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { Loader2, ShieldAlert, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { UserActionsMenu } from "@/components/configuracion/user-actions-menu";
 import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
-import { TableShell, TH_META } from "@/components/shell/table-shell";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { NativeSelect } from "@/components/ui/native-select";
+import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { absoluteTime, relativeTime } from "@/lib/format";
 import { ALL_ROLES, ROLE_LABELS, SPECIALTY_LABELS } from "@/lib/permissions";
 import type { AuthUser, RolesCatalog, UserRole } from "@/lib/types/auth";
-import { cn } from "@/lib/utils";
 
 type EstadoFiltro = "todos" | "activos" | "inactivos";
-
-const FILTER_CLASS =
-  "h-8 rounded-lg border border-input bg-background px-2 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
-/** Iniciales para el avatar de las cards (máximo dos). */
-function initials(fullName: string): string {
-  return (
-    fullName
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((p) => p.charAt(0).toUpperCase())
-      .join("") || "?"
-  );
-}
 
 function RoleBadge({ role }: { role: UserRole }) {
   // El admin se distingue en violeta (permisos totales); el resto de roles
@@ -197,6 +175,87 @@ export default function UsuariosPage() {
     );
   }
 
+  const columnas: DataColumn<AuthUser>[] = [
+    {
+      key: "full_name",
+      label: "Nombre",
+      cardRole: "title",
+      render: (u) => (
+        <span className="font-medium">
+          {u.full_name}
+          {u.id === current?.id && (
+            <span className="ml-2 text-[11px] font-normal text-meta-foreground">
+              (tú)
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "email",
+      label: "Correo",
+      cardRole: "meta",
+      render: (u) => <span className="text-muted-foreground">{u.email}</span>,
+    },
+    {
+      key: "role",
+      label: "Rol",
+      width: "w-36",
+      cardRole: "badge",
+      render: (u) => <RoleBadge role={u.role} />,
+    },
+    {
+      key: "is_active",
+      label: "Estado",
+      width: "w-28",
+      cardRole: "badge",
+      render: (u) => <ActiveBadge active={u.is_active} />,
+    },
+    {
+      key: "specialty",
+      label: "Especialidad",
+      width: "w-32",
+      render: (u) => (
+        <span className="text-xs text-meta-foreground">
+          {u.specialty ? SPECIALTY_LABELS[u.specialty] : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "created_at",
+      label: "Registrado",
+      width: "w-28",
+      nowrap: true,
+      render: (u) => (
+        <span
+          className="text-xs text-meta-foreground"
+          title={absoluteTime(u.created_at)}
+        >
+          {relativeTime(u.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "acciones",
+      label: "Acciones",
+      width: "w-20",
+      numeric: true,
+      cardRole: "actions",
+      render: (u) => (
+        <UserActionsMenu
+          user={u}
+          catalog={catalog}
+          isAdmin={isAdmin}
+          isSelf={u.id === current?.id}
+          onChanged={() => {
+            fetchUsers();
+            if (u.id === current?.id) void refresh();
+          }}
+        />
+      ),
+    },
+  ];
+
   return (
     <PageContainer className="animate-rise">
       <PageHeader
@@ -285,206 +344,72 @@ export default function UsuariosPage() {
         </div>
       </Card>
 
-      {/* Listado: filtros + contador */}
+      {/* Listado */}
       {error && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-meta-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nombre o correo…"
-            aria-label="Buscar usuarios"
-            className="pl-8"
-          />
-        </div>
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as UserRole | "todos")}
-          aria-label="Filtrar por rol"
-          className={FILTER_CLASS}
-        >
-          <option value="todos">Todos los roles</option>
-          {ALL_ROLES.map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as EstadoFiltro)}
-          aria-label="Filtrar por estado"
-          className={FILTER_CLASS}
-        >
-          <option value="todos">Activos e inactivos</option>
-          <option value="activos">Solo activos</option>
-          <option value="inactivos">Solo inactivos</option>
-        </select>
-
-        {/* Contador: refleja el filtro y, cuando filtra, también el total. */}
-        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-meta-foreground">
-          <Users className="h-3.5 w-3.5" />
-          {filtrando
-            ? `${filtered.length} de ${users.length} usuarios`
-            : `${users.length} ${users.length === 1 ? "usuario" : "usuarios"}`}
-        </span>
-      </div>
-
-      {/* Escritorio: tabla completa */}
-      <TableShell className="hidden md:block">
-        <Table className="min-w-[52rem]">
-          <TableHeader className="bg-muted/30">
-            <TableRow className="hover:bg-transparent">
-              <TableHead className={TH_META}>Nombre</TableHead>
-              <TableHead className={TH_META}>Correo</TableHead>
-              <TableHead className={TH_META}>Rol</TableHead>
-              <TableHead className={TH_META}>Especialidad</TableHead>
-              <TableHead className={TH_META}>Estado</TableHead>
-              <TableHead className={TH_META}>Registrado</TableHead>
-              <TableHead className={cn(TH_META, "text-right")}>Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="[&_tr:nth-child(even)]:bg-muted/25">
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={`sk-${i}`} className="hover:bg-transparent">
-                  {Array.from({ length: 7 }).map((__, j) => (
-                    <TableCell key={j}>
-                      <Skeleton className="h-4 w-full max-w-28" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                  {filtrando
-                    ? "Ningún usuario coincide con los filtros."
-                    : "No hay usuarios."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((u) => {
-                const isSelf = u.id === current?.id;
-                return (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-medium">
-                      {u.full_name}
-                      {isSelf && (
-                        <span className="ml-2 text-[11px] text-meta-foreground">
-                          (tú)
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {u.email}
-                    </TableCell>
-                    <TableCell>
-                      <RoleBadge role={u.role} />
-                    </TableCell>
-                    <TableCell className="text-xs text-meta-foreground">
-                      {u.specialty ? SPECIALTY_LABELS[u.specialty] : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <ActiveBadge active={u.is_active} />
-                    </TableCell>
-                    <TableCell
-                      className="whitespace-nowrap text-xs text-meta-foreground"
-                      title={absoluteTime(u.created_at)}
-                    >
-                      {relativeTime(u.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <UserActionsMenu
-                        user={u}
-                        catalog={catalog}
-                        isAdmin={isAdmin}
-                        isSelf={isSelf}
-                        onChanged={() => {
-                          fetchUsers();
-                          if (isSelf) void refresh();
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableShell>
-
-      {/* Móvil y tablet: una card por usuario (la tabla no cabe sin scroll) */}
-      <div className="space-y-2 md:hidden">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={`skc-${i}`} className="h-24 rounded-xl" />
-          ))
-        ) : filtered.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-            {filtrando
-              ? "Ningún usuario coincide con los filtros."
-              : "No hay usuarios."}
-          </p>
-        ) : (
-          filtered.map((u) => {
-            const isSelf = u.id === current?.id;
-            return (
-              <div
-                key={u.id}
-                className="rounded-xl bg-card p-3 ring-1 ring-foreground/10"
+      <DataTable
+        columns={columnas}
+        rows={filtered}
+        rowKey={(u) => u.id}
+        loading={loading}
+        zebra
+        empty={
+          filtrando
+            ? "Ningún usuario coincide con los filtros."
+            : "No hay usuarios."
+        }
+        toolbar={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por nombre o correo…"
+              aria-label="Buscar usuarios"
+              className="sm:max-w-xs"
+            />
+            <div className="flex gap-2">
+              <NativeSelect
+                value={roleFilter}
+                onChange={(e) =>
+                  setRoleFilter(e.target.value as UserRole | "todos")
+                }
+                aria-label="Filtrar por rol"
+                className="text-xs sm:w-40"
               >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/20">
-                    {initials(u.full_name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {u.full_name}
-                      </span>
-                      {isSelf && (
-                        <span className="shrink-0 text-[11px] text-meta-foreground">
-                          (tú)
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate text-xs text-meta-foreground">
-                      {u.email}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <RoleBadge role={u.role} />
-                      <ActiveBadge active={u.is_active} />
-                      {u.specialty && (
-                        <span className="text-[11px] text-meta-foreground">
-                          {SPECIALTY_LABELS[u.specialty]}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <UserActionsMenu
-                    user={u}
-                    catalog={catalog}
-                    isAdmin={isAdmin}
-                    isSelf={isSelf}
-                    onChanged={() => {
-                      fetchUsers();
-                      if (isSelf) void refresh();
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+                <option value="todos">Todos los roles</option>
+                {ALL_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </NativeSelect>
+              <NativeSelect
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as EstadoFiltro)
+                }
+                aria-label="Filtrar por estado"
+                className="text-xs sm:w-44"
+              >
+                <option value="todos">Activos e inactivos</option>
+                <option value="activos">Solo activos</option>
+                <option value="inactivos">Solo inactivos</option>
+              </NativeSelect>
+            </div>
+            {/* Contador: refleja el filtro y, cuando filtra, también el total. */}
+            <span className="inline-flex items-center gap-1.5 text-xs text-meta-foreground sm:ml-auto">
+              <Users className="h-3.5 w-3.5" />
+              {filtrando
+                ? `${filtered.length} de ${users.length} usuarios`
+                : `${users.length} ${users.length === 1 ? "usuario" : "usuarios"}`}
+            </span>
+          </div>
+        }
+      />
     </PageContainer>
   );
 }

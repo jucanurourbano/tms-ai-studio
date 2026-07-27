@@ -55,6 +55,7 @@ import {
 } from "@/components/scrum/assignee";
 import { ScrumValidationControls } from "@/components/scrum/validation-controls";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -405,6 +406,73 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const visibleBacklog = a.product_backlog.ordered_story_ids.filter((sid) =>
     matchesPersonFilter(sid, personFilter, assigneeOf),
   );
+
+  // El backlog usa el patrón de tabla de la app: tabla en escritorio, una card
+  // por historia en móvil (nada de scroll horizontal).
+  const backlogColumns: DataColumn<string>[] = [
+    {
+      key: "orden",
+      label: "#",
+      width: "w-12",
+      numeric: true,
+      cardRole: "hidden",
+      render: (sid) => (
+        <span className="text-[11px] text-meta-foreground">
+          {visibleBacklog.indexOf(sid) + 1}
+        </span>
+      ),
+    },
+    {
+      key: "id",
+      label: "ID",
+      width: "w-28",
+      cardRole: "meta",
+      render: (sid) => <RefChip refId={sid} />,
+    },
+    {
+      key: "historia",
+      label: "Historia",
+      cardRole: "title",
+      render: (sid) => {
+        const s = storyById.get(sid);
+        return (
+          <span className="line-clamp-2">
+            {s?.goal ?? s?.statement ?? "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "prioridad",
+      label: "Prioridad",
+      width: "w-28",
+      cardRole: "badge",
+      render: (sid) => <MoscowBadge priority={storyById.get(sid)?.priority} />,
+    },
+    {
+      key: "puntos",
+      label: "Puntos",
+      width: "w-20",
+      numeric: true,
+      render: (sid) => storyById.get(sid)?.story_points ?? "—",
+    },
+    {
+      key: "asignado",
+      label: "Asignado a",
+      width: "w-52",
+      render: (sid) => (
+        <AssigneeSelect
+          storyId={sid}
+          team={team}
+          member={assigneeOf.get(sid)}
+          inherited={sourceOf.get(sid) === "sprint"}
+          readOnly={!puedeEditar}
+          busy={assigningId === sid}
+          onAssign={onAssign}
+        />
+      ),
+    },
+  ];
   const questions = onlyBlocking
     ? a.questions_for_po.filter((q) => q.blocking)
     : a.questions_for_po;
@@ -769,68 +837,17 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           >
             {() => (
               <>
-                {visibleBacklog.length > 0 ? (
-                  <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full border-collapse text-sm">
-                      <thead className="sticky top-0 z-[1] bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
-                        <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold">
-                          <th className="w-10 text-right">#</th>
-                          <th className="w-24 text-left">ID</th>
-                          <th className="text-left">Historia</th>
-                          <th className="w-24 text-left">Prioridad</th>
-                          <th className="w-20 text-right">Puntos</th>
-                          <th className="w-44 text-left">Asignado a</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/60">
-                        {visibleBacklog.map((sid, i) => {
-                          const s = storyById.get(sid);
-                          return (
-                            <tr
-                              key={sid}
-                              className="odd:bg-muted/20 hover:bg-primary/[0.04] [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
-                            >
-                              <td className="text-right font-mono text-[11px] tabular-nums text-meta-foreground">
-                                {i + 1}
-                              </td>
-                              <td>
-                                <RefChip refId={sid} />
-                              </td>
-                              <td className="min-w-0">
-                                <span className="line-clamp-2">
-                                  {s?.goal ?? s?.statement ?? "—"}
-                                </span>
-                              </td>
-                              <td>
-                                <MoscowBadge priority={s?.priority} />
-                              </td>
-                              <td className="text-right font-mono tabular-nums">
-                                {s?.story_points ?? "—"}
-                              </td>
-                              <td className="min-w-0">
-                                <AssigneeSelect
-                                  storyId={sid}
-                                  team={team}
-                                  member={assigneeOf.get(sid)}
-                                  inherited={sourceOf.get(sid) === "sprint"}
-                                  readOnly={!puedeEditar}
-                                  busy={assigningId === sid}
-                                  onAssign={onAssign}
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <EmptyHint>
-                    {personFilter
+                <DataTable
+                  columns={backlogColumns}
+                  rows={visibleBacklog}
+                  rowKey={(sid) => sid}
+                  zebra
+                  empty={
+                    personFilter
                       ? "Ninguna historia del backlog coincide con ese responsable."
-                      : "Backlog vacío."}
-                  </EmptyHint>
-                )}
+                      : "Backlog vacío."
+                  }
+                />
                 {a.product_backlog.rationale && (
                   <p className="prose-measure mt-2 text-xs text-muted-foreground">
                     {a.product_backlog.rationale}
