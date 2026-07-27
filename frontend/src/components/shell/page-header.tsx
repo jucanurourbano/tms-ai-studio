@@ -1,8 +1,12 @@
 import { AgentIconView } from "@/lib/agent-icons";
 import type { AgentIcon } from "@/lib/isdf";
+import { accentOf } from "@/lib/module-accent";
+import type { ModuleKey } from "@/lib/types/auth";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
+  /** Módulo al que pertenece la página: tiñe el chip del icono con su acento. */
+  module?: ModuleKey;
   /** Fase ISDF u otra etiqueta pequeña sobre el título. */
   eyebrow?: string;
   title: string;
@@ -25,10 +29,12 @@ export function PageHeader({
   title,
   description,
   icon,
+  module,
   variant = "plain",
   action,
   className,
 }: PageHeaderProps) {
+  const accent = accentOf(module);
   if (variant === "hero") {
     return (
       <div
@@ -68,7 +74,14 @@ export function PageHeader({
     >
       <div className="flex items-start gap-3">
         {icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground ring-1 ring-primary/10">
+          <div
+            className={cn(
+              // Cabecera: icono a 20px (en filas de tabla van a 16px).
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1",
+              accent.soft,
+              accent.ring,
+            )}
+          >
             <AgentIconView icon={icon} className="h-5 w-5" />
           </div>
         )}

@@ -74,6 +74,7 @@ export default function NewPlanPage() {
   return (
     <PageContainer variant="form">
       <PageHeader
+        module="scrum"
         icon="kanban"
         eyebrow="Gestionar"
         title="Nuevo plan ágil"

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import {
   Tooltip,
   TooltipContent,
@@ -74,15 +75,6 @@ export function ConfidenceBadge({ value }: { value?: number | null }) {
   );
 }
 
-const STATUS_STYLES: Record<JobStatus, string> = {
-  PENDING: "border-slate-300 bg-slate-50 text-slate-700",
-  RUNNING: "border-blue-300 bg-blue-50 text-blue-700",
-  NEEDS_INPUT: "border-amber-300 bg-amber-50 text-amber-700",
-  COMPLETED: "border-emerald-300 bg-emerald-50 text-emerald-700",
-  COMPLETED_WITH_WARNINGS: "border-amber-300 bg-amber-50 text-amber-700",
-  FAILED: "border-red-300 bg-red-50 text-red-700",
-};
-
 const STATUS_LABELS: Record<JobStatus, string> = {
   PENDING: "Pendiente",
   RUNNING: "En proceso",
@@ -92,11 +84,22 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   FAILED: "Falló",
 };
 
+/** Tono funcional de cada estado de job (el color significa, no decora). */
+const STATUS_TONE: Record<JobStatus, StatusTone> = {
+  PENDING: "neutral",
+  RUNNING: "info",
+  NEEDS_INPUT: "warning",
+  COMPLETED: "success",
+  COMPLETED_WITH_WARNINGS: "warning",
+  FAILED: "error",
+};
+
 export function JobStatusBadge({ status }: { status: JobStatus }) {
+  const enCurso = status === "RUNNING" || status === "PENDING";
   return (
-    <Badge variant="outline" className={STATUS_STYLES[status]}>
+    <StatusPill tone={STATUS_TONE[status] ?? "neutral"} pulse={enCurso}>
       {STATUS_LABELS[status] ?? status}
-    </Badge>
+    </StatusPill>
   );
 }
 

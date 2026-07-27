@@ -259,6 +259,7 @@ export default function UsuariosPage() {
   return (
     <PageContainer className="animate-rise">
       <PageHeader
+        module="config"
         eyebrow="Configuración"
         title="Usuarios"
         description="Administra el acceso a TMS AI Studio: registra usuarios, asigna su rol funcional y concede accesos adicionales por módulo."

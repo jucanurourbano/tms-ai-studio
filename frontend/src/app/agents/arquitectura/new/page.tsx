@@ -68,6 +68,7 @@ export default function NewDesignPage() {
   return (
     <PageContainer variant="form">
       <PageHeader
+        module="arquitectura"
         icon="layers"
         eyebrow="Diseñar"
         title="Nuevo diseño de arquitectura"

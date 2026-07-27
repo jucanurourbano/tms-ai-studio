@@ -111,6 +111,7 @@ export default function NewAnalysisPage() {
   return (
     <PageContainer variant="form">
       <PageHeader
+        module="ef"
         icon="file-search"
         eyebrow="Especificar"
         title="Nuevo análisis"

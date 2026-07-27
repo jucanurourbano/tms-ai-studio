@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { AgentIconView } from "@/lib/agent-icons";
 import { defaultOpenGroups, navForModules, type PhaseNav } from "@/lib/isdf";
+import { accentOf } from "@/lib/module-accent";
 import { ROLE_LABELS } from "@/lib/permissions";
 import type { UserRole } from "@/lib/types/auth";
 import { usePersistentState } from "@/lib/use-persistent-state";
@@ -389,9 +390,14 @@ function SidebarItem({ agent, collapsed, pathname, onNavigate }: SidebarItemProp
             : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
         )}
       >
+        {/* Acento por módulo: el icono lleva su tono, salvo cuando la fila está
+            activa — ahí manda el violeta de marca de la navegación. */}
         <AgentIconView
           icon={agent.icon}
-          className={cn("h-4 w-4 shrink-0", active && "text-primary")}
+          className={cn(
+            "h-4 w-4 shrink-0",
+            active ? "text-primary" : accentOf(agent.module).text,
+          )}
         />
         {!collapsed && <span className="flex-1">{agent.name}</span>}
       </Link>

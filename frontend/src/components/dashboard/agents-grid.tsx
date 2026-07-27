@@ -8,6 +8,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AgentIconView } from "@/lib/agent-icons";
 import { useAuth } from "@/lib/auth/auth-context";
 import { type FlatAgent, flatAgentsForModules } from "@/lib/isdf";
+import { accentOf } from "@/lib/module-accent";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +39,7 @@ export function AgentsGrid() {
 
 function AgentCard({ agent }: { agent: FlatAgent }) {
   const active = agent.enabled && !!agent.href;
+  const accent = accentOf(agent.module);
 
   const inner = (
     <Card
@@ -52,8 +54,9 @@ function AgentCard({ agent }: { agent: FlatAgent }) {
         <div
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors [&_svg]:h-5 [&_svg]:w-5",
+            // Fondo tenue + icono en el tono pleno del módulo (acento suave).
             active
-              ? "icon-glow bg-primary/10 text-primary ring-primary/20 group-hover:bg-primary group-hover:text-primary-foreground"
+              ? cn("icon-glow ring-1", accent.soft, accent.ring)
               : "bg-muted text-muted-foreground/60 ring-border",
           )}
         >
@@ -71,7 +74,12 @@ function AgentCard({ agent }: { agent: FlatAgent }) {
           >
             <span className="truncate">{agent.name}</span>
             {active ? (
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
+              <ArrowRight
+                className={cn(
+                  "h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5",
+                  accent.groupHoverText,
+                )}
+              />
             ) : null}
           </CardTitle>
         </div>
@@ -83,7 +91,9 @@ function AgentCard({ agent }: { agent: FlatAgent }) {
 
       <div className="mt-3 px-(--card-spacing)">
         {active ? (
-          <Badge className="bg-primary">activo</Badge>
+          <Badge variant="outline" className={cn("border-transparent", accent.soft)}>
+            activo
+          </Badge>
         ) : (
           <Badge
             variant="outline"

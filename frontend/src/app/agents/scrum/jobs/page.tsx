@@ -52,6 +52,7 @@ export default function ScrumJobsHistoryPage() {
   return (
     <PageContainer className="animate-rise">
       <PageHeader
+        module="scrum"
         icon="kanban"
         eyebrow="Gestionar"
         title="Historial"
@@ -78,31 +79,33 @@ export default function ScrumJobsHistoryPage() {
         basePath="/agents/scrum/jobs"
         loading={loading}
         emptyLabel="No hay planes todavía."
+        footer={
+    <div className="flex items-center justify-between text-xs text-meta-foreground">
+            <span>
+              {from}–{to} de {total}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={offset === 0 || loading}
+                onClick={() => goTo(Math.max(0, offset - PAGE_SIZE))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={to >= total || loading}
+                onClick={() => goTo(offset + PAGE_SIZE)}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        }
       />
 
-      <div className="mt-3 flex items-center justify-between text-xs text-meta-foreground">
-        <span>
-          {from}–{to} de {total}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset === 0 || loading}
-            onClick={() => goTo(Math.max(0, offset - PAGE_SIZE))}
-          >
-            Anterior
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={to >= total || loading}
-            onClick={() => goTo(offset + PAGE_SIZE)}
-          >
-            Siguiente
-          </Button>
-        </div>
-      </div>
 
       <p className="mt-3 text-xs text-meta-foreground">
         El título y la fuente se heredan del EF de origen. El buscador filtra por
