@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
+from app.models.user import User
 from app.schemas.scrum import CreatePlanRequest, ScrumValidationPatchRequest
 from app.services.scrum_service import ScrumPlanningService
 from shared.responses.api_response import ApiResponse
@@ -25,11 +26,11 @@ def _service(session: AsyncSession) -> ScrumPlanningService:
 @router.post(
     "/plans",
     summary="Generar un plan ágil desde un job EF listo",
-    dependencies=[_WRITE],
 )
 async def create_plan(
     body: CreatePlanRequest,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un plan Scrum.
@@ -39,7 +40,10 @@ async def create_plan(
     claro (completar preguntas bloqueantes o generar EF afinada).
     """
     job = await _service(session).create_plan(
-        body.ef_job_id, body.capacity_points, background_tasks=background_tasks
+        body.ef_job_id,
+        body.capacity_points,
+        background_tasks=background_tasks,
+        actor_id=actor.id,
     )
     return ApiResponse.ok(
         data={
@@ -131,11 +135,11 @@ async def list_jobs(
 @router.patch(
     "/jobs/{job_id}/validations",
     summary="Registrar validación del PO",
-    dependencies=[_WRITE],
 )
 async def patch_validation(
     job_id: str,
     body: ScrumValidationPatchRequest,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Registra/actualiza una validación del PO, sin mutar el artefacto."""
@@ -145,6 +149,7 @@ async def patch_validation(
         target_id=body.target_id,
         status=body.status,
         respuesta=body.respuesta,
+        actor_id=actor.id,
     )
     return ApiResponse.ok(
         data={
@@ -182,16 +187,16 @@ async def export_clickup(
 @router.post(
     "/jobs/{job_id}/refine",
     summary="Crear job hijo de afinamiento (PO)",
-    dependencies=[_WRITE],
 )
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un job hijo reinyectando las respuestas confirmadas del PO."""
     child = await _service(session).create_refine(
-        job_id, background_tasks=background_tasks
+        job_id, background_tasks=background_tasks, actor_id=actor.id
     )
     return ApiResponse.ok(
         data={"job_id": child.id, "parent_job_id": child.parent_job_id},

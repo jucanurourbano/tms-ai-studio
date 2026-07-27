@@ -49,6 +49,19 @@ class SetRoleRequest(BaseModel):
     role: UserRole
 
 
+class UpdateProfileRequest(BaseModel):
+    """Edita los datos de un usuario. Solo se aplica lo que llega informado."""
+
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    email: Optional[EmailStr] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    """Contraseña nueva definida por un administrador."""
+
+    password: str = Field(min_length=8, max_length=128)
+
+
 class ModuleGrantIn(BaseModel):
     """Acceso adicional a un módulo, tal como lo envía el panel."""
 

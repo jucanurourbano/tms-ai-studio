@@ -26,9 +26,11 @@ from app.schemas.auth import (
     LoginRequest,
     LoginResult,
     RegisterRequest,
+    ResetPasswordRequest,
     SetActiveRequest,
     SetGrantsRequest,
     SetRoleRequest,
+    UpdateProfileRequest,
     UserOut,
 )
 from app.services.auth_service import AuthService
@@ -182,6 +184,96 @@ async def set_user_active(
     return ApiResponse.ok(
         data=UserOut.of(user).model_dump(mode="json"),
         message="Usuario actualizado",
+    )
+
+
+@router.patch(
+    "/users/{user_id}/profile",
+    summary="Editar nombre y correo de un usuario (requiere Configuración)",
+)
+async def update_user_profile(
+    user_id: str,
+    body: UpdateProfileRequest,
+    actor: User = _CONFIG_WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Actualiza los datos de identidad. Solo se aplica lo que llega informado."""
+    user = await AuthService(session).update_profile(
+        user_id=user_id,
+        actor=actor,
+        full_name=body.full_name,
+        email=body.email,
+    )
+    return ApiResponse.ok(
+        data=UserOut.of(user).model_dump(mode="json"),
+        message="Usuario actualizado",
+    )
+
+
+@router.post(
+    "/users/{user_id}/password",
+    summary="Restablecer la contraseña de un usuario (requiere Configuración)",
+)
+async def reset_user_password(
+    user_id: str,
+    body: ResetPasswordRequest,
+    actor: User = _CONFIG_WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Define una contraseña nueva para el usuario.
+
+    Operación **administrativa**: no se pide la contraseña anterior. La contraseña
+    en claro nunca se registra en logs ni se devuelve.
+    """
+    user = await AuthService(session).reset_password(
+        user_id=user_id, new_password=body.password, actor=actor
+    )
+    return ApiResponse.ok(
+        data=UserOut.of(user).model_dump(mode="json"),
+        message="Contraseña restablecida",
+    )
+
+
+@router.get(
+    "/users/{user_id}/activity",
+    summary="Huella del usuario (jobs y validaciones) para decidir la baja",
+    dependencies=[_CONFIG_READ],
+)
+async def user_activity(
+    user_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Cuenta la actividad ATRIBUIDA al usuario y recomienda cómo darlo de baja.
+
+    Con actividad registrada se recomienda **desactivar** en vez de eliminar: la
+    cuenta deja de servir para entrar, pero el historial sigue leyéndose con su
+    nombre. Los registros anteriores a la migración `0007` no tienen autor, así
+    que el resumen mide la huella conocida y nunca la inventa.
+    """
+    data = await AuthService(session).activity_summary(user_id=user_id)
+    return ApiResponse.ok(data=data)
+
+
+@router.delete(
+    "/users/{user_id}",
+    summary="Dar de baja un usuario (baja lógica; requiere Configuración)",
+)
+async def delete_user(
+    user_id: str,
+    actor: User = _CONFIG_WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Da de **baja lógica** al usuario (no borrado físico).
+
+    Se conserva la fila para no romper la trazabilidad (los jobs y validaciones
+    referencian a su autor); la cuenta no puede iniciar sesión ni aparece en los
+    listados. Salvaguardas: no puedes eliminarte a ti mismo ni dejar la
+    plataforma sin ningún administrador activo.
+    """
+    user = await AuthService(session).delete_user(user_id=user_id, actor=actor)
+    return ApiResponse.ok(
+        data=UserOut.of(user).model_dump(mode="json"),
+        message="Usuario dado de baja",
     )
 
 

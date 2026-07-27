@@ -11,6 +11,7 @@ Orquesta el repositorio de usuarios y las utilidades de seguridad. Reglas:
 Las contraseñas en claro NUNCA se registran en logs ni se devuelven.
 """
 
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,7 +122,103 @@ class AuthService:
         user = await self.repo.get_by_id(user_id)
         if user is None:
             raise NotFoundError("Usuario no encontrado.")
+        if not is_active and user.role is UserRole.ADMIN:
+            # Este endpoint solo exige `config` FULL, que es concedible por grant:
+            # sin esta guarda, alguien sin rol admin podría desactivar a TODOS los
+            # administradores y dejar la plataforma sin nadie que pueda promover a
+            # otro (cambiar roles exige rol admin estricto).
+            restantes = await self.repo.count_active_admins(excluding=user.id)
+            if restantes == 0:
+                raise ForbiddenError(
+                    "No puedes desactivar al último administrador activo. "
+                    "Asigna el rol de Administrador a otra cuenta primero."
+                )
         await self.repo.set_active(user, is_active)
+        await self.session.commit()
+        return user
+
+    async def update_profile(
+        self,
+        *,
+        user_id: str,
+        actor: User,
+        full_name: Optional[str] = None,
+        email: Optional[str] = None,
+    ) -> User:
+        """Edita nombre y/o correo de acceso de un usuario (requiere `config` FULL)."""
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+
+        normalized: Optional[str] = None
+        if email is not None:
+            normalized = self._normalize_email(email)
+            if normalized != user.email:
+                # ``include_deleted``: la única de la tabla también cubre las bajas
+                # lógicas, así que un correo "libre" en apariencia puede no estarlo.
+                otro = await self.repo.get_by_email(normalized, include_deleted=True)
+                if otro is not None and otro.id != user.id:
+                    raise ConflictError("Ya existe un usuario con ese correo.")
+
+        await self.repo.update_profile(user, full_name=full_name, email=normalized)
+        await self.session.commit()
+        return user
+
+    async def reset_password(
+        self, *, user_id: str, new_password: str, actor: User
+    ) -> User:
+        """Restablece la contraseña de un usuario (la define un administrador).
+
+        No se exige la contraseña anterior: es una operación administrativa, no un
+        cambio hecho por el propio usuario. La contraseña en claro no se registra
+        en ningún log; solo se persiste su hash.
+        """
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+        await self.repo.set_password_hash(user, hash_password(new_password))
+        await self.session.commit()
+        return user
+
+    async def activity_summary(self, *, user_id: str) -> dict:
+        """Huella del usuario + recomendación de baja vs. desactivación."""
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+        counts = await self.repo.activity_counts(user_id)
+        total = sum(counts.values())
+        return {
+            **counts,
+            "total": total,
+            # Con actividad registrada se recomienda desactivar: la cuenta deja de
+            # servir para entrar, pero el historial sigue leyéndose con su nombre.
+            "recommend_deactivate": total > 0,
+        }
+
+    async def delete_user(self, *, user_id: str, actor: User) -> User:
+        """Da de **baja lógica** a un usuario, con salvaguardas.
+
+        - No puedes eliminarte a ti mismo.
+        - No se permite dejar la plataforma sin ningún administrador activo.
+
+        Es baja lógica (``deleted_at``), nunca borrado físico: los jobs y las
+        validaciones referencian al autor y el historial debe seguir respondiendo
+        "¿quién hizo esto?". La cuenta queda inutilizable (no inicia sesión ni
+        aparece en los listados) y la baja es reversible.
+        """
+        if user_id == actor.id:
+            raise ForbiddenError("No puedes eliminar tu propia cuenta.")
+        user = await self.repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("Usuario no encontrado.")
+        if user.role is UserRole.ADMIN:
+            restantes = await self.repo.count_active_admins(excluding=user.id)
+            if restantes == 0:
+                raise ForbiddenError(
+                    "No puedes eliminar al último administrador activo. "
+                    "Asigna el rol de Administrador a otra cuenta primero."
+                )
+        await self.repo.soft_delete(user, when=datetime.now(timezone.utc))
         await self.session.commit()
         return user
 

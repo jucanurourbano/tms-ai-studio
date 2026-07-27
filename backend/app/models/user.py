@@ -10,9 +10,10 @@ El rol da el permiso base; ``user_module_grants`` añade accesos por usuario que
 ``app/core/permissions.py`` (única fuente de verdad), no aquí.
 """
 
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.permissions import AccessLevel, Module, UserRole
@@ -44,6 +45,14 @@ class User(Base, IdMixin, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
+    )
+    # BAJA LÓGICA (soft delete). Se conserva la fila para no romper la trazabilidad:
+    # los jobs (``created_by``), las validaciones (``answered_by``) y las
+    # asignaciones de historias apuntan a este usuario, y anonimizar dejaría el
+    # historial sin respuesta a "¿quién hizo esto?". Un usuario con
+    # ``deleted_at`` no puede iniciar sesión ni aparece en los listados.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # ``lazy="selectin"``: los grants se cargan SIEMPRE con el usuario. Son pocos

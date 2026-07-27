@@ -82,6 +82,7 @@ class ScrumPlanningService:
         capacity_points: Optional[int] = None,
         *,
         background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un plan Scrum a partir de un job EF **listo**. Falla rápido si no."""
         ef_job = await self.repo.get_job(ef_job_id)
@@ -109,6 +110,7 @@ class ScrumPlanningService:
             input_job_id=ef_job_id,
             title=ef_job.title,
             source_type=ef_job.source_type,
+            created_by=actor_id,
         )
         await self.session.commit()
 
@@ -185,6 +187,7 @@ class ScrumPlanningService:
         status: str,
         respuesta: Optional[str] = None,
         target_type: str = "question",
+        actor_id: Optional[str] = None,
     ):
         val = await self.repo.upsert_validation(
             job_id=job_id,
@@ -192,6 +195,7 @@ class ScrumPlanningService:
             target_id=target_id,
             status=ValidationStatus(status),
             respuesta=respuesta,
+            answered_by=actor_id,
         )
         await self.session.commit()
         return val
@@ -255,7 +259,11 @@ class ScrumPlanningService:
     # --- Refine (PO) --------------------------------------------------------
 
     async def create_refine(
-        self, parent_job_id: str, *, background_tasks=None
+        self,
+        parent_job_id: str,
+        *,
+        background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job hijo Scrum reinyectando las respuestas del PO como contexto."""
         parent = await self.repo.get_job(parent_job_id)
@@ -281,6 +289,7 @@ class ScrumPlanningService:
             title=parent.title,
             source_type=parent.source_type,
             version=parent.version + 1,
+            created_by=actor_id,
         )
         await self.session.commit()
 

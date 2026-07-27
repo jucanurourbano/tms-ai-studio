@@ -145,6 +145,13 @@ class AgentJob(Base, IdMixin, TimestampMixin):
     )
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metrics: Mapped[Optional[dict]] = mapped_column(JSONVariant, nullable=True)
+    # Autor del job. Nullable: los jobs anteriores a la migración 0007 no tienen
+    # autor conocido y no se inventa uno. ``ON DELETE SET NULL`` para que borrar
+    # físicamente un usuario (algo que la app NO hace: usa baja lógica) jamás
+    # arrastre el historial de trabajos.
+    created_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     source_doc: Mapped[Optional["EFSourceDoc"]] = relationship(back_populates="jobs")
     artifact: Mapped[Optional["AgentArtifactRow"]] = relationship(
@@ -218,6 +225,10 @@ class AgentValidation(Base, IdMixin, TimestampMixin):
         default=ValidationStatus.PENDIENTE,
     )
     respuesta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Quién respondió la validación (mismo criterio que ``AgentJob.created_by``).
+    answered_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     job: Mapped["AgentJob"] = relationship(back_populates="validations")
 

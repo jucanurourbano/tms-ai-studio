@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
+from app.models.user import User
 from app.schemas.arquitectura import (
     ArchitectValidationPatchRequest,
     CreateDesignRequest,
@@ -32,11 +33,11 @@ def _service(session: AsyncSession) -> ArquitecturaService:
 @router.post(
     "/designs",
     summary="Generar un diseño desde un plan Scrum listo",
-    dependencies=[_WRITE],
 )
 async def create_design(
     body: CreateDesignRequest,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un diseño de arquitectura.
@@ -47,7 +48,7 @@ async def create_design(
     transitivamente.
     """
     job = await _service(session).create_design(
-        body.scrum_job_id, background_tasks=background_tasks
+        body.scrum_job_id, background_tasks=background_tasks, actor_id=actor.id
     )
     return ApiResponse.ok(
         data={
@@ -142,11 +143,11 @@ async def list_jobs(
 @router.patch(
     "/jobs/{job_id}/validations",
     summary="Registrar validación del Arquitecto",
-    dependencies=[_WRITE],
 )
 async def patch_validation(
     job_id: str,
     body: ArchitectValidationPatchRequest,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Registra/actualiza una validación del Arquitecto, sin mutar el artefacto."""
@@ -156,6 +157,7 @@ async def patch_validation(
         status=body.status,
         respuesta=body.respuesta,
         target_type=body.target_type,
+        actor_id=actor.id,
     )
     return ApiResponse.ok(
         data={
@@ -182,16 +184,16 @@ async def get_validation_summary(
 @router.post(
     "/jobs/{job_id}/refine",
     summary="Crear job hijo de afinamiento",
-    dependencies=[_WRITE],
 )
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un job hijo reinyectando las respuestas confirmadas del Arquitecto."""
     child = await _service(session).create_refine(
-        job_id, background_tasks=background_tasks
+        job_id, background_tasks=background_tasks, actor_id=actor.id
     )
     return ApiResponse.ok(
         data={"job_id": child.id, "parent_job_id": child.parent_job_id},

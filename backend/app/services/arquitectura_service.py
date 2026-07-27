@@ -85,7 +85,11 @@ class ArquitecturaService:
     # --- Generación (con gate de entrada) -----------------------------------
 
     async def create_design(
-        self, scrum_job_id: str, *, background_tasks=None
+        self,
+        scrum_job_id: str,
+        *,
+        background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un diseño desde un plan Scrum **listo**. Falla rápido si no lo está."""
         scrum_job = await self.repo.get_job(scrum_job_id)
@@ -121,6 +125,7 @@ class ArquitecturaService:
             input_job_id=scrum_job_id,
             title=scrum_job.title,
             source_type=scrum_job.source_type,
+            created_by=actor_id,
         )
         await self.session.commit()
 
@@ -177,6 +182,7 @@ class ArquitecturaService:
         status: str,
         respuesta: Optional[str] = None,
         target_type: str = "question",
+        actor_id: Optional[str] = None,
     ):
         val = await self.repo.upsert_validation(
             job_id=job_id,
@@ -184,6 +190,7 @@ class ArquitecturaService:
             target_id=target_id,
             status=ValidationStatus(status),
             respuesta=respuesta,
+            answered_by=actor_id,
         )
         await self.session.commit()
         return val
@@ -246,7 +253,11 @@ class ArquitecturaService:
     # --- Refine (Arquitecto) ------------------------------------------------
 
     async def create_refine(
-        self, parent_job_id: str, *, background_tasks=None
+        self,
+        parent_job_id: str,
+        *,
+        background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job hijo reinyectando las respuestas del Arquitecto como contexto."""
         parent = await self.repo.get_job(parent_job_id)
@@ -280,6 +291,7 @@ class ArquitecturaService:
             title=parent.title,
             source_type=parent.source_type,
             version=parent.version + 1,
+            created_by=actor_id,
         )
         await self.session.commit()
 

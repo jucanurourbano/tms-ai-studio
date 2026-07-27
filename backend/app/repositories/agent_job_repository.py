@@ -76,11 +76,14 @@ class AgentJobRepository:
         title: Optional[str] = None,
         source_type: Optional[str] = None,
         version: int = 1,
+        created_by: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job en estado PENDING para el agente indicado.
 
         ``title``/``source_type`` se desnormalizan aquí (historial) y ``version``
         numera la cadena de afinamiento (v1 original, v2+ refinado).
+        ``created_by`` atribuye el job a quien lo lanzó (nullable: los jobs
+        anteriores a la migración 0007 no tienen autor conocido).
         """
         job = AgentJob(
             agent_type=agent_type,
@@ -91,6 +94,7 @@ class AgentJobRepository:
             source_type=source_type,
             version=version,
             status=JobStatus.PENDING,
+            created_by=created_by,
         )
         self.session.add(job)
         await self.session.flush()
@@ -205,8 +209,12 @@ class AgentJobRepository:
         target_id: str,
         status: ValidationStatus,
         respuesta: Optional[str] = None,
+        answered_by: Optional[str] = None,
     ) -> AgentValidation:
-        """Registra/actualiza una validación (única por job+target)."""
+        """Registra/actualiza una validación (única por job+target).
+
+        ``answered_by`` atribuye la respuesta a quien la registró.
+        """
         existing = await self.session.scalar(
             select(AgentValidation).where(
                 AgentValidation.job_id == job_id,
@@ -217,6 +225,8 @@ class AgentJobRepository:
         if existing is not None:
             existing.status = status
             existing.respuesta = respuesta
+            if answered_by is not None:
+                existing.answered_by = answered_by
             await self.session.flush()
             return existing
         val = AgentValidation(
@@ -225,6 +235,7 @@ class AgentJobRepository:
             target_id=target_id,
             status=status,
             respuesta=respuesta,
+            answered_by=answered_by,
         )
         self.session.add(val)
         await self.session.flush()

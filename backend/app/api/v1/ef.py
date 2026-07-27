@@ -8,6 +8,7 @@ from ai.errors import IngestError
 from app.core.permissions import AccessLevel, Module
 from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
+from app.models.user import User
 from app.schemas.ef import AnalyzeTextRequest, ValidationPatchRequest
 from app.services.ef_service import EFAnalysisService
 from shared.responses.api_response import ApiResponse
@@ -32,6 +33,7 @@ def _service(session: AsyncSession) -> EFAnalysisService:
 async def analyze(
     request: Request,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un análisis EF.
@@ -63,7 +65,7 @@ async def analyze(
 
     service = _service(session)
     job, cached = await service.create_analysis(
-        filename, content, background_tasks=background_tasks
+        filename, content, background_tasks=background_tasks, actor_id=actor.id
     )
     return ApiResponse.ok(
         data={"job_id": job.id, "status": job.status.value, "cached": cached},
@@ -142,6 +144,7 @@ async def list_jobs(
 async def patch_validation(
     job_id: str,
     body: ValidationPatchRequest,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Registra/actualiza una validación (pregunta o supuesto), sin mutar el artefacto."""
@@ -151,6 +154,7 @@ async def patch_validation(
         target_id=body.target_id,
         status=body.status,
         respuesta=body.respuesta,
+        actor_id=actor.id,
     )
     return ApiResponse.ok(
         data={
@@ -174,16 +178,16 @@ async def get_validation_summary(
 @router.post(
     "/jobs/{job_id}/refine",
     summary="Crear job hijo de afinamiento",
-    dependencies=[_WRITE],
 )
 async def refine(
     job_id: str,
     background_tasks: BackgroundTasks,
+    actor: User = _WRITE,
     session: AsyncSession = Depends(get_session),
 ) -> ApiResponse:
     """Crea un job hijo (``parent_job_id``) reinyectando las respuestas confirmadas."""
     child = await _service(session).create_refine(
-        job_id, background_tasks=background_tasks
+        job_id, background_tasks=background_tasks, actor_id=actor.id
     )
     return ApiResponse.ok(
         data={"job_id": child.id, "parent_job_id": child.parent_job_id},

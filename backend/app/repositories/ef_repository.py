@@ -22,6 +22,7 @@ class EFRepository(AgentJobRepository):
         title: Optional[str] = None,
         source_type: Optional[str] = None,
         version: int = 1,
+        created_by: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job EF en estado PENDING."""
         return await super().create_job(
@@ -31,6 +32,7 @@ class EFRepository(AgentJobRepository):
             title=title,
             source_type=source_type,
             version=version,
+            created_by=created_by,
         )
 
     async def find_completed_job_by_hash(

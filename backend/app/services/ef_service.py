@@ -86,6 +86,7 @@ class EFAnalysisService:
         content: bytes,
         *,
         background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> tuple[EFJob, bool]:
         """Crea (o reutiliza por hash) un análisis. Devuelve (job, cached)."""
         content_hash = compute_hash(content)
@@ -113,6 +114,7 @@ class EFAnalysisService:
             source_doc_id=doc.id,
             title=_derive_title(result.filename, result.source_type),
             source_type=result.source_type,
+            created_by=actor_id,
         )
         await self.session.commit()
 
@@ -137,6 +139,7 @@ class EFAnalysisService:
         target_id: str,
         status: str,
         respuesta: Optional[str] = None,
+        actor_id: Optional[str] = None,
     ):
         val = await self.repo.upsert_validation(
             job_id=job_id,
@@ -144,6 +147,7 @@ class EFAnalysisService:
             target_id=target_id,
             status=ValidationStatus(status),
             respuesta=respuesta,
+            answered_by=actor_id,
         )
         await self.session.commit()
         return val
@@ -192,7 +196,11 @@ class EFAnalysisService:
         return summary
 
     async def create_refine(
-        self, parent_job_id: str, *, background_tasks=None
+        self,
+        parent_job_id: str,
+        *,
+        background_tasks=None,
+        actor_id: Optional[str] = None,
     ) -> EFJob:
         """Crea un job hijo reinyectando las respuestas como contexto autoritativo."""
         parent = await self.repo.get_job(parent_job_id)
@@ -212,6 +220,7 @@ class EFAnalysisService:
             title=parent.title,
             source_type=parent.source_type,
             version=parent.version + 1,
+            created_by=actor_id,
         )
         await self.session.commit()
 
