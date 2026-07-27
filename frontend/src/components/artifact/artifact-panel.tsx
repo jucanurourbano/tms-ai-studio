@@ -49,6 +49,12 @@ export interface PanelRenderCtx {
   query: string;
   /** true al construir el documento imprimible (sin filtros ni controles). */
   forPrint: boolean;
+  /**
+   * Referencia a la que se acaba de saltar, si la hay. La sección puede usarla
+   * para desplegar el detalle que la contiene (un criterio de aceptación vive
+   * dentro de su historia y, plegado, no habría nada que resaltar).
+   */
+  refId?: string;
 }
 
 export interface PanelTab {
@@ -61,6 +67,12 @@ export interface PanelTab {
    * de un golpe en qué pestaña está lo que se busca, sin ir tanteando una a una.
    */
   matchCount?: (query: string) => number;
+  /**
+   * La pestaña es una VISTA FILTRADA de otra (p. ej. "Must" sobre "Todas") y por
+   * tanto no aporta contenido nuevo al PDF: incluirla duplicaría las mismas
+   * historias en el informe.
+   */
+  printSkip?: boolean;
   render: (ctx: PanelRenderCtx) => React.ReactNode;
 }
 
@@ -313,8 +325,8 @@ function PanelInner({
         className="animate-panel-fade min-h-0 flex-1 overflow-y-auto px-5 py-4"
       >
         {activeTab
-          ? activeTab.render({ query, forPrint: false })
-          : section.render?.({ query, forPrint: false })}
+          ? activeTab.render({ query, forPrint: false, refId })
+          : section.render?.({ query, forPrint: false, refId })}
       </div>
     </>
   );

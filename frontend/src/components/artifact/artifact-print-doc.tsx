@@ -44,27 +44,35 @@ export function ArtifactPrintDoc({
       </div>
 
       <div className="space-y-7">
-        {sections.map((s, i) => (
-          <section key={s.id}>
-            <header className="print-heading mb-3 border-b-2 border-violet-800/70 pb-1.5">
-              <h2 className="font-heading text-base font-bold text-violet-800">
-                {i + 1}. {s.printTitle ?? s.title}
-              </h2>
-            </header>
-            {s.tabs && s.tabs.length > 0 ? (
-              <div className="space-y-4">
-                {s.tabs.map((t) => (
-                  <div key={t.id}>
-                    <GroupLabel count={t.count}>{t.label}</GroupLabel>
-                    {t.render({ query: "", forPrint: true })}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              s.render?.({ query: "", forPrint: true })
-            )}
-          </section>
-        ))}
+        {sections.map((s, i) => {
+          // Las pestañas que solo filtran otra (`printSkip`) se omiten: en el
+          // informe repetirían el mismo contenido bajo otro rótulo.
+          const tabs = s.tabs?.filter((t) => !t.printSkip) ?? [];
+          return (
+            <section key={s.id}>
+              <header className="print-heading mb-3 border-b-2 border-violet-800/70 pb-1.5">
+                <h2 className="font-heading text-base font-bold text-violet-800">
+                  {i + 1}. {s.printTitle ?? s.title}
+                </h2>
+              </header>
+              {tabs.length > 0 ? (
+                <div className="space-y-4">
+                  {tabs.map((t) => (
+                    <div key={t.id}>
+                      {/* Con una sola pestaña, su rótulo no aporta nada al informe. */}
+                      {tabs.length > 1 && (
+                        <GroupLabel count={t.count}>{t.label}</GroupLabel>
+                      )}
+                      {t.render({ query: "", forPrint: true })}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                s.render?.({ query: "", forPrint: true })
+              )}
+            </section>
+          );
+        })}
       </div>
     </div>
   );

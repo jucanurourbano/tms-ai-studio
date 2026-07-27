@@ -47,7 +47,7 @@ import {
   type PanelTab,
 } from "@/components/artifact/artifact-panel";
 import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
-import { HubCard, HubGrid } from "@/components/artifact/hub-card";
+import { HubCard, HubGrid, HubHint } from "@/components/artifact/hub-card";
 import {
   FocusedQuestionFlow,
   type SheetQuestion,
@@ -1151,12 +1151,7 @@ export function ResultView({ job }: { job: JobDetail }) {
               />
             ))}
           </HubGrid>
-
-          <p className="mt-4 text-[11px] text-meta-foreground">
-            Cada tarjeta abre su sección en el panel lateral. Dentro:{" "}
-            <Kbd>←</Kbd> <Kbd>→</Kbd> cambian de sección, <Kbd>Esc</Kbd> cierra y
-            los chips de referencia saltan a la sección que los define.
-          </p>
+          <HubHint />
         </div>
 
         <ArtifactPanel hub={hub} sections={sections} module="ef" />
@@ -1167,15 +1162,6 @@ export function ResultView({ job }: { job: JobDetail }) {
 }
 
 // --- subcomponentes ----------------------------------------------------------
-
-/** Tecla en la pista de atajos del hub. */
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="rounded border bg-muted px-1 font-mono text-[10px] text-foreground/70">
-      {children}
-    </kbd>
-  );
-}
 
 /** Sub-bloque con etiqueta dentro del cuerpo del panel. */
 function Block({

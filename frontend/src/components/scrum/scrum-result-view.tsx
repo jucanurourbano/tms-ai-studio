@@ -1,6 +1,15 @@
 "use client";
 
+// CENTRO DE COMANDO del plan Scrum. Mismo patrón que el EF (ver
+// `components/ef/result-view.tsx`): cabecera + grid de tarjetas-sección, todo el
+// contenido en el panel lateral universal y el PDF como documento lineal.
+//
+// Lo propio del Scrum es la capa de ASIGNACIÓN al equipo: vive fuera del
+// artefacto y se superpone al plan (selector por historia y por sprint, carga por
+// sprint, filtro por responsable). Se mantiene íntegra dentro del panel.
+
 import {
+  AlertTriangle,
   ChevronRight,
   Coins,
   DollarSign,
@@ -10,6 +19,7 @@ import {
   Hash,
   Layers,
   ListChecks,
+  ListOrdered,
   MessagesSquare,
   Printer,
   Send,
@@ -20,14 +30,22 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AudienceBadge, ConfidenceBadge, JobStatusBadge, Mono } from "@/components/ef/badges";
 import {
-  ArtifactIndexPanel,
-  type IndexSection,
-} from "@/components/artifact/artifact-index";
-import { ArtifactSection } from "@/components/artifact/artifact-section";
+  AudienceBadge,
+  ConfidenceBadge,
+  JobStatusBadge,
+  Mono,
+} from "@/components/ef/badges";
+import { ArtifactNavProvider } from "@/components/artifact/artifact-nav";
 import {
-  QuestionSheet,
+  ArtifactPanel,
+  type HubSection,
+  type PanelRenderCtx,
+} from "@/components/artifact/artifact-panel";
+import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
+import { HubCard, HubGrid, HubHint } from "@/components/artifact/hub-card";
+import {
+  FocusedQuestionFlow,
   type SheetQuestion,
 } from "@/components/artifact/question-sheet";
 import {
@@ -38,7 +56,6 @@ import {
   IdTag,
   PrintCover,
   PrintFooter,
-  PrintToc,
   PrintValidationState,
   RefChip,
   Stat,
@@ -46,7 +63,6 @@ import {
   StatusPill,
 } from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
-import { BackToTop } from "@/components/artifact/back-to-top";
 import {
   AssigneeBadge,
   AssigneeSelect,
@@ -73,6 +89,8 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api/client";
 import { scrumApi } from "@/lib/api/scrum";
+import { makeRefResolver, type RefRoute } from "@/lib/artifact-refs";
+import { filterByQuery, plural } from "@/lib/artifact-search";
 import type { QuestionStatus } from "@/lib/types/ef";
 import type {
   MoscowPriority,
@@ -93,13 +111,37 @@ import {
   sprintAssigneeMap,
   unassignedPoints,
 } from "@/lib/scrum-assignments";
+import { useArtifactHub } from "@/lib/use-artifact-hub";
 import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
-import { useDisclosure } from "@/lib/use-disclosure";
-import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
 import { useAuth } from "@/lib/auth/auth-context";
 import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
+
+// --- secciones y rutas de referencia -----------------------------------------
+
+const SECTION_IDS = [
+  "backlog",
+  "sprints",
+  "historias",
+  "epicas",
+  "preguntas",
+  "analisis",
+] as const;
+
+/**
+ * Un plan Scrum cita ids del EF (REQ-F-…, BR-…): esos NO se resuelven aquí a
+ * propósito — no viven en este artefacto y el chip lo dice en vez de fingir.
+ */
+const REF_ROUTES: RefRoute[] = [
+  { prefix: "EPIC-", sectionId: "epicas" },
+  { prefix: "US-", sectionId: "historias" },
+  { prefix: "AC-", sectionId: "historias" },
+  { prefix: "SPRINT-", sectionId: "sprints" },
+  { prefix: "Q-", sectionId: "preguntas" },
+  { prefix: "RISK-", sectionId: "analisis", tabId: "riesgos" },
+  { prefix: "OBS-", sectionId: "analisis", tabId: "observaciones" },
+];
 
 // --- badges de dominio -------------------------------------------------------
 
@@ -161,6 +203,20 @@ function download(content: string, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Campos por los que se busca una historia. */
+const STORY_TEXT = (s: Story) => [
+  s.id,
+  s.statement,
+  s.goal,
+  s.epic_ref,
+  s.priority,
+  s.estimation_rationale,
+  ...s.source_refs.requirement_refs,
+  ...s.source_refs.rule_refs,
+  ...s.acceptance_criteria.map((c) => c.text ?? ""),
+  ...s.acceptance_criteria.flatMap((c) => [c.given, c.when, c.then]),
+];
+
 // --- componente principal ----------------------------------------------------
 
 export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
@@ -171,8 +227,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const [loading, setLoading] = useState(true);
   const [onlyBlocking, setOnlyBlocking] = useState(false);
   const [refining, setRefining] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [expandedStories, setExpandedStories] = useState<Set<string>>(new Set());
+  const [questionMode, setQuestionMode] = useState<"lista" | "enfocado" | null>(
+    null,
+  );
   // Equipo y asignaciones: viven FUERA del artefacto, así que se cargan aparte.
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [assignments, setAssignments] = useState<StoryAssignment[]>([]);
@@ -182,11 +240,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   /** Filtro "ver historias de": id de colaborador, "" = todas. */
   const [personFilter, setPersonFilter] = useState("");
-  const [indexCollapsed, setIndexCollapsed] = usePersistentState(
-    "artifact:index-collapsed",
-    false,
-  );
-  const disc = useDisclosure(2);
+
+  const hub = useArtifactHub(SECTION_IDS);
   const { printMode, printNow } = usePrintExpand();
   // Modo lectura: con acceso de solo lectura al módulo «scrum» se muestra
   // todo el contenido pero se retiran las acciones de escritura (responder,
@@ -302,28 +357,6 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
     }
   }, [job.job_id]);
 
-  const scrollToRef = useCallback((id: string) => {
-    const el = document.getElementById(`ref-${id}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ref-highlight");
-    window.setTimeout(() => el.classList.remove("ref-highlight"), 1600);
-  }, []);
-
-  const handlePoAnswered = useCallback(
-    async (answeredId: string) => {
-      const s = await reloadSummary();
-      if (!s || !artifact) return;
-      const statusIn = (id: string) =>
-        s.validations.find((v) => v.target_id === id)?.status ?? "pendiente";
-      const next = artifact.questions_for_po.find(
-        (q) => q.blocking && q.id !== answeredId && statusIn(q.id) === "pendiente",
-      );
-      if (next) scrollToRef(next.id);
-    },
-    [reloadSummary, artifact, scrollToRef],
-  );
-
   const statusOf = useCallback(
     (id: string): QuestionStatus =>
       summary?.validations.find((x) => x.target_id === id)?.status ?? "pendiente",
@@ -339,6 +372,31 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
     () => summary?.validations.filter((v) => v.status !== "pendiente").length ?? 0,
     [summary],
   );
+
+  const resolveRef = useMemo(() => makeRefResolver(REF_ROUTES), []);
+  const canNavigateToRef = useCallback(
+    (refId: string) => resolveRef(refId) !== null,
+    [resolveRef],
+  );
+  const navigateToRef = useCallback(
+    (refId: string) => {
+      const target = resolveRef(refId);
+      if (!target) {
+        toast.info(
+          `${refId} pertenece a la EF de origen, no al plan. Ábrela para verlo.`,
+        );
+        return;
+      }
+      if (target.sectionId === "preguntas") setQuestionMode("lista");
+      hub.pushEntry({ ...target, refId });
+    },
+    [resolveRef, hub],
+  );
+
+  const openQuestions = useCallback(() => {
+    setQuestionMode(null);
+    hub.openSection("preguntas");
+  }, [hub]);
 
   async function doRefine() {
     setRefining(true);
@@ -401,16 +459,33 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const unassignedPointsOf = (storyIds: string[]) =>
     unassignedPoints(storyIds, storyById, assigneeOf);
 
-  const visibleStories = a.stories.filter((s) =>
-    matchesPersonFilter(s.id, personFilter, assigneeOf),
-  );
-  const visibleBacklog = a.product_backlog.ordered_story_ids.filter((sid) =>
-    matchesPersonFilter(sid, personFilter, assigneeOf),
-  );
+  const cov = a.analysis.coverage;
+  const canRefine = answered >= 1;
+  const blockingTotal = a.questions_for_po.filter((q) => q.blocking).length;
+  const blockingRemaining = a.questions_for_po.filter(
+    (q) => q.blocking && statusOf(q.id) === "pendiente",
+  ).length;
+  const blockingDone = blockingTotal > 0 && blockingRemaining === 0;
+  const pendingQuestions = a.questions_for_po.filter(
+    (q) => statusOf(q.id) === "pendiente",
+  ).length;
+  const mode = questionMode ?? (pendingQuestions > 0 ? "enfocado" : "lista");
+
+  const estimated = a.stories.filter((s) => s.story_points != null).length;
+  const unestimated = a.stories.length - estimated;
+  const mustCount = a.stories.filter((s) => s.priority === "must").length;
 
   // El backlog usa el patrón de tabla de la app: tabla en escritorio, una card
   // por historia en móvil (nada de scroll horizontal).
-  const backlogColumns: DataColumn<string>[] = [
+  const backlogRows = (query: string) =>
+    a.product_backlog.ordered_story_ids
+      .filter((sid) => matchesPersonFilter(sid, personFilter, assigneeOf))
+      .filter((sid) => {
+        const s = storyById.get(sid);
+        return s ? filterByQuery(query, [s], STORY_TEXT).length > 0 : !query;
+      });
+
+  const backlogColumns = (rows: string[]): DataColumn<string>[] => [
     {
       key: "orden",
       label: "#",
@@ -419,7 +494,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       cardRole: "hidden",
       render: (sid) => (
         <span className="text-[11px] text-meta-foreground">
-          {visibleBacklog.indexOf(sid) + 1}
+          {rows.indexOf(sid) + 1}
         </span>
       ),
     },
@@ -437,9 +512,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       render: (sid) => {
         const s = storyById.get(sid);
         return (
-          <span className="line-clamp-2">
-            {s?.goal ?? s?.statement ?? "—"}
-          </span>
+          <span className="line-clamp-2">{s?.goal ?? s?.statement ?? "—"}</span>
         );
       },
     },
@@ -474,320 +547,794 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
       ),
     },
   ];
-  const questions = onlyBlocking
-    ? a.questions_for_po.filter((q) => q.blocking)
-    : a.questions_for_po;
-  const cov = a.analysis.coverage;
-  const canRefine = answered >= 1;
 
-  const blockingTotal = a.questions_for_po.filter((q) => q.blocking).length;
-  const blockingRemaining = a.questions_for_po.filter(
-    (q) => q.blocking && statusOf(q.id) === "pendiente",
-  ).length;
-  const blockingDone = blockingTotal > 0 && blockingRemaining === 0;
-  const indexSections: IndexSection[] = [
+  const sheetQuestions = a.questions_for_po.map(
+    (q): SheetQuestion => ({
+      id: q.id,
+      question: q.question,
+      reason: q.reason,
+      blocking: q.blocking,
+      audience: q.audience,
+      linked_to_ref: q.linked_to_ref,
+    }),
+  );
+
+  const questionControls = (id: string, onAnswered?: () => void) => (
+    <ScrumValidationControls
+      readOnly={!puedeEditar}
+      jobId={job.job_id}
+      targetId={id}
+      status={statusOf(id)}
+      respuesta={respuestaOf(id)}
+      onChanged={() => {
+        void reloadSummary();
+        onAnswered?.();
+      }}
+    />
+  );
+
+  /** Historias visibles: filtro por responsable + buscador local. */
+  const storiesFor = (query: string, priority?: MoscowPriority) =>
+    filterByQuery(
+      query,
+      a.stories.filter(
+        (s) =>
+          matchesPersonFilter(s.id, personFilter, assigneeOf) &&
+          (!priority || s.priority === priority),
+      ),
+      STORY_TEXT,
+    );
+
+  const storiesTab = (
+    id: string,
+    label: string,
+    priority?: MoscowPriority,
+  ) => ({
+    id,
+    label,
+    count: priority
+      ? a.stories.filter((s) => s.priority === priority).length
+      : a.stories.length,
+    matchCount: (q: string) => storiesFor(q, priority).length,
+    // Las pestañas MoSCoW filtran "Todas": en el PDF bastaría con esa, y
+    // repetirlas duplicaría las 31 historias cuatro veces.
+    printSkip: priority !== undefined,
+    render: (ctx: PanelRenderCtx) => (
+      <StoryList
+        stories={storiesFor(ctx.query, priority)}
+        ctx={ctx}
+        team={team}
+        assigneeOf={assigneeOf}
+        sourceOf={sourceOf}
+        expanded={expandedStories}
+        onToggle={toggleStory}
+        onAssign={onAssign}
+        assigningId={assigningId}
+        readOnly={!puedeEditar}
+      />
+    ),
+  });
+
+  const sections: HubSection[] = [
     {
-      id: "sec-backlog",
-      label: "Backlog",
+      id: "backlog",
+      title: "Backlog",
+      printTitle: "Backlog de producto",
+      icon: <ListOrdered />,
       count: a.product_backlog.ordered_story_ids.length,
+      metrics: `${plural(a.product_backlog.ordered_story_ids.length, "historia")} · ${a.product_backlog.method}`,
+      insight: (
+        <span>
+          {plural(a.metrics.points_total, "punto")} · {mustCount} must
+        </span>
+      ),
+      render: ({ query, forPrint }) => {
+        const rows = backlogRows(forPrint ? "" : query);
+        return (
+          <>
+            <DataTable
+              columns={backlogColumns(rows)}
+              rows={rows}
+              rowKey={(sid) => sid}
+              zebra
+              empty={
+                personFilter
+                  ? "Ninguna historia del backlog coincide con ese responsable."
+                  : query
+                    ? "Nada coincide con la búsqueda."
+                    : "Backlog vacío."
+              }
+            />
+            {a.product_backlog.rationale && (
+              <p className="prose-measure mt-2 text-xs text-muted-foreground">
+                {a.product_backlog.rationale}
+              </p>
+            )}
+          </>
+        );
+      },
     },
-    { id: "sec-sprints", label: "Sprints", count: a.sprints.length },
-    { id: "sec-stories", label: "Historias", count: a.stories.length },
-    { id: "sec-epics", label: "Épicas", count: a.epics.length },
+
     {
-      id: "sec-questions",
-      label: "Preguntas al PO",
+      id: "sprints",
+      title: "Sprints",
+      icon: <Layers />,
+      count: a.sprints.length,
+      metrics: `${plural(a.sprints.length, "sprint")} · ${a.metrics.points_total} pts`,
+      urgent: a.unassigned_story_ids.length > 0,
+      urgentLabel:
+        a.unassigned_story_ids.length > 0
+          ? String(a.unassigned_story_ids.length)
+          : undefined,
+      insight:
+        a.unassigned_story_ids.length > 0 ? (
+          <span>
+            {plural(a.unassigned_story_ids.length, "historia")} fuera de sprint
+          </span>
+        ) : (
+          <span>Todas las historias estimadas quedaron asignadas</span>
+        ),
+      render: ({ query, forPrint }) => {
+        const q = forPrint ? "" : query;
+        const sprints = filterByQuery(q, a.sprints, (sp) => [
+          sp.id,
+          sp.goal,
+          ...sp.story_ids,
+        ]);
+        return (
+          <div className="space-y-3">
+            {sprints.length === 0 && (
+              <EmptyHint warn={!q}>
+                {q ? "Ningún sprint coincide." : "Sin sprints."}
+              </EmptyHint>
+            )}
+            {sprints.map((sp) => (
+              <div
+                key={sp.id}
+                id={`ref-${sp.id}`}
+                className="print-atom rounded-lg border p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <IdTag id={sp.id} />
+                  <Badge variant="outline" className="font-mono tabular-nums">
+                    {sp.total_points}/{sp.capacity_points} pts
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">{sp.goal}</span>
+                  <span className="ml-auto print:hidden">
+                    <SprintAssigneeSelect
+                      sprintId={sp.id}
+                      team={team}
+                      member={sprintAssigneeOf.get(sp.id)}
+                      readOnly={!puedeEditar}
+                      busy={assigningId === sp.id}
+                      onAssign={onAssignSprint}
+                    />
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {sp.story_ids.map((sid) => (
+                    <span key={sid} className="inline-flex items-center gap-1">
+                      <RefChip refId={sid} />
+                      {/* Avatar compacto: quién lleva cada historia del sprint. */}
+                      {assigneeOf.get(sid) && (
+                        <AssigneeBadge member={assigneeOf.get(sid)} compact />
+                      )}
+                    </span>
+                  ))}
+                </div>
+                <SprintLoad
+                  loads={loadsOfSprint(sp.story_ids)}
+                  capacityPoints={sp.capacity_points}
+                  unassignedPoints={unassignedPointsOf(sp.story_ids)}
+                />
+              </div>
+            ))}
+            {a.unassigned_story_ids.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+                <GroupLabel count={a.unassigned_story_ids.length}>
+                  <span className="text-amber-700">⚠ Fuera de sprint</span>
+                </GroupLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {a.unassigned_story_ids.map((sid) => (
+                    <RefChip key={sid} refId={sid} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+
+    {
+      id: "historias",
+      title: "Historias",
+      printTitle: "Historias de usuario",
+      icon: <ListChecks />,
+      count: a.stories.length,
+      metrics: `${a.stories.length} · ${estimated} estimadas`,
+      urgent: checks ? !checks.must_should_estimated : false,
+      insight:
+        unestimated > 0 ? (
+          <span>{plural(unestimated, "historia")} sin estimar</span>
+        ) : (
+          <span>Todas estimadas · criterios en Gherkin</span>
+        ),
+      tabs: [
+        storiesTab("todas", "Todas"),
+        storiesTab("must", "Must", "must"),
+        storiesTab("should", "Should", "should"),
+        storiesTab("could", "Could", "could"),
+        storiesTab("wont", "Won't", "wont"),
+      ],
+    },
+
+    {
+      id: "epicas",
+      title: "Épicas",
+      icon: <Hash />,
+      count: a.epics.length,
+      metrics: plural(a.epics.length, "épica"),
+      insight: (
+        <span className="line-clamp-2">
+          {a.epics.map((e) => e.title).join(" · ") || "Sin épicas"}
+        </span>
+      ),
+      render: ({ query, forPrint }) => {
+        const q = forPrint ? "" : query;
+        const epics = filterByQuery(q, a.epics, (e) => [
+          e.id,
+          e.title,
+          e.description,
+          ...e.source_refs,
+          ...e.story_ids,
+        ]);
+        if (epics.length === 0)
+          return (
+            <EmptyHint warn={!q}>
+              {q ? "Ninguna épica coincide." : "Sin épicas."}
+            </EmptyHint>
+          );
+        return (
+          <div className="space-y-2">
+            {epics.map((e) => (
+              <div
+                key={e.id}
+                id={`ref-${e.id}`}
+                className="print-atom rounded-lg border p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <IdTag id={e.id} />
+                  <span className="text-sm font-medium">{e.title}</span>
+                  <ConfidenceBadge value={e.confidence} />
+                </div>
+                {e.description && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {e.description}
+                  </p>
+                )}
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    origen:{" "}
+                    {e.source_refs.map((r) => (
+                      <RefChip key={r} refId={r} />
+                    ))}
+                  </span>
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    historias:{" "}
+                    {e.story_ids.map((r) => (
+                      <RefChip key={r} refId={r} />
+                    ))}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      },
+    },
+
+    {
+      id: "preguntas",
+      title: "Preguntas al PO",
+      printTitle: "Preguntas al Product Owner",
+      icon: <MessagesSquare />,
       count: a.questions_for_po.length,
-      meta: `${blockingTotal} bloq.`,
+      metrics: `${a.questions_for_po.length} · ${plural(blockingTotal, "bloqueante")}`,
+      urgent: blockingRemaining > 0,
+      urgentLabel: blockingRemaining > 0 ? String(blockingRemaining) : undefined,
+      insight:
+        blockingRemaining > 0 ? (
+          <span>{plural(blockingRemaining, "bloqueante")} sin responder</span>
+        ) : (
+          <span>
+            {blockingTotal > 0
+              ? "Bloqueantes resueltas"
+              : "Sin preguntas bloqueantes"}{" "}
+            · {answered} respondidas
+          </span>
+        ),
+      searchable: mode === "lista",
+      actions: (
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            value={mode}
+            onChange={setQuestionMode}
+            options={[
+              { value: "enfocado", label: "Una a una" },
+              { value: "lista", label: "Lista" },
+            ]}
+          />
+          {mode === "lista" && (
+            <Segmented
+              value={onlyBlocking ? "bloq" : "todas"}
+              onChange={(v) => setOnlyBlocking(v === "bloq")}
+              options={[
+                { value: "todas", label: "Todas" },
+                { value: "bloq", label: "Bloqueantes" },
+              ]}
+            />
+          )}
+        </div>
+      ),
+      render: ({ query, forPrint }) => {
+        if (!forPrint && mode === "enfocado") {
+          return (
+            <FocusedQuestionFlow
+              questions={sheetQuestions}
+              statusOf={statusOf}
+              renderControls={(q, onAnswered) =>
+                questionControls(q.id, onAnswered)
+              }
+            />
+          );
+        }
+        const base = forPrint
+          ? a.questions_for_po
+          : onlyBlocking
+            ? a.questions_for_po.filter((q) => q.blocking)
+            : a.questions_for_po;
+        const items = filterByQuery(forPrint ? "" : query, base, (q) => [
+          q.id,
+          q.question,
+          q.reason,
+          q.linked_to_ref,
+        ]);
+        if (items.length === 0) {
+          return (
+            <EmptyHint warn={false}>
+              {query
+                ? "Ninguna pregunta coincide con la búsqueda."
+                : onlyBlocking
+                  ? "Sin preguntas bloqueantes."
+                  : "Sin preguntas al PO."}
+            </EmptyHint>
+          );
+        }
+        return (
+          <div className="space-y-2">
+            {items.map((q) => (
+              <div
+                key={q.id}
+                id={`ref-${q.id}`}
+                className={cn(
+                  "print-atom rounded-lg border p-3",
+                  q.blocking && "border-red-300 bg-red-50/40",
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <IdTag id={q.id} />
+                  <AudienceBadge audience={q.audience} />
+                  {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
+                  {q.linked_to_ref && (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      ligada a <RefChip refId={q.linked_to_ref} />
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-sm font-medium">{q.question}</p>
+                <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
+                <div className="print:hidden">{questionControls(q.id)}</div>
+                <PrintValidationState
+                  status={statusOf(q.id)}
+                  respuesta={respuestaOf(q.id)}
+                />
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
+
     {
-      id: "sec-analysis",
-      label: "Análisis",
+      id: "analisis",
+      title: "Análisis",
+      icon: <AlertTriangle />,
       count: a.analysis.risks.length + a.analysis.observations.length,
+      metrics: plural(
+        a.analysis.risks.length + a.analysis.observations.length,
+        "hallazgo",
+      ),
+      urgent: checks ? !checks.coverage_met : false,
+      insight: (
+        <span>
+          Cobertura RF {Math.round(cov.coverage_ratio * 100)}% ·{" "}
+          {plural(a.analysis.risks.length, "riesgo")}
+        </span>
+      ),
+      tabs: [
+        {
+          id: "cobertura",
+          label: "Cobertura",
+          render: () => (
+            <div className="rounded-lg border p-3 text-sm">
+              <GroupLabel>Cobertura de requisitos funcionales</GroupLabel>
+              <p>
+                {cov.requirements_covered} / {cov.requirements_total} cubiertos (
+                {Math.round(cov.coverage_ratio * 100)}%)
+              </p>
+              {cov.uncovered_requirement_refs.length > 0 ? (
+                <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-amber-700">
+                  ⚠ No cubiertos:{" "}
+                  {cov.uncovered_requirement_refs.map((r) => (
+                    <RefChip key={r} refId={r} />
+                  ))}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-emerald-700">
+                  Todos los RF quedaron cubiertos.
+                </p>
+              )}
+            </div>
+          ),
+        },
+        {
+          id: "riesgos",
+          label: "Riesgos",
+          count: a.analysis.risks.length,
+          matchCount: (q) =>
+            filterByQuery(q, a.analysis.risks, (r) => [
+              r.id,
+              r.description,
+              r.severity,
+            ]).length,
+          render: ({ query, forPrint }) => {
+            const items = filterByQuery(
+              forPrint ? "" : query,
+              a.analysis.risks,
+              (r) => [r.id, r.description, r.severity],
+            );
+            if (items.length === 0)
+              return <EmptyHint warn={false}>Sin riesgos.</EmptyHint>;
+            return (
+              <DataList>
+                {items.map((r) => (
+                  <DataRow
+                    key={r.id}
+                    id={r.id}
+                    right={
+                      <>
+                        <Badge variant="outline">{r.severity}</Badge>
+                        <IdTag id={r.id} />
+                      </>
+                    }
+                  >
+                    {r.description}
+                  </DataRow>
+                ))}
+              </DataList>
+            );
+          },
+        },
+        {
+          id: "observaciones",
+          label: "Observaciones",
+          count: a.analysis.observations.length,
+          matchCount: (q) =>
+            filterByQuery(q, a.analysis.observations, (o) => [
+              o.id,
+              o.description,
+              o.reason,
+            ]).length,
+          render: ({ query, forPrint }) => {
+            const items = filterByQuery(
+              forPrint ? "" : query,
+              a.analysis.observations,
+              (o) => [o.id, o.description, o.reason],
+            );
+            if (items.length === 0)
+              return <EmptyHint warn={false}>Sin observaciones.</EmptyHint>;
+            return (
+              <DataList>
+                {items.map((o) => (
+                  <DataRow key={o.id} id={o.id} right={<IdTag id={o.id} />}>
+                    {o.description}
+                    {o.reason ? (
+                      <span className="text-muted-foreground"> — {o.reason}</span>
+                    ) : null}
+                  </DataRow>
+                ))}
+              </DataList>
+            );
+          },
+        },
+      ],
     },
   ];
 
   return (
-    <div className="flex h-full flex-col">
-      <PrintCover
-        kind="Plan Scrum"
-        title="Plan ágil"
-        subtitle="Épicas, historias, criterios de aceptación, estimaciones, backlog priorizado y plan de sprints."
-        version="1.0.0"
-        stats={[
-          { label: "historias", value: String(a.metrics.stories_total) },
-          { label: "puntos", value: String(a.metrics.points_total) },
-          { label: "sprints", value: String(a.metrics.sprints_total) },
-          { label: "cobertura", value: `${Math.round(a.metrics.coverage * 100)}%` },
-        ]}
-      />
-      <PrintToc
-        items={[
-          "Backlog de producto",
-          "Sprints",
-          "Historias de usuario",
-          "Épicas",
-          "Preguntas al Product Owner",
-          "Análisis",
-        ]}
-      />
-      <PrintFooter title="Plan Scrum" />
+    <ArtifactNavProvider
+      navigateToRef={navigateToRef}
+      canNavigateToRef={canNavigateToRef}
+    >
+      <div className="flex h-full flex-col">
+        <PrintCover
+          kind="Plan Scrum"
+          title="Plan ágil"
+          subtitle="Épicas, historias, criterios de aceptación, estimaciones, backlog priorizado y plan de sprints."
+          version="1.0.0"
+          stats={[
+            { label: "historias", value: String(a.metrics.stories_total) },
+            { label: "puntos", value: String(a.metrics.points_total) },
+            { label: "sprints", value: String(a.metrics.sprints_total) },
+            {
+              label: "cobertura",
+              value: `${Math.round(a.metrics.coverage * 100)}%`,
+            },
+          ]}
+        />
+        <PrintFooter title="Plan Scrum" />
 
-      {/* Barra superior de afinamiento + semáforo */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-heading font-semibold">Plan Scrum v1.0.0</span>
-          <Badge variant="outline">
-            {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
-          </Badge>
-          {job.parent_job_id && (
-            <Link
-              href={`/agents/scrum/jobs/${job.parent_job_id}`}
-              className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
-            >
-              ver original (<Mono>{job.parent_job_id}</Mono>)
-            </Link>
-          )}
-          {job.input_job_id && (
-            <Link
-              href={`/agents/ef/jobs/${job.input_job_id}`}
-              className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
-            >
-              EF de origen (<Mono>{job.input_job_id}</Mono>)
-            </Link>
-          )}
-          <span className="text-xs text-muted-foreground">{answered} respondidas</span>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
-              ready
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-slate-300 bg-slate-50 text-slate-600",
-              ready && celebrate && "animate-celebrate",
+        {/* Barra superior de afinamiento + semáforo */}
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur print:hidden">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="font-heading font-semibold">Plan Scrum v1.0.0</span>
+            <Badge variant="outline">
+              {job.parent_job_id ? "v2 · afinamiento" : "v1 · original"}
+            </Badge>
+            {job.parent_job_id && (
+              <Link
+                href={`/agents/scrum/jobs/${job.parent_job_id}`}
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+              >
+                ver original (<Mono>{job.parent_job_id}</Mono>)
+              </Link>
             )}
-          >
+            {job.input_job_id && (
+              <Link
+                href={`/agents/ef/jobs/${job.input_job_id}`}
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+              >
+                EF de origen (<Mono>{job.input_job_id}</Mono>)
+              </Link>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {answered} respondidas
+            </span>
             <span
               className={cn(
-                "h-2 w-2 rounded-full",
-                ready ? "bg-emerald-500" : "bg-slate-400",
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+                ready
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-slate-300 bg-slate-50 text-slate-600",
+                ready && celebrate && "animate-celebrate",
               )}
-            />
-            {ready ? "Listo para el Agente Arquitectura" : "Pendiente de afinamiento"}
-          </span>
-
-          {!puedeEditar && (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
-              title="Tu rol permite consultar este módulo, no modificarlo"
             >
-              <Eye className="h-3 w-3" />
-              Modo lectura
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  ready ? "bg-emerald-500" : "bg-slate-400",
+                )}
+              />
+              {ready
+                ? "Listo para el Agente Arquitectura"
+                : "Pendiente de afinamiento"}
             </span>
-          )}
 
-          {/* Filtro por responsable: la asignación es una lectura transversal del
-              plan, así que vive en la barra y afecta backlog e historias. */}
-          {team.length > 0 && (
-            <label className="inline-flex items-center gap-1.5 text-xs text-meta-foreground print:hidden">
-              Ver historias de
-              <NativeSelect
-                value={personFilter}
-                onChange={(e) => setPersonFilter(e.target.value)}
-                aria-label="Filtrar historias por responsable"
-                className="h-8 max-w-[12rem] text-xs"
+            {!puedeEditar && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 print:hidden"
+                title="Tu rol permite consultar este módulo, no modificarlo"
               >
-                <option value="">Todas</option>
-                <option value={SIN_ASIGNAR}>Sin asignar</option>
-                {team.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.full_name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-          )}
+                <Eye className="h-3 w-3" />
+                Modo lectura
+              </span>
+            )}
 
-          <div className="ml-auto flex flex-wrap gap-2">
-            {puedeEditar && a.questions_for_po.length > 0 && (
+            {/* Filtro por responsable: la asignación es una lectura transversal del
+                plan, así que vive en la barra y afecta backlog e historias. */}
+            {team.length > 0 && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-meta-foreground print:hidden">
+                Ver historias de
+                <NativeSelect
+                  value={personFilter}
+                  onChange={(e) => setPersonFilter(e.target.value)}
+                  aria-label="Filtrar historias por responsable"
+                  className="h-8 max-w-[12rem] text-xs"
+                >
+                  <option value="">Todas</option>
+                  <option value={SIN_ASIGNAR}>Sin asignar</option>
+                  {team.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+            )}
+
+            <div className="ml-auto flex flex-wrap gap-2">
+              {puedeEditar && a.questions_for_po.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={openQuestions}
+                >
+                  <MessagesSquare className="h-3.5 w-3.5" />
+                  Responder preguntas
+                  {blockingRemaining > 0 && (
+                    <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
+                      {blockingRemaining}
+                    </span>
+                  )}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => setSheetOpen(true)}
+                onClick={printNow}
               >
-                <MessagesSquare className="h-3.5 w-3.5" />
-                Responder preguntas
-                {blockingRemaining > 0 && (
-                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular-nums">
-                    {blockingRemaining}
-                  </span>
-                )}
+                <Printer className="h-3.5 w-3.5" />
+                Exportar PDF
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={printNow}
-            >
-              <Printer className="h-3.5 w-3.5" />
-              Exportar PDF
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => doExport("csv")}
-            >
-              <FileDown className="h-3.5 w-3.5" />
-              ClickUp CSV
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => doExport("json")}
-            >
-              <FileDown className="h-3.5 w-3.5" />
-              JSON
-            </Button>
-            {/*
-              Envío directo a ClickUp: VISIBLE pero deshabilitado. Está aquí a
-              propósito — comunica que la asignación que el equipo hace hoy no se
-              va a perder cuando llegue la API. Ocultarlo dejaría la duda de si
-              asignar sirve para algo. El `<span>` envuelve al botón porque un
-              elemento `disabled` no emite eventos de ratón y el tooltip no se
-              mostraría.
-            */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="inline-flex">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      disabled
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Enviar a ClickUp
-                    </Button>
-                  </span>
-                }
-              />
-              <TooltipContent>
-                Disponible en la próxima versión — las asignaciones ya quedarán
-                vinculadas.
-              </TooltipContent>
-            </Tooltip>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() =>
-                download(
-                  JSON.stringify(a, null, 2),
-                  `scrum-artifact-${job.job_id}.json`,
-                  "application/json",
-                )
-              }
-            >
-              <Download className="h-3.5 w-3.5" />
-              Artefacto
-            </Button>
-            {puedeEditar && (
-              <Dialog>
-                <DialogTrigger
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => doExport("csv")}
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                ClickUp CSV
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => doExport("json")}
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                JSON
+              </Button>
+              {/*
+                Envío directo a ClickUp: VISIBLE pero deshabilitado. Está aquí a
+                propósito — comunica que la asignación que el equipo hace hoy no se
+                va a perder cuando llegue la API. Ocultarlo dejaría la duda de si
+                asignar sirve para algo. El `<span>` envuelve al botón porque un
+                elemento `disabled` no emite eventos de ratón y el tooltip no se
+                mostraría.
+              */}
+              <Tooltip>
+                <TooltipTrigger
                   render={
-                    <Button size="sm" disabled={!canRefine}>
-                      Regenerar plan afinado
-                    </Button>
+                    <span className="inline-flex">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Enviar a ClickUp
+                      </Button>
+                    </span>
                   }
                 />
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Regenerar plan afinado</DialogTitle>
-                    <DialogDescription>
-                      Se creará un plan hijo reinyectando las respuestas del Product
-                      Owner y se ejecutará el modelo real.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                    Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al plan
-                    anterior). Esta acción consume tokens de la API.
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={doRefine} disabled={refining || !canRefine}>
-                      {refining ? "Regenerando…" : "Confirmar y regenerar"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+                <TooltipContent>
+                  Disponible en la próxima versión — las asignaciones ya quedarán
+                  vinculadas.
+                </TooltipContent>
+              </Tooltip>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() =>
+                  download(
+                    JSON.stringify(a, null, 2),
+                    `scrum-artifact-${job.job_id}.json`,
+                    "application/json",
+                  )
+                }
+              >
+                <Download className="h-3.5 w-3.5" />
+                Artefacto
+              </Button>
+              {puedeEditar && (
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button size="sm" disabled={!canRefine}>
+                        Regenerar plan afinado
+                      </Button>
+                    }
+                  />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Regenerar plan afinado</DialogTitle>
+                      <DialogDescription>
+                        Se creará un plan hijo reinyectando las respuestas del
+                        Product Owner y se ejecutará el modelo real.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                      Costo estimado: ~${a.metrics.cost.toFixed(4)} (similar al plan
+                      anterior). Esta acción consume tokens de la API.
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={doRefine} disabled={refining || !canRefine}>
+                        {refining ? "Regenerando…" : "Confirmar y regenerar"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          </div>
+          {checks && (
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <StatusPill ok={checks.no_blocking_questions} label="Sin bloqueantes PO" />
+              <StatusPill ok={checks.must_should_estimated} label="Must/should estimadas" />
+              <StatusPill ok={checks.coverage_met} label="Cobertura RF" />
+              <StatusPill ok={checks.no_must_unassigned} label="Sin must sin asignar" />
+            </div>
+          )}
+        </div>
+
+        {/* Cabecera: estado y mini-stats */}
+        <div className="border-b px-6 py-3 print:hidden">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <StatRow>
+              <Stat
+                icon={<ListChecks />}
+                value={a.metrics.stories_total}
+                label="historias"
+              />
+              <Stat icon={<Hash />} value={a.metrics.points_total} label="puntos" />
+              <Stat
+                icon={<Layers />}
+                value={a.metrics.sprints_total}
+                label="sprints"
+              />
+              <Stat
+                icon={<Target />}
+                value={`${Math.round(a.metrics.coverage * 100)}%`}
+                label="cobertura"
+              />
+              <Stat
+                icon={<Coins />}
+                value={a.metrics.tokens.total.toLocaleString("es-PE")}
+                label="tokens"
+              />
+              <Stat
+                icon={<DollarSign />}
+                value={`$${a.metrics.cost.toFixed(4)}`}
+                label="costo"
+              />
+            </StatRow>
+            <div className="ml-auto">
+              <JobStatusBadge status={job.status} />
+            </div>
           </div>
         </div>
-        {checks && (
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <StatusPill ok={checks.no_blocking_questions} label="Sin bloqueantes PO" />
-            <StatusPill ok={checks.must_should_estimated} label="Must/should estimadas" />
-            <StatusPill ok={checks.coverage_met} label="Cobertura RF" />
-            <StatusPill ok={checks.no_must_unassigned} label="Sin must sin asignar" />
-          </div>
-        )}
-      </div>
 
-      {/* Cabecera: estado y mini-stats */}
-      <div className="border-b px-6 py-4">
-        <div className="mb-3">
-          <JobStatusBadge status={job.status} />
-        </div>
-        <StatRow>
-          <Stat icon={<ListChecks />} value={a.metrics.stories_total} label="historias" />
-          <Stat icon={<Hash />} value={a.metrics.points_total} label="puntos" />
-          <Stat icon={<Layers />} value={a.metrics.sprints_total} label="sprints" />
-          <Stat
-            icon={<Target />}
-            value={`${Math.round(a.metrics.coverage * 100)}%`}
-            label="cobertura"
-          />
-          <Stat
-            icon={<Coins />}
-            value={a.metrics.tokens.total.toLocaleString("es-PE")}
-            label="tokens"
-          />
-          <Stat
-            icon={<DollarSign />}
-            value={`$${a.metrics.cost.toFixed(4)}`}
-            label="costo"
-          />
-        </StatRow>
-      </div>
-
-      {/* Dos columnas: índice (plegable) + contenido */}
-      <div
-        className={cn(
-          "grid grid-cols-1 gap-6 px-4 py-5 md:px-6 print:block!",
-          indexCollapsed
-            ? "md:grid-cols-[2.75rem_1fr]"
-            : "md:grid-cols-[13rem_1fr]",
-        )}
-      >
-        <div className="md:sticky md:top-28 md:self-start print:hidden">
-          <ArtifactIndexPanel
-            sections={indexSections}
-            collapsed={indexCollapsed}
-            onToggle={() => setIndexCollapsed((v) => !v)}
-            onNavigate={disc.openOnly}
-            openIds={disc.openIds}
-          />
-        </div>
-
-        <div className="min-w-0 space-y-6 stagger-children">
-          {/* Banner de éxito */}
+        {/* EL HUB */}
+        <div className="px-4 py-5 md:px-6 print:hidden">
           {blockingDone && (
             <div
               className={cn(
-                "rounded-xl border p-4 print:hidden",
+                "mb-4 rounded-xl border p-4",
                 // En verde, el rim-light esmeralda sustituye al borde plano (de
                 // ahí `border-transparent`: si no, doble anillo).
                 ready
@@ -820,597 +1367,241 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             </div>
           )}
 
-          {/* 1. Backlog — tabla real */}
-          <ArtifactSection
-            id="sec-backlog"
-            index="1"
-            title={`Backlog de producto (${a.product_backlog.method})`}
-            count={a.product_backlog.ordered_story_ids.length}
-            open={disc.isOpen("sec-backlog")}
-            onToggle={() => disc.toggle("sec-backlog")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {a.product_backlog.ordered_story_ids.length} historias priorizadas
-                por {a.product_backlog.method}
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <DataTable
-                  columns={backlogColumns}
-                  rows={visibleBacklog}
-                  rowKey={(sid) => sid}
-                  zebra
-                  empty={
-                    personFilter
-                      ? "Ninguna historia del backlog coincide con ese responsable."
-                      : "Backlog vacío."
-                  }
-                />
-                {a.product_backlog.rationale && (
-                  <p className="prose-measure mt-2 text-xs text-muted-foreground">
-                    {a.product_backlog.rationale}
-                  </p>
-                )}
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 2. Sprints */}
-          <ArtifactSection
-            id="sec-sprints"
-            index="2"
-            title="Sprints"
-            count={a.sprints.length}
-            open={disc.isOpen("sec-sprints")}
-            onToggle={() => disc.toggle("sec-sprints")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {a.metrics.points_total} puntos en {a.sprints.length} sprint
-                {a.sprints.length !== 1 ? "s" : ""}
-                {a.unassigned_story_ids.length > 0 ? (
-                  <span className="text-amber-700">
-                    {" "}
-                    · {a.unassigned_story_ids.length} sin asignar
-                  </span>
-                ) : null}
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-3">
-                  {a.sprints.map((sp) => (
-                    <div key={sp.id} className="print-atom rounded-lg border p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <IdTag id={sp.id} />
-                        <Badge variant="outline" className="font-mono tabular-nums">
-                          {sp.total_points}/{sp.capacity_points} pts
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">{sp.goal}</span>
-                        <span className="ml-auto">
-                          <SprintAssigneeSelect
-                            sprintId={sp.id}
-                            team={team}
-                            member={sprintAssigneeOf.get(sp.id)}
-                            readOnly={!puedeEditar}
-                            busy={assigningId === sp.id}
-                            onAssign={onAssignSprint}
-                          />
-                        </span>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {sp.story_ids.map((sid) => (
-                          <span key={sid} className="inline-flex items-center gap-1">
-                            <RefChip refId={sid} />
-                            {/* Avatar compacto: quién lleva cada historia del sprint. */}
-                            {assigneeOf.get(sid) && (
-                              <AssigneeBadge member={assigneeOf.get(sid)} compact />
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                      <SprintLoad
-                        loads={loadsOfSprint(sp.story_ids)}
-                        capacityPoints={sp.capacity_points}
-                        unassignedPoints={unassignedPointsOf(sp.story_ids)}
-                      />
-                    </div>
-                  ))}
-                  {a.unassigned_story_ids.length > 0 ? (
-                    <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3">
-                      <GroupLabel count={a.unassigned_story_ids.length}>
-                        <span className="text-amber-700">⚠ Sin asignar</span>
-                      </GroupLabel>
-                      <div className="flex flex-wrap gap-1.5">
-                        {a.unassigned_story_ids.map((sid) => (
-                          <RefChip key={sid} refId={sid} />
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Todas las historias estimadas quedaron asignadas.
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 3. Historias */}
-          <ArtifactSection
-            id="sec-stories"
-            index="3"
-            title="Historias de usuario"
-            count={a.stories.length}
-            open={disc.isOpen("sec-stories")}
-            onToggle={() => disc.toggle("sec-stories")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {a.stories.filter((s) => s.story_points != null).length} de{" "}
-                {a.stories.length} estimadas · con criterios de aceptación Gherkin
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-3">
-                  {visibleStories.length === 0 && (
-                    <EmptyHint>
-                      Ninguna historia coincide con ese responsable.
-                    </EmptyHint>
-                  )}
-                  {visibleStories.map((s) => (
-                    <div
-                      key={s.id}
-                      id={`ref-${s.id}`}
-                      className="print-atom rounded-lg border p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <IdTag id={s.id} />
-                        <MoscowBadge priority={s.priority} />
-                        <PointsBadge points={s.story_points} />
-                        {s.epic_ref && (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            épica <RefChip refId={s.epic_ref} />
-                          </span>
-                        )}
-                        <ConfidenceBadge value={s.confidence} />
-                        {/* Asignar a: en el detalle de la historia, alineado a la
-                            derecha para no competir con los badges del dominio. */}
-                        <span className="ml-auto print:hidden">
-                          <AssigneeSelect
-                            storyId={s.id}
-                            team={team}
-                            member={assigneeOf.get(s.id)}
-                            inherited={sourceOf.get(s.id) === "sprint"}
-                            readOnly={!puedeEditar}
-                            busy={assigningId === s.id}
-                            onAssign={onAssign}
-                          />
-                        </span>
-                        {/* En impresión el responsable se ve como texto. */}
-                        <span className="ml-auto hidden print:inline">
-                          {assigneeOf.get(s.id)?.full_name ?? "sin asignar"}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-sm font-medium">{s.statement}</p>
-
-                      {/* Trazabilidad al EF */}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span className="inline-flex flex-wrap items-center gap-1">
-                          RF:{" "}
-                          {s.source_refs.requirement_refs.map((r) => (
-                            <RefChip key={r} refId={r} />
-                          ))}
-                        </span>
-                        {s.source_refs.rule_refs.length > 0 && (
-                          <span className="inline-flex flex-wrap items-center gap-1">
-                            reglas:{" "}
-                            {s.source_refs.rule_refs.map((r) => (
-                              <RefChip key={r} refId={r} />
-                            ))}
-                          </span>
-                        )}
-                        {s.dependencies.length > 0 && (
-                          <span className="inline-flex flex-wrap items-center gap-1">
-                            depende de:{" "}
-                            {s.dependencies.map((r) => (
-                              <RefChip key={r} refId={r} />
-                            ))}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Criterios de aceptación (Gherkin) — plegados por defecto */}
-                      {s.acceptance_criteria.length > 0 ? (
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleStory(s.id)}
-                            aria-expanded={expandedStories.has(s.id)}
-                            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            <ChevronRight
-                              className={cn(
-                                "h-3.5 w-3.5 transition-transform duration-200",
-                                expandedStories.has(s.id) && "rotate-90",
-                              )}
-                            />
-                            Criterios de aceptación ({s.acceptance_criteria.length})
-                          </button>
-                          <div
-                            className={cn(
-                              "grid transition-[grid-template-rows] duration-200 ease-in-out",
-                              expandedStories.has(s.id)
-                                ? "grid-rows-[1fr]"
-                                : "grid-rows-[0fr]",
-                            )}
-                          >
-                            <div className="overflow-hidden">
-                              <div className="mt-2 space-y-1.5">
-                                {s.acceptance_criteria.map((c) => (
-                                  <div
-                                    key={c.id}
-                                    className="rounded-lg border bg-muted/30 p-2.5 text-xs"
-                                  >
-                                    <div className="mb-1">
-                                      <IdTag id={c.id} />
-                                    </div>
-                                    {c.format === "gherkin" ? (
-                                      <span>
-                                        <b className="text-foreground">Dado</b> {c.given}{" "}
-                                        <b className="text-foreground">cuando</b> {c.when}{" "}
-                                        <b className="text-foreground">entonces</b>{" "}
-                                        {c.then}
-                                      </span>
-                                    ) : (
-                                      <span>{c.text}</span>
-                                    )}{" "}
-                                    {c.source_refs.map((r) => (
-                                      <RefChip key={r} refId={r} className="ml-1" />
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-2">
-                          <EmptyHint>Sin criterios de aceptación.</EmptyHint>
-                        </div>
-                      )}
-
-                      {s.estimation_rationale && (
-                        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          Estimación sugerida: {s.estimation_rationale}
-                          <ConfidenceBadge value={s.estimation_confidence} />
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 4. Épicas */}
-          <ArtifactSection
-            id="sec-epics"
-            index="4"
-            title="Épicas"
-            count={a.epics.length}
-            open={disc.isOpen("sec-epics")}
-            onToggle={() => disc.toggle("sec-epics")}
-            forceRender={printMode}
-            preview={
-              <span className="line-clamp-2">
-                {a.epics.map((e) => e.title).join(" · ") || "Sin épicas"}
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-2">
-                  {a.epics.map((e) => (
-                    <div
-                      key={e.id}
-                      id={`ref-${e.id}`}
-                      className="print-atom rounded-lg border p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <IdTag id={e.id} />
-                        <span className="text-sm font-medium">{e.title}</span>
-                        <ConfidenceBadge value={e.confidence} />
-                      </div>
-                      {e.description && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {e.description}
-                        </p>
-                      )}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span className="inline-flex flex-wrap items-center gap-1">
-                          origen:{" "}
-                          {e.source_refs.map((r) => (
-                            <RefChip key={r} refId={r} />
-                          ))}
-                        </span>
-                        <span className="inline-flex flex-wrap items-center gap-1">
-                          historias:{" "}
-                          {e.story_ids.map((r) => (
-                            <RefChip key={r} refId={r} />
-                          ))}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 5. Preguntas al PO */}
-          <ArtifactSection
-            id="sec-questions"
-            index="5"
-            title="Preguntas al Product Owner"
-            count={a.questions_for_po.length}
-            meta={`${blockingTotal} bloq.`}
-            open={disc.isOpen("sec-questions")}
-            onToggle={() => disc.toggle("sec-questions")}
-            forceRender={printMode}
-            preview={
-              <span>
-                {blockingRemaining > 0 ? (
-                  <span className="font-medium text-red-600">
-                    {blockingRemaining} bloqueante
-                    {blockingRemaining !== 1 ? "s" : ""} sin responder
-                  </span>
-                ) : blockingTotal > 0 ? (
-                  <span className="font-medium text-emerald-600">
-                    Bloqueantes resueltas
-                  </span>
-                ) : (
-                  "Sin preguntas bloqueantes"
-                )}
-                {" · "}
-                {answered} respondidas
-              </span>
-            }
-            actions={
-              <FilterToggle onlyBlocking={onlyBlocking} onChange={setOnlyBlocking} />
-            }
-          >
-            {() => (
-              <>
-                {questions.length > 0 ? (
-                  <div className="space-y-2">
-                    {questions.map((q) => (
-                      <div
-                        key={q.id}
-                        id={`ref-${q.id}`}
-                        className={cn(
-                          "print-atom rounded-lg border p-3",
-                          q.blocking && "border-red-300 bg-red-50/40",
-                        )}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <IdTag id={q.id} />
-                          <AudienceBadge audience={q.audience} />
-                          {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
-                          {q.linked_to_ref && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              ligada a <RefChip refId={q.linked_to_ref} />
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1.5 text-sm font-medium">{q.question}</p>
-                        <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
-                        <div className="print:hidden">
-                          <ScrumValidationControls
-                            readOnly={!puedeEditar}
-                            jobId={job.job_id}
-                            targetId={q.id}
-                            status={statusOf(q.id)}
-                            respuesta={respuestaOf(q.id)}
-                            onChanged={() => void handlePoAnswered(q.id)}
-                          />
-                        </div>
-                        <PrintValidationState
-                          status={statusOf(q.id)}
-                          respuesta={respuestaOf(q.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyHint warn={false}>
-                    {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas al PO."}
-                  </EmptyHint>
-                )}
-              </>
-            )}
-          </ArtifactSection>
-
-          {/* 6. Análisis */}
-          <ArtifactSection
-            id="sec-analysis"
-            index="6"
-            title="Análisis"
-            count={a.analysis.risks.length + a.analysis.observations.length}
-            open={disc.isOpen("sec-analysis")}
-            onToggle={() => disc.toggle("sec-analysis")}
-            forceRender={printMode}
-            preview={
-              <span>
-                Cobertura RF {Math.round(cov.coverage_ratio * 100)}% ·{" "}
-                {a.analysis.risks.length} riesgos ·{" "}
-                {a.analysis.observations.length} observaciones
-              </span>
-            }
-          >
-            {() => (
-              <>
-                <div className="space-y-4">
-                  <div className="rounded-lg border p-3 text-sm">
-                    <GroupLabel>Cobertura de requisitos funcionales</GroupLabel>
-                    <p>
-                      {cov.requirements_covered} / {cov.requirements_total} cubiertos (
-                      {Math.round(cov.coverage_ratio * 100)}%)
-                    </p>
-                    {cov.uncovered_requirement_refs.length > 0 ? (
-                      <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-amber-700">
-                        ⚠ No cubiertos:{" "}
-                        {cov.uncovered_requirement_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-xs text-emerald-700">
-                        Todos los RF quedaron cubiertos.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <GroupLabel count={a.analysis.risks.length}>Riesgos</GroupLabel>
-                    {a.analysis.risks.length > 0 ? (
-                      <DataList>
-                        {a.analysis.risks.map((r) => (
-                          <DataRow
-                            key={r.id}
-                            id={r.id}
-                            right={
-                              <>
-                                <Badge variant="outline">{r.severity}</Badge>
-                                <IdTag id={r.id} />
-                              </>
-                            }
-                          >
-                            {r.description}
-                          </DataRow>
-                        ))}
-                      </DataList>
-                    ) : (
-                      <EmptyHint warn={false}>Sin riesgos.</EmptyHint>
-                    )}
-                  </div>
-
-                  <div>
-                    <GroupLabel count={a.analysis.observations.length}>
-                      Observaciones
-                    </GroupLabel>
-                    {a.analysis.observations.length > 0 ? (
-                      <DataList>
-                        {a.analysis.observations.map((o) => (
-                          <DataRow key={o.id} id={o.id} right={<IdTag id={o.id} />}>
-                            {o.description}
-                            {o.reason ? (
-                              <span className="text-muted-foreground"> — {o.reason}</span>
-                            ) : null}
-                          </DataRow>
-                        ))}
-                      </DataList>
-                    ) : (
-                      <EmptyHint warn={false}>Sin observaciones.</EmptyHint>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </ArtifactSection>
+          <HubGrid>
+            {sections.map((s) => (
+              <HubCard
+                key={s.id}
+                module="scrum"
+                icon={s.icon}
+                title={s.title}
+                metrics={s.metrics}
+                insight={s.insight}
+                urgent={s.urgent}
+                urgentLabel={s.urgentLabel}
+                onOpen={() =>
+                  s.id === "preguntas" ? openQuestions() : hub.openSection(s.id)
+                }
+              />
+            ))}
+          </HubGrid>
+          <HubHint />
         </div>
+
+        <ArtifactPanel hub={hub} sections={sections} module="scrum" />
+        <ArtifactPrintDoc sections={sections} active={printMode} />
       </div>
-
-      {/* Contador flotante de bloqueantes → abre el modo enfocado */}
-      {puedeEditar && blockingRemaining > 0 && (
-        <button
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full border bg-background/95 px-4 py-1.5 text-xs shadow-lg backdrop-blur transition-colors hover:border-primary/40 hover:text-primary print:hidden"
-        >
-          <span className="font-semibold text-red-600">{blockingRemaining}</span>{" "}
-          bloqueante{blockingRemaining !== 1 ? "s" : ""} restante
-          {blockingRemaining !== 1 ? "s" : ""} · responder
-        </button>
-      )}
-
-      <QuestionSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        title="Responder preguntas al PO"
-        questions={a.questions_for_po.map(
-          (q): SheetQuestion => ({
-            id: q.id,
-            question: q.question,
-            reason: q.reason,
-            blocking: q.blocking,
-            audience: q.audience,
-            linked_to_ref: q.linked_to_ref,
-          }),
-        )}
-        statusOf={statusOf}
-        renderControls={(q, onAnswered) => (
-          <ScrumValidationControls
-                            readOnly={!puedeEditar}
-            jobId={job.job_id}
-            targetId={q.id}
-            status={statusOf(q.id)}
-            respuesta={respuestaOf(q.id)}
-            onChanged={() => {
-              void reloadSummary();
-              onAnswered();
-            }}
-          />
-        )}
-      />
-
-      <BackToTop />
-    </div>
+    </ArtifactNavProvider>
   );
 }
 
 // --- subcomponentes ----------------------------------------------------------
 
-function FilterToggle({
-  onlyBlocking,
-  onChange,
+/**
+ * Historias de usuario: fila-tarjeta con badges de dominio, trazabilidad al EF,
+ * responsable y criterios de aceptación plegados. Los criterios se despliegan al
+ * imprimir, al buscar (el término puede estar dentro) y al llegar por un chip
+ * `AC-…` (si no, no habría nada que resaltar).
+ */
+function StoryList({
+  stories,
+  ctx,
+  team,
+  assigneeOf,
+  sourceOf,
+  expanded,
+  onToggle,
+  onAssign,
+  assigningId,
+  readOnly,
 }: {
-  onlyBlocking: boolean;
-  onChange: (v: boolean) => void;
+  stories: Story[];
+  ctx: PanelRenderCtx;
+  team: TeamMember[];
+  assigneeOf: Map<string, TeamMember | undefined>;
+  sourceOf: Map<string, "story" | "sprint">;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  onAssign: (storyId: string, userId: string | null) => void;
+  assigningId: string | null;
+  readOnly: boolean;
+}) {
+  if (stories.length === 0) {
+    return (
+      <EmptyHint>
+        {ctx.query
+          ? "Ninguna historia coincide con la búsqueda."
+          : "Ninguna historia en este grupo."}
+      </EmptyHint>
+    );
+  }
+  const expandAll =
+    ctx.forPrint || !!ctx.query || (ctx.refId?.startsWith("AC-") ?? false);
+
+  return (
+    <div className="space-y-3">
+      {stories.map((s) => {
+        const open = expandAll || expanded.has(s.id);
+        return (
+          <div
+            key={s.id}
+            id={`ref-${s.id}`}
+            className="print-atom rounded-lg border p-3"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <IdTag id={s.id} />
+              <MoscowBadge priority={s.priority} />
+              <PointsBadge points={s.story_points} />
+              {s.epic_ref && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  épica <RefChip refId={s.epic_ref} />
+                </span>
+              )}
+              <ConfidenceBadge value={s.confidence} />
+              {/* Asignar a: alineado a la derecha para no competir con los
+                  badges del dominio. */}
+              <span className="ml-auto print:hidden">
+                <AssigneeSelect
+                  storyId={s.id}
+                  team={team}
+                  member={assigneeOf.get(s.id)}
+                  inherited={sourceOf.get(s.id) === "sprint"}
+                  readOnly={readOnly}
+                  busy={assigningId === s.id}
+                  onAssign={onAssign}
+                />
+              </span>
+              {/* En impresión el responsable se ve como texto. */}
+              <span className="ml-auto hidden print:inline">
+                {assigneeOf.get(s.id)?.full_name ?? "sin asignar"}
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm font-medium">{s.statement}</p>
+
+            {/* Trazabilidad al EF */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="inline-flex flex-wrap items-center gap-1">
+                RF:{" "}
+                {s.source_refs.requirement_refs.map((r) => (
+                  <RefChip key={r} refId={r} />
+                ))}
+              </span>
+              {s.source_refs.rule_refs.length > 0 && (
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  reglas:{" "}
+                  {s.source_refs.rule_refs.map((r) => (
+                    <RefChip key={r} refId={r} />
+                  ))}
+                </span>
+              )}
+              {s.dependencies.length > 0 && (
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  depende de:{" "}
+                  {s.dependencies.map((r) => (
+                    <RefChip key={r} refId={r} />
+                  ))}
+                </span>
+              )}
+            </div>
+
+            {/* Criterios de aceptación (Gherkin) */}
+            {s.acceptance_criteria.length > 0 ? (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => onToggle(s.id)}
+                  aria-expanded={open}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground print:hidden"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      open && "rotate-90",
+                    )}
+                  />
+                  Criterios de aceptación ({s.acceptance_criteria.length})
+                </button>
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-200 ease-out print:grid-rows-[1fr]",
+                    open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  )}
+                >
+                  <div className="overflow-hidden print:overflow-visible">
+                    <div className="mt-2 space-y-1.5">
+                      {s.acceptance_criteria.map((c) => (
+                        <div
+                          key={c.id}
+                          id={`ref-${c.id}`}
+                          className="rounded-lg border bg-muted/30 p-2.5 text-xs"
+                        >
+                          <div className="mb-1">
+                            <IdTag id={c.id} />
+                          </div>
+                          {c.format === "gherkin" ? (
+                            <span>
+                              <b className="text-foreground">Dado</b> {c.given}{" "}
+                              <b className="text-foreground">cuando</b> {c.when}{" "}
+                              <b className="text-foreground">entonces</b> {c.then}
+                            </span>
+                          ) : (
+                            <span>{c.text}</span>
+                          )}{" "}
+                          {c.source_refs.map((r) => (
+                            <RefChip key={r} refId={r} className="ml-1" />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <EmptyHint>Sin criterios de aceptación.</EmptyHint>
+              </div>
+            )}
+
+            {s.estimation_rationale && (
+              <p className="mt-1.5 inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                Estimación sugerida: {s.estimation_rationale}
+                <ConfidenceBadge value={s.estimation_confidence} />
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Conmutador segmentado compacto (modo de preguntas, filtros del panel). */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
 }) {
   return (
     <div className="flex rounded-lg border bg-muted/40 p-0.5 text-xs">
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={cn(
-          "rounded-md px-2 py-0.5 transition-colors",
-          !onlyBlocking
-            ? "bg-background font-medium text-foreground shadow-sm"
-            : "text-muted-foreground",
-        )}
-      >
-        Todas
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={cn(
-          "rounded-md px-2 py-0.5 transition-colors",
-          onlyBlocking
-            ? "bg-background font-medium text-foreground shadow-sm"
-            : "text-muted-foreground",
-        )}
-      >
-        Bloqueantes
-      </button>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={cn(
+            "rounded-md px-2 py-1 transition-colors duration-150",
+            value === o.value
+              ? "bg-background font-medium text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

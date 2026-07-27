@@ -22,6 +22,29 @@ export function HubGrid({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Pista de uso bajo el grid: dice en una línea que las tarjetas abren un panel y
+ * qué teclas funcionan dentro. El hub es un patrón nuevo; una frase evita que el
+ * usuario descubra los atajos por accidente (o nunca).
+ */
+export function HubHint() {
+  return (
+    <p className="mt-4 text-[11px] text-meta-foreground">
+      Cada tarjeta abre su sección en el panel lateral. Dentro: <Kbd>←</Kbd>{" "}
+      <Kbd>→</Kbd> cambian de sección, <Kbd>Esc</Kbd> cierra y los chips de
+      referencia saltan a la sección que los define.
+    </p>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border bg-muted px-1 font-mono text-[10px] text-foreground/70">
+      {children}
+    </kbd>
+  );
+}
+
 export function HubCard({
   module,
   icon,
