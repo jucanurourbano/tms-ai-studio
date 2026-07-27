@@ -1,11 +1,12 @@
 import { History, Kanban } from "lucide-react";
 
 import { ActionCard } from "@/components/shell/action-card";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 
 export default function ScrumLandingPage() {
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <PageContainer>
       <PageHeader
         variant="hero"
         icon="kanban"
@@ -34,6 +35,6 @@ export default function ScrumLandingPage() {
           footer="Abre un plan para revisarlo y afinarlo con el PO."
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { JobsHistoryTable } from "@/components/history/jobs-history-table";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { arquitecturaApi } from "@/lib/api/arquitectura";
@@ -49,7 +50,7 @@ export default function ArquitecturaJobsHistoryPage() {
   const to = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <div className="animate-rise p-6 max-w-full">
+    <PageContainer className="animate-rise">
       <PageHeader
         icon="layers"
         eyebrow="Diseñar"
@@ -107,6 +108,6 @@ export default function ArquitecturaJobsHistoryPage() {
         El título y la fuente se heredan del plan Scrum de origen. El buscador
         filtra por título dentro de la página actual.
       </p>
-    </div>
+    </PageContainer>
   );
 }

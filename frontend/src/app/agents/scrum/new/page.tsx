@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { JobStatusBadge, Mono } from "@/components/ef/badges";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,7 +72,7 @@ export default function NewPlanPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <PageContainer variant="form">
       <PageHeader
         icon="kanban"
         eyebrow="Gestionar"
@@ -177,6 +178,6 @@ export default function NewPlanPage() {
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

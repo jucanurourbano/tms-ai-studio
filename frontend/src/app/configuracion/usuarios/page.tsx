@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { UserActionsMenu } from "@/components/configuracion/user-actions-menu";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 import { TableShell, TH_META } from "@/components/shell/table-shell";
 import { Badge } from "@/components/ui/badge";
@@ -179,7 +180,7 @@ export default function UsuariosPage() {
 
   if (!puedeVerPanel) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <PageContainer variant="notice">
         <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-800">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
@@ -192,12 +193,12 @@ export default function UsuariosPage() {
             </p>
           </div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="animate-rise mx-auto max-w-5xl p-6">
+    <PageContainer className="animate-rise">
       <PageHeader
         eyebrow="Configuración"
         title="Usuarios"
@@ -484,6 +485,6 @@ export default function UsuariosPage() {
           })
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

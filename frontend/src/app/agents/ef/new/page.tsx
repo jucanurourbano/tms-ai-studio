@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shell/page-header";
+import { PageContainer } from "@/components/shell/page-container";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -108,7 +109,7 @@ export default function NewAnalysisPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <PageContainer variant="form">
       <PageHeader
         icon="file-search"
         eyebrow="Especificar"
@@ -285,6 +286,6 @@ export default function NewAnalysisPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

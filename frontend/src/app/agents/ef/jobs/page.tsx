@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { JobsHistoryTable } from "@/components/history/jobs-history-table";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -52,7 +53,7 @@ export default function JobsHistoryPage() {
   const to = Math.min(offset + PAGE_SIZE, total);
 
   return (
-    <div className="animate-rise p-6 max-w-full">
+    <PageContainer className="animate-rise">
       <PageHeader
         icon="file-search"
         eyebrow="Especificar"
@@ -109,6 +110,6 @@ export default function JobsHistoryPage() {
       <p className="mt-3 text-xs text-meta-foreground">
         El buscador filtra por título dentro de la página actual.
       </p>
-    </div>
+    </PageContainer>
   );
 }

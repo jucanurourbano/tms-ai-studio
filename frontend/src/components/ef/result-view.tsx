@@ -500,7 +500,9 @@ export function ResultView({ job }: { job: JobDetail }) {
             label="cobertura"
           />
         </StatRow>
-        <p className="mt-3 max-w-full text-sm text-muted-foreground">{a.summary}</p>
+        <p className="prose-measure mt-3 text-sm text-muted-foreground">
+          {a.summary}
+        </p>
       </div>
 
       {/* Dos columnas: índice (plegable) + contenido */}
@@ -586,7 +588,9 @@ export function ResultView({ job }: { job: JobDetail }) {
                 <div className="space-y-4">
                   <div>
                     <GroupLabel>Qué pide Procesos</GroupLabel>
-                    <p className="text-sm">{si.what_process_requests}</p>
+                    <p className="prose-measure text-sm leading-relaxed">
+                      {si.what_process_requests}
+                    </p>
                   </div>
 
                   <div>

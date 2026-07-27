@@ -832,7 +832,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                   </EmptyHint>
                 )}
                 {a.product_backlog.rationale && (
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="prose-measure mt-2 text-xs text-muted-foreground">
                     {a.product_backlog.rationale}
                   </p>
                 )}

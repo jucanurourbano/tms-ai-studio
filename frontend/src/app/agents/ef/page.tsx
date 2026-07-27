@@ -1,11 +1,12 @@
 import { FileSearch, History } from "lucide-react";
 
 import { ActionCard } from "@/components/shell/action-card";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 
 export default function EFLandingPage() {
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <PageContainer>
       <PageHeader
         variant="hero"
         icon="file-search"
@@ -30,6 +31,6 @@ export default function EFLandingPage() {
           footer="Abre un análisis para ver su artefacto y afinarlo."
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }

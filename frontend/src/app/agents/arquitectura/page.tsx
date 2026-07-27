@@ -1,11 +1,12 @@
 import { History, Layers } from "lucide-react";
 
 import { ActionCard } from "@/components/shell/action-card";
+import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
 
 export default function ArquitecturaLandingPage() {
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <PageContainer>
       <PageHeader
         variant="hero"
         icon="layers"
@@ -34,6 +35,6 @@ export default function ArquitecturaLandingPage() {
           footer="Abre un diseño para revisarlo y afinarlo con el Arquitecto."
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
