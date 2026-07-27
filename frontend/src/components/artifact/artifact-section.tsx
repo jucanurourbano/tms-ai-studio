@@ -14,6 +14,14 @@ import { cn } from "@/lib/utils";
  * flujo (acordeón). El contenido pesado se monta perezosamente (solo tras la
  * primera apertura) y se conserva montado para que reabrir sea instantáneo.
  *
+ * LAZY RENDER DE VERDAD: `children` acepta una **función**. Si se pasa como JSX
+ * normal, el padre construye el subárbol completo (los `.map()` sobre cientos de
+ * requisitos, historias o componentes) en CADA render aunque la sección esté
+ * cerrada — `mounted &&` solo evita insertarlo en el DOM, no el trabajo de
+ * crearlo. Pasándolo como `{() => (…)}` el cuerpo no se evalúa hasta la primera
+ * apertura (o la impresión). Se admiten ambas formas: las secciones ligeras
+ * pueden seguir pasando JSX directo.
+ *
  * En impresión (`forceRender`) todo se monta y expande para que el PDF incluya
  * el artefacto íntegro.
  */
@@ -44,7 +52,8 @@ export function ArtifactSection({
   /** Fuerza el montaje/expansión (impresión). */
   forceRender?: boolean;
   className?: string;
-  children: React.ReactNode;
+  /** JSX directo, o un *thunk* para que el cuerpo no se construya si está cerrada. */
+  children: React.ReactNode | (() => React.ReactNode);
 }) {
   // Latch de montaje perezoso: el contenido se monta al abrir por primera vez
   // (o al imprimir) y se conserva montado para que reabrir sea instantáneo y el
@@ -131,7 +140,11 @@ export function ArtifactSection({
         )}
       >
         <div className="overflow-hidden print:overflow-visible">
-          {mounted && <div className="p-4 print:px-0 print:py-3">{children}</div>}
+          {mounted && (
+            <div className="p-4 print:px-0 print:py-3">
+              {typeof children === "function" ? children() : children}
+            </div>
+          )}
         </div>
       </div>
     </section>

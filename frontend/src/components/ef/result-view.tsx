@@ -562,101 +562,105 @@ export function ResultView({ job }: { job: JobDetail }) {
             forceRender={printMode}
             preview={<span className="line-clamp-2">{si.what_process_requests}</span>}
           >
-            <div className="space-y-4">
-              <div>
-                <GroupLabel>Qué pide Procesos</GroupLabel>
-                <p className="text-sm">{si.what_process_requests}</p>
-              </div>
-
-              <div>
-                <GroupLabel count={si.scope_for_systems?.length}>
-                  Alcance para Sistemas
-                </GroupLabel>
-                {si.scope_for_systems && si.scope_for_systems.length > 0 ? (
-                  <DataList>
-                    {si.scope_for_systems.map((s, i) => (
-                      <DataRow
-                        key={s.id ?? i}
-                        index={i + 1}
-                        right={s.requirement_refs?.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
-                      >
-                        {s.description}
-                      </DataRow>
-                    ))}
-                  </DataList>
-                ) : (
-                  <EmptyHint>Sin alcance definido.</EmptyHint>
-                )}
-              </div>
-
-              <div>
-                <GroupLabel count={si.apparent_out_of_scope?.length}>
-                  Aparentemente fuera de alcance
-                </GroupLabel>
-                {si.apparent_out_of_scope &&
-                si.apparent_out_of_scope.length > 0 ? (
-                  <DataList>
-                    {si.apparent_out_of_scope.map((s, i) => (
-                      <DataRow key={s.id ?? i} index={i + 1}>
-                        {s.description}
-                        {s.reason ? (
-                          <span className="text-muted-foreground"> — {s.reason}</span>
-                        ) : null}
-                      </DataRow>
-                    ))}
-                  </DataList>
-                ) : (
-                  <EmptyHint warn={false}>Nada marcado fuera de alcance.</EmptyHint>
-                )}
-              </div>
-
-              <div>
-                <GroupLabel count={assumptions.length}>
-                  Supuestos de interpretación (validables)
-                </GroupLabel>
-                {assumptions.length > 0 ? (
-                  <div className="space-y-2">
-                    {assumptions.map((s) => (
-                      <div
-                        key={s.id}
-                        id={`ref-${s.id}`}
-                        className="print-atom rounded-lg border p-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <IdTag id={s.id} />
-                          <OriginBadge origin={s.origin} />
-                          <ConfidenceBadge value={s.confidence} />
-                        </div>
-                        <p className="mt-1.5 text-sm">{s.assumption}</p>
-                        {s.rationale && (
-                          <p className="text-xs text-muted-foreground">
-                            {s.rationale}
-                          </p>
-                        )}
-                        <div className="print:hidden">
-                          <ValidationControls
-                            jobId={job.job_id}
-                            targetType="assumption"
-                            targetId={s.id}
-                            status={statusOf(s.id)}
-                            respuesta={respuestaOf(s.id)}
-                            onChanged={reloadSummary}
-                          />
-                        </div>
-                        <PrintValidationState
-                          status={statusOf(s.id)}
-                          respuesta={respuestaOf(s.id)}
-                        />
-                      </div>
-                    ))}
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <div>
+                    <GroupLabel>Qué pide Procesos</GroupLabel>
+                    <p className="text-sm">{si.what_process_requests}</p>
                   </div>
-                ) : (
-                  <EmptyHint>Sin supuestos.</EmptyHint>
-                )}
-              </div>
-            </div>
+
+                  <div>
+                    <GroupLabel count={si.scope_for_systems?.length}>
+                      Alcance para Sistemas
+                    </GroupLabel>
+                    {si.scope_for_systems && si.scope_for_systems.length > 0 ? (
+                      <DataList>
+                        {si.scope_for_systems.map((s, i) => (
+                          <DataRow
+                            key={s.id ?? i}
+                            index={i + 1}
+                            right={s.requirement_refs?.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          >
+                            {s.description}
+                          </DataRow>
+                        ))}
+                      </DataList>
+                    ) : (
+                      <EmptyHint>Sin alcance definido.</EmptyHint>
+                    )}
+                  </div>
+
+                  <div>
+                    <GroupLabel count={si.apparent_out_of_scope?.length}>
+                      Aparentemente fuera de alcance
+                    </GroupLabel>
+                    {si.apparent_out_of_scope &&
+                    si.apparent_out_of_scope.length > 0 ? (
+                      <DataList>
+                        {si.apparent_out_of_scope.map((s, i) => (
+                          <DataRow key={s.id ?? i} index={i + 1}>
+                            {s.description}
+                            {s.reason ? (
+                              <span className="text-muted-foreground"> — {s.reason}</span>
+                            ) : null}
+                          </DataRow>
+                        ))}
+                      </DataList>
+                    ) : (
+                      <EmptyHint warn={false}>Nada marcado fuera de alcance.</EmptyHint>
+                    )}
+                  </div>
+
+                  <div>
+                    <GroupLabel count={assumptions.length}>
+                      Supuestos de interpretación (validables)
+                    </GroupLabel>
+                    {assumptions.length > 0 ? (
+                      <div className="space-y-2">
+                        {assumptions.map((s) => (
+                          <div
+                            key={s.id}
+                            id={`ref-${s.id}`}
+                            className="print-atom rounded-lg border p-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <IdTag id={s.id} />
+                              <OriginBadge origin={s.origin} />
+                              <ConfidenceBadge value={s.confidence} />
+                            </div>
+                            <p className="mt-1.5 text-sm">{s.assumption}</p>
+                            {s.rationale && (
+                              <p className="text-xs text-muted-foreground">
+                                {s.rationale}
+                              </p>
+                            )}
+                            <div className="print:hidden">
+                              <ValidationControls
+                                jobId={job.job_id}
+                                targetType="assumption"
+                                targetId={s.id}
+                                status={statusOf(s.id)}
+                                respuesta={respuestaOf(s.id)}
+                                onChanged={reloadSummary}
+                              />
+                            </div>
+                            <PrintValidationState
+                              status={statusOf(s.id)}
+                              respuesta={respuestaOf(s.id)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyHint>Sin supuestos.</EmptyHint>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 2. Preguntas al analista */}
@@ -694,54 +698,58 @@ export function ResultView({ job }: { job: JobDetail }) {
               />
             }
           >
-            {questions.length > 0 ? (
-              <div className="space-y-2">
-                {questions.map((q) => (
-                  <div
-                    key={q.id}
-                    id={`ref-${q.id}`}
-                    className={cn(
-                      "print-atom rounded-lg border p-3",
-                      q.blocking && "border-red-300 bg-red-50/40",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={q.id} />
-                      <AudienceBadge audience={q.audience} />
-                      {q.blocking && (
-                        <Badge className="bg-red-600">bloqueante</Badge>
-                      )}
-                      {q.linked_to_ref && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          ligada a <RefChip refId={q.linked_to_ref} />
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1.5 text-sm font-medium">{q.question}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Motivo: {q.reason}
-                    </p>
-                    <div className="print:hidden">
-                      <ValidationControls
-                        jobId={job.job_id}
-                        targetType="question"
-                        targetId={q.id}
-                        status={statusOf(q.id)}
-                        respuesta={respuestaOf(q.id)}
-                        onChanged={() => void handleQuestionAnswered(q.id)}
-                      />
-                    </div>
-                    <PrintValidationState
-                      status={statusOf(q.id)}
-                      respuesta={respuestaOf(q.id)}
-                    />
+            {() => (
+              <>
+                {questions.length > 0 ? (
+                  <div className="space-y-2">
+                    {questions.map((q) => (
+                      <div
+                        key={q.id}
+                        id={`ref-${q.id}`}
+                        className={cn(
+                          "print-atom rounded-lg border p-3",
+                          q.blocking && "border-red-300 bg-red-50/40",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={q.id} />
+                          <AudienceBadge audience={q.audience} />
+                          {q.blocking && (
+                            <Badge className="bg-red-600">bloqueante</Badge>
+                          )}
+                          {q.linked_to_ref && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              ligada a <RefChip refId={q.linked_to_ref} />
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-sm font-medium">{q.question}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Motivo: {q.reason}
+                        </p>
+                        <div className="print:hidden">
+                          <ValidationControls
+                            jobId={job.job_id}
+                            targetType="question"
+                            targetId={q.id}
+                            status={statusOf(q.id)}
+                            respuesta={respuestaOf(q.id)}
+                            onChanged={() => void handleQuestionAnswered(q.id)}
+                          />
+                        </div>
+                        <PrintValidationState
+                          status={statusOf(q.id)}
+                          respuesta={respuestaOf(q.id)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={!onlyBlocking}>
-                {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
-              </EmptyHint>
+                ) : (
+                  <EmptyHint warn={!onlyBlocking}>
+                    {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
+                  </EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -762,55 +770,59 @@ export function ResultView({ job }: { job: JobDetail }) {
               </span>
             }
           >
-            <div className="space-y-4">
-              {(
-                [
-                  ["Negocio", a.requirements.business],
-                  ["Funcionales", a.requirements.functional],
-                  ["No funcionales", a.requirements.non_functional],
-                ] as const
-              ).map(([label, list]) => (
-                <div key={label}>
-                  <GroupLabel count={list.length}>{label}</GroupLabel>
-                  {list.length > 0 ? (
-                    <DataList>
-                      {list.map((r, i) => (
-                        <div key={r.id} id={`ref-${r.id}`} className="print-atom">
-                          <button
-                            type="button"
-                            onClick={() => toggle(r.id)}
-                            className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
-                          >
-                            <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
-                              {i + 1}
-                            </span>
-                            <span className="min-w-0 flex-1 text-sm">{r.text}</span>
-                            <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
-                              <OriginBadge origin={r.origin} />
-                              <ConfidenceBadge value={r.confidence} />
-                              <IdTag id={r.id} />
-                            </span>
-                          </button>
-                          {expanded.has(r.id) && (
-                            <div className="space-y-1 px-3 pb-3 pl-11 text-xs">
-                              <div>
-                                source_ref: <Mono>{r.source_ref ?? "—"}</Mono>
-                              </div>
-                              <div className="text-muted-foreground">evidence:</div>
-                              <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
-                                {r.evidence ?? "— sin evidencia —"}
-                              </pre>
+            {() => (
+              <>
+                <div className="space-y-4">
+                  {(
+                    [
+                      ["Negocio", a.requirements.business],
+                      ["Funcionales", a.requirements.functional],
+                      ["No funcionales", a.requirements.non_functional],
+                    ] as const
+                  ).map(([label, list]) => (
+                    <div key={label}>
+                      <GroupLabel count={list.length}>{label}</GroupLabel>
+                      {list.length > 0 ? (
+                        <DataList>
+                          {list.map((r, i) => (
+                            <div key={r.id} id={`ref-${r.id}`} className="print-atom">
+                              <button
+                                type="button"
+                                onClick={() => toggle(r.id)}
+                                className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-primary/[0.04]"
+                              >
+                                <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-meta-foreground">
+                                  {i + 1}
+                                </span>
+                                <span className="min-w-0 flex-1 text-sm">{r.text}</span>
+                                <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                                  <OriginBadge origin={r.origin} />
+                                  <ConfidenceBadge value={r.confidence} />
+                                  <IdTag id={r.id} />
+                                </span>
+                              </button>
+                              {expanded.has(r.id) && (
+                                <div className="space-y-1 px-3 pb-3 pl-11 text-xs">
+                                  <div>
+                                    source_ref: <Mono>{r.source_ref ?? "—"}</Mono>
+                                  </div>
+                                  <div className="text-muted-foreground">evidence:</div>
+                                  <pre className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[11px]">
+                                    {r.evidence ?? "— sin evidencia —"}
+                                  </pre>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </DataList>
-                  ) : (
-                    <EmptyHint>Sin requisitos de {label.toLowerCase()}.</EmptyHint>
-                  )}
+                          ))}
+                        </DataList>
+                      ) : (
+                        <EmptyHint>Sin requisitos de {label.toLowerCase()}.</EmptyHint>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 4. Modelo */}
@@ -829,120 +841,124 @@ export function ResultView({ job }: { job: JobDetail }) {
               </span>
             }
           >
-            <div className="space-y-4">
-              <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
-                {a.actors.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.name}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-modules" title="Módulos" n={a.modules.length}>
-                {a.modules.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.name}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-menus" title="Menús" n={a.menus.length}>
-                {a.menus.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-processes" title="Procesos" n={a.processes.length}>
-                {a.processes.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.name}
-                    {x.steps && x.steps.length > 0 ? (
-                      <span className="text-xs text-muted-foreground">
-                        {" "}
-                        · {x.steps.join(" → ")}
-                      </span>
-                    ) : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-rules" title="Reglas" n={a.business_rules.length}>
-                {a.business_rules.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.statement}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock
-                id="m-validations"
-                title="Validaciones"
-                n={a.validations.length}
-              >
-                {a.validations.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.rule}{" "}
-                    {x.field_ref ? (
-                      <span className="text-xs">
-                        (<RefChip refId={x.field_ref} />)
-                      </span>
-                    ) : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-fields" title="Campos" n={a.fields.length}>
-                {a.fields.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    <Mono>{x.name}</Mono>
-                    <span className="text-xs text-muted-foreground">
-                      {" "}
-                      {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
-                      {x.entity_ref ? " · " : ""}
-                    </span>
-                    {x.entity_ref ? <RefChip refId={x.entity_ref} /> : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-entities" title="Entidades" n={a.entities.length}>
-                {a.entities.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    {x.name}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock
-                id="m-relationships"
-                title="Relaciones"
-                n={a.relationships.length}
-              >
-                {a.relationships.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    <RefChip refId={x.source_entity_ref} />{" "}
-                    <Mono>{x.cardinality}</Mono>{" "}
-                    <RefChip refId={x.target_entity_ref} />
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-crud" title="CRUD" n={a.crud.length}>
-                {a.crud.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    <RefChip refId={x.entity_ref} />
-                    <span className="ml-2 font-mono text-xs">
-                      {x.create ? "C" : "-"}
-                      {x.read ? "R" : "-"}
-                      {x.update ? "U" : "-"}
-                      {x.delete ? "D" : "-"}
-                    </span>
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock id="m-apis" title="APIs" n={a.apis.length}>
-                {a.apis.map((x) => (
-                  <ItemRow key={x.id} id={x.id} origin={x.origin}>
-                    <Mono>
-                      {x.method} {x.path}
-                    </Mono>
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-            </div>
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <ModelBlock id="m-actors" title="Actores" n={a.actors.length}>
+                    {a.actors.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.name}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-modules" title="Módulos" n={a.modules.length}>
+                    {a.modules.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.name}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-menus" title="Menús" n={a.menus.length}>
+                    {a.menus.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.name} {x.path ? <Mono>{x.path}</Mono> : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-processes" title="Procesos" n={a.processes.length}>
+                    {a.processes.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.name}
+                        {x.steps && x.steps.length > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            · {x.steps.join(" → ")}
+                          </span>
+                        ) : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-rules" title="Reglas" n={a.business_rules.length}>
+                    {a.business_rules.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.statement}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock
+                    id="m-validations"
+                    title="Validaciones"
+                    n={a.validations.length}
+                  >
+                    {a.validations.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.rule}{" "}
+                        {x.field_ref ? (
+                          <span className="text-xs">
+                            (<RefChip refId={x.field_ref} />)
+                          </span>
+                        ) : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-fields" title="Campos" n={a.fields.length}>
+                    {a.fields.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        <Mono>{x.name}</Mono>
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          {x.data_type ?? "?"} {x.required ? "· requerido" : ""}
+                          {x.entity_ref ? " · " : ""}
+                        </span>
+                        {x.entity_ref ? <RefChip refId={x.entity_ref} /> : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-entities" title="Entidades" n={a.entities.length}>
+                    {a.entities.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        {x.name}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock
+                    id="m-relationships"
+                    title="Relaciones"
+                    n={a.relationships.length}
+                  >
+                    {a.relationships.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        <RefChip refId={x.source_entity_ref} />{" "}
+                        <Mono>{x.cardinality}</Mono>{" "}
+                        <RefChip refId={x.target_entity_ref} />
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-crud" title="CRUD" n={a.crud.length}>
+                    {a.crud.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        <RefChip refId={x.entity_ref} />
+                        <span className="ml-2 font-mono text-xs">
+                          {x.create ? "C" : "-"}
+                          {x.read ? "R" : "-"}
+                          {x.update ? "U" : "-"}
+                          {x.delete ? "D" : "-"}
+                        </span>
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock id="m-apis" title="APIs" n={a.apis.length}>
+                    {a.apis.map((x) => (
+                      <ItemRow key={x.id} id={x.id} origin={x.origin}>
+                        <Mono>
+                          {x.method} {x.path}
+                        </Mono>
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 5. Análisis crítico */}
@@ -963,61 +979,65 @@ export function ResultView({ job }: { job: JobDetail }) {
               </span>
             }
           >
-            <div className="space-y-4">
-              <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
-                {(analysis.ambiguities ?? []).map((x) => (
-                  <ItemRow key={x.id} id={x.id}>
-                    {x.description}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock title="Faltantes" n={analysis.missing_info?.length ?? 0}>
-                {(analysis.missing_info ?? []).map((x) => (
-                  <ItemRow key={x.id} id={x.id}>
-                    {x.description}
-                    {x.expected_where ? (
-                      <span className="text-xs text-muted-foreground">
-                        {" "}
-                        — esperado en: {x.expected_where}
-                      </span>
-                    ) : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock
-                title="Inconsistencias"
-                n={analysis.inconsistencies?.length ?? 0}
-              >
-                {(analysis.inconsistencies ?? []).map((x) => (
-                  <ItemRow key={x.id} id={x.id}>
-                    {x.description}
-                    {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
-                      <span className="ml-1 inline-flex flex-wrap gap-1">
-                        {x.conflicting_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
-                      </span>
-                    ) : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-              <ModelBlock
-                title="Observaciones"
-                n={analysis.observations?.length ?? 0}
-              >
-                {(analysis.observations ?? []).map((x) => (
-                  <ItemRow key={x.id} id={x.id}>
-                    {x.description}
-                    {x.reason ? (
-                      <span className="text-xs text-muted-foreground">
-                        {" "}
-                        — {x.reason}
-                      </span>
-                    ) : null}
-                  </ItemRow>
-                ))}
-              </ModelBlock>
-            </div>
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <ModelBlock title="Ambigüedades" n={analysis.ambiguities?.length ?? 0}>
+                    {(analysis.ambiguities ?? []).map((x) => (
+                      <ItemRow key={x.id} id={x.id}>
+                        {x.description}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock title="Faltantes" n={analysis.missing_info?.length ?? 0}>
+                    {(analysis.missing_info ?? []).map((x) => (
+                      <ItemRow key={x.id} id={x.id}>
+                        {x.description}
+                        {x.expected_where ? (
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            — esperado en: {x.expected_where}
+                          </span>
+                        ) : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock
+                    title="Inconsistencias"
+                    n={analysis.inconsistencies?.length ?? 0}
+                  >
+                    {(analysis.inconsistencies ?? []).map((x) => (
+                      <ItemRow key={x.id} id={x.id}>
+                        {x.description}
+                        {x.conflicting_refs && x.conflicting_refs.length > 0 ? (
+                          <span className="ml-1 inline-flex flex-wrap gap-1">
+                            {x.conflicting_refs.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </span>
+                        ) : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                  <ModelBlock
+                    title="Observaciones"
+                    n={analysis.observations?.length ?? 0}
+                  >
+                    {(analysis.observations ?? []).map((x) => (
+                      <ItemRow key={x.id} id={x.id}>
+                        {x.description}
+                        {x.reason ? (
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            — {x.reason}
+                          </span>
+                        ) : null}
+                      </ItemRow>
+                    ))}
+                  </ModelBlock>
+                </div>
+              </>
+            )}
           </ArtifactSection>
         </div>
       </div>

@@ -588,56 +588,60 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </span>
             }
           >
-            {a.product_backlog.ordered_story_ids.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="sticky top-0 z-[1] bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
-                    <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold">
-                      <th className="w-10 text-right">#</th>
-                      <th className="w-24 text-left">ID</th>
-                      <th className="text-left">Historia</th>
-                      <th className="w-24 text-left">Prioridad</th>
-                      <th className="w-20 text-right">Puntos</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {a.product_backlog.ordered_story_ids.map((sid, i) => {
-                      const s = storyById.get(sid);
-                      return (
-                        <tr
-                          key={sid}
-                          className="odd:bg-muted/20 hover:bg-primary/[0.04] [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
-                        >
-                          <td className="text-right font-mono text-[11px] tabular-nums text-meta-foreground">
-                            {i + 1}
-                          </td>
-                          <td>
-                            <RefChip refId={sid} />
-                          </td>
-                          <td className="min-w-0">
-                            <span className="line-clamp-2">
-                              {s?.goal ?? s?.statement ?? "—"}
-                            </span>
-                          </td>
-                          <td>
-                            <MoscowBadge priority={s?.priority} />
-                          </td>
-                          <td className="text-right font-mono tabular-nums">
-                            {s?.story_points ?? "—"}
-                          </td>
+            {() => (
+              <>
+                {a.product_backlog.ordered_story_ids.length > 0 ? (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="sticky top-0 z-[1] bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
+                        <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold">
+                          <th className="w-10 text-right">#</th>
+                          <th className="w-24 text-left">ID</th>
+                          <th className="text-left">Historia</th>
+                          <th className="w-24 text-left">Prioridad</th>
+                          <th className="w-20 text-right">Puntos</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyHint>Backlog vacío.</EmptyHint>
-            )}
-            {a.product_backlog.rationale && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {a.product_backlog.rationale}
-              </p>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {a.product_backlog.ordered_story_ids.map((sid, i) => {
+                          const s = storyById.get(sid);
+                          return (
+                            <tr
+                              key={sid}
+                              className="odd:bg-muted/20 hover:bg-primary/[0.04] [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
+                            >
+                              <td className="text-right font-mono text-[11px] tabular-nums text-meta-foreground">
+                                {i + 1}
+                              </td>
+                              <td>
+                                <RefChip refId={sid} />
+                              </td>
+                              <td className="min-w-0">
+                                <span className="line-clamp-2">
+                                  {s?.goal ?? s?.statement ?? "—"}
+                                </span>
+                              </td>
+                              <td>
+                                <MoscowBadge priority={s?.priority} />
+                              </td>
+                              <td className="text-right font-mono tabular-nums">
+                                {s?.story_points ?? "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <EmptyHint>Backlog vacío.</EmptyHint>
+                )}
+                {a.product_backlog.rationale && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {a.product_backlog.rationale}
+                  </p>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -663,40 +667,44 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </span>
             }
           >
-            <div className="space-y-3">
-              {a.sprints.map((sp) => (
-                <div key={sp.id} className="print-atom rounded-lg border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IdTag id={sp.id} />
-                    <Badge variant="outline" className="font-mono tabular-nums">
-                      {sp.total_points}/{sp.capacity_points} pts
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">{sp.goal}</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {sp.story_ids.map((sid) => (
-                      <RefChip key={sid} refId={sid} />
-                    ))}
-                  </div>
+            {() => (
+              <>
+                <div className="space-y-3">
+                  {a.sprints.map((sp) => (
+                    <div key={sp.id} className="print-atom rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <IdTag id={sp.id} />
+                        <Badge variant="outline" className="font-mono tabular-nums">
+                          {sp.total_points}/{sp.capacity_points} pts
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">{sp.goal}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {sp.story_ids.map((sid) => (
+                          <RefChip key={sid} refId={sid} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {a.unassigned_story_ids.length > 0 ? (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+                      <GroupLabel count={a.unassigned_story_ids.length}>
+                        <span className="text-amber-700">⚠ Sin asignar</span>
+                      </GroupLabel>
+                      <div className="flex flex-wrap gap-1.5">
+                        {a.unassigned_story_ids.map((sid) => (
+                          <RefChip key={sid} refId={sid} />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Todas las historias estimadas quedaron asignadas.
+                    </p>
+                  )}
                 </div>
-              ))}
-              {a.unassigned_story_ids.length > 0 ? (
-                <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3">
-                  <GroupLabel count={a.unassigned_story_ids.length}>
-                    <span className="text-amber-700">⚠ Sin asignar</span>
-                  </GroupLabel>
-                  <div className="flex flex-wrap gap-1.5">
-                    {a.unassigned_story_ids.map((sid) => (
-                      <RefChip key={sid} refId={sid} />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Todas las historias estimadas quedaron asignadas.
-                </p>
-              )}
-            </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 3. Historias */}
@@ -715,121 +723,125 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </span>
             }
           >
-            <div className="space-y-3">
-              {a.stories.map((s) => (
-                <div
-                  key={s.id}
-                  id={`ref-${s.id}`}
-                  className="print-atom rounded-lg border p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IdTag id={s.id} />
-                    <MoscowBadge priority={s.priority} />
-                    <PointsBadge points={s.story_points} />
-                    {s.epic_ref && (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        épica <RefChip refId={s.epic_ref} />
-                      </span>
-                    )}
-                    <ConfidenceBadge value={s.confidence} />
-                  </div>
-                  <p className="mt-1.5 text-sm font-medium">{s.statement}</p>
-
-                  {/* Trazabilidad al EF */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="inline-flex flex-wrap items-center gap-1">
-                      RF:{" "}
-                      {s.source_refs.requirement_refs.map((r) => (
-                        <RefChip key={r} refId={r} />
-                      ))}
-                    </span>
-                    {s.source_refs.rule_refs.length > 0 && (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        reglas:{" "}
-                        {s.source_refs.rule_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
-                      </span>
-                    )}
-                    {s.dependencies.length > 0 && (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        depende de:{" "}
-                        {s.dependencies.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Criterios de aceptación (Gherkin) — plegados por defecto */}
-                  {s.acceptance_criteria.length > 0 ? (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleStory(s.id)}
-                        aria-expanded={expandedStories.has(s.id)}
-                        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <ChevronRight
-                          className={cn(
-                            "h-3.5 w-3.5 transition-transform duration-200",
-                            expandedStories.has(s.id) && "rotate-90",
-                          )}
-                        />
-                        Criterios de aceptación ({s.acceptance_criteria.length})
-                      </button>
-                      <div
-                        className={cn(
-                          "grid transition-[grid-template-rows] duration-200 ease-in-out",
-                          expandedStories.has(s.id)
-                            ? "grid-rows-[1fr]"
-                            : "grid-rows-[0fr]",
+            {() => (
+              <>
+                <div className="space-y-3">
+                  {a.stories.map((s) => (
+                    <div
+                      key={s.id}
+                      id={`ref-${s.id}`}
+                      className="print-atom rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <IdTag id={s.id} />
+                        <MoscowBadge priority={s.priority} />
+                        <PointsBadge points={s.story_points} />
+                        {s.epic_ref && (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            épica <RefChip refId={s.epic_ref} />
+                          </span>
                         )}
-                      >
-                        <div className="overflow-hidden">
-                          <div className="mt-2 space-y-1.5">
-                            {s.acceptance_criteria.map((c) => (
-                              <div
-                                key={c.id}
-                                className="rounded-lg border bg-muted/30 p-2.5 text-xs"
-                              >
-                                <div className="mb-1">
-                                  <IdTag id={c.id} />
-                                </div>
-                                {c.format === "gherkin" ? (
-                                  <span>
-                                    <b className="text-foreground">Dado</b> {c.given}{" "}
-                                    <b className="text-foreground">cuando</b> {c.when}{" "}
-                                    <b className="text-foreground">entonces</b>{" "}
-                                    {c.then}
-                                  </span>
-                                ) : (
-                                  <span>{c.text}</span>
-                                )}{" "}
-                                {c.source_refs.map((r) => (
-                                  <RefChip key={r} refId={r} className="ml-1" />
+                        <ConfidenceBadge value={s.confidence} />
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium">{s.statement}</p>
+
+                      {/* Trazabilidad al EF */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          RF:{" "}
+                          {s.source_refs.requirement_refs.map((r) => (
+                            <RefChip key={r} refId={r} />
+                          ))}
+                        </span>
+                        {s.source_refs.rule_refs.length > 0 && (
+                          <span className="inline-flex flex-wrap items-center gap-1">
+                            reglas:{" "}
+                            {s.source_refs.rule_refs.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </span>
+                        )}
+                        {s.dependencies.length > 0 && (
+                          <span className="inline-flex flex-wrap items-center gap-1">
+                            depende de:{" "}
+                            {s.dependencies.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Criterios de aceptación (Gherkin) — plegados por defecto */}
+                      {s.acceptance_criteria.length > 0 ? (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleStory(s.id)}
+                            aria-expanded={expandedStories.has(s.id)}
+                            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "h-3.5 w-3.5 transition-transform duration-200",
+                                expandedStories.has(s.id) && "rotate-90",
+                              )}
+                            />
+                            Criterios de aceptación ({s.acceptance_criteria.length})
+                          </button>
+                          <div
+                            className={cn(
+                              "grid transition-[grid-template-rows] duration-200 ease-in-out",
+                              expandedStories.has(s.id)
+                                ? "grid-rows-[1fr]"
+                                : "grid-rows-[0fr]",
+                            )}
+                          >
+                            <div className="overflow-hidden">
+                              <div className="mt-2 space-y-1.5">
+                                {s.acceptance_criteria.map((c) => (
+                                  <div
+                                    key={c.id}
+                                    className="rounded-lg border bg-muted/30 p-2.5 text-xs"
+                                  >
+                                    <div className="mb-1">
+                                      <IdTag id={c.id} />
+                                    </div>
+                                    {c.format === "gherkin" ? (
+                                      <span>
+                                        <b className="text-foreground">Dado</b> {c.given}{" "}
+                                        <b className="text-foreground">cuando</b> {c.when}{" "}
+                                        <b className="text-foreground">entonces</b>{" "}
+                                        {c.then}
+                                      </span>
+                                    ) : (
+                                      <span>{c.text}</span>
+                                    )}{" "}
+                                    {c.source_refs.map((r) => (
+                                      <RefChip key={r} refId={r} className="ml-1" />
+                                    ))}
+                                  </div>
                                 ))}
                               </div>
-                            ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <EmptyHint>Sin criterios de aceptación.</EmptyHint>
-                    </div>
-                  )}
+                      ) : (
+                        <div className="mt-2">
+                          <EmptyHint>Sin criterios de aceptación.</EmptyHint>
+                        </div>
+                      )}
 
-                  {s.estimation_rationale && (
-                    <p className="mt-1.5 inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                      Estimación sugerida: {s.estimation_rationale}
-                      <ConfidenceBadge value={s.estimation_confidence} />
-                    </p>
-                  )}
+                      {s.estimation_rationale && (
+                        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          Estimación sugerida: {s.estimation_rationale}
+                          <ConfidenceBadge value={s.estimation_confidence} />
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 4. Épicas */}
@@ -847,40 +859,44 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </span>
             }
           >
-            <div className="space-y-2">
-              {a.epics.map((e) => (
-                <div
-                  key={e.id}
-                  id={`ref-${e.id}`}
-                  className="print-atom rounded-lg border p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IdTag id={e.id} />
-                    <span className="text-sm font-medium">{e.title}</span>
-                    <ConfidenceBadge value={e.confidence} />
-                  </div>
-                  {e.description && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {e.description}
-                    </p>
-                  )}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="inline-flex flex-wrap items-center gap-1">
-                      origen:{" "}
-                      {e.source_refs.map((r) => (
-                        <RefChip key={r} refId={r} />
-                      ))}
-                    </span>
-                    <span className="inline-flex flex-wrap items-center gap-1">
-                      historias:{" "}
-                      {e.story_ids.map((r) => (
-                        <RefChip key={r} refId={r} />
-                      ))}
-                    </span>
-                  </div>
+            {() => (
+              <>
+                <div className="space-y-2">
+                  {a.epics.map((e) => (
+                    <div
+                      key={e.id}
+                      id={`ref-${e.id}`}
+                      className="print-atom rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <IdTag id={e.id} />
+                        <span className="text-sm font-medium">{e.title}</span>
+                        <ConfidenceBadge value={e.confidence} />
+                      </div>
+                      {e.description && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {e.description}
+                        </p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          origen:{" "}
+                          {e.source_refs.map((r) => (
+                            <RefChip key={r} refId={r} />
+                          ))}
+                        </span>
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          historias:{" "}
+                          {e.story_ids.map((r) => (
+                            <RefChip key={r} refId={r} />
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 5. Preguntas al PO */}
@@ -915,49 +931,53 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               <FilterToggle onlyBlocking={onlyBlocking} onChange={setOnlyBlocking} />
             }
           >
-            {questions.length > 0 ? (
-              <div className="space-y-2">
-                {questions.map((q) => (
-                  <div
-                    key={q.id}
-                    id={`ref-${q.id}`}
-                    className={cn(
-                      "print-atom rounded-lg border p-3",
-                      q.blocking && "border-red-300 bg-red-50/40",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={q.id} />
-                      <AudienceBadge audience={q.audience} />
-                      {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
-                      {q.linked_to_ref && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          ligada a <RefChip refId={q.linked_to_ref} />
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1.5 text-sm font-medium">{q.question}</p>
-                    <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
-                    <div className="print:hidden">
-                      <ScrumValidationControls
-                        jobId={job.job_id}
-                        targetId={q.id}
-                        status={statusOf(q.id)}
-                        respuesta={respuestaOf(q.id)}
-                        onChanged={() => void handlePoAnswered(q.id)}
-                      />
-                    </div>
-                    <PrintValidationState
-                      status={statusOf(q.id)}
-                      respuesta={respuestaOf(q.id)}
-                    />
+            {() => (
+              <>
+                {questions.length > 0 ? (
+                  <div className="space-y-2">
+                    {questions.map((q) => (
+                      <div
+                        key={q.id}
+                        id={`ref-${q.id}`}
+                        className={cn(
+                          "print-atom rounded-lg border p-3",
+                          q.blocking && "border-red-300 bg-red-50/40",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={q.id} />
+                          <AudienceBadge audience={q.audience} />
+                          {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
+                          {q.linked_to_ref && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              ligada a <RefChip refId={q.linked_to_ref} />
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-sm font-medium">{q.question}</p>
+                        <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
+                        <div className="print:hidden">
+                          <ScrumValidationControls
+                            jobId={job.job_id}
+                            targetId={q.id}
+                            status={statusOf(q.id)}
+                            respuesta={respuestaOf(q.id)}
+                            onChanged={() => void handlePoAnswered(q.id)}
+                          />
+                        </div>
+                        <PrintValidationState
+                          status={statusOf(q.id)}
+                          respuesta={respuestaOf(q.id)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={false}>
-                {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas al PO."}
-              </EmptyHint>
+                ) : (
+                  <EmptyHint warn={false}>
+                    {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas al PO."}
+                  </EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -978,71 +998,75 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               </span>
             }
           >
-            <div className="space-y-4">
-              <div className="rounded-lg border p-3 text-sm">
-                <GroupLabel>Cobertura de requisitos funcionales</GroupLabel>
-                <p>
-                  {cov.requirements_covered} / {cov.requirements_total} cubiertos (
-                  {Math.round(cov.coverage_ratio * 100)}%)
-                </p>
-                {cov.uncovered_requirement_refs.length > 0 ? (
-                  <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-amber-700">
-                    ⚠ No cubiertos:{" "}
-                    {cov.uncovered_requirement_refs.map((r) => (
-                      <RefChip key={r} refId={r} />
-                    ))}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs text-emerald-700">
-                    Todos los RF quedaron cubiertos.
-                  </p>
-                )}
-              </div>
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <div className="rounded-lg border p-3 text-sm">
+                    <GroupLabel>Cobertura de requisitos funcionales</GroupLabel>
+                    <p>
+                      {cov.requirements_covered} / {cov.requirements_total} cubiertos (
+                      {Math.round(cov.coverage_ratio * 100)}%)
+                    </p>
+                    {cov.uncovered_requirement_refs.length > 0 ? (
+                      <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-amber-700">
+                        ⚠ No cubiertos:{" "}
+                        {cov.uncovered_requirement_refs.map((r) => (
+                          <RefChip key={r} refId={r} />
+                        ))}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-emerald-700">
+                        Todos los RF quedaron cubiertos.
+                      </p>
+                    )}
+                  </div>
 
-              <div>
-                <GroupLabel count={a.analysis.risks.length}>Riesgos</GroupLabel>
-                {a.analysis.risks.length > 0 ? (
-                  <DataList>
-                    {a.analysis.risks.map((r) => (
-                      <DataRow
-                        key={r.id}
-                        id={r.id}
-                        right={
-                          <>
-                            <Badge variant="outline">{r.severity}</Badge>
-                            <IdTag id={r.id} />
-                          </>
-                        }
-                      >
-                        {r.description}
-                      </DataRow>
-                    ))}
-                  </DataList>
-                ) : (
-                  <EmptyHint warn={false}>Sin riesgos.</EmptyHint>
-                )}
-              </div>
+                  <div>
+                    <GroupLabel count={a.analysis.risks.length}>Riesgos</GroupLabel>
+                    {a.analysis.risks.length > 0 ? (
+                      <DataList>
+                        {a.analysis.risks.map((r) => (
+                          <DataRow
+                            key={r.id}
+                            id={r.id}
+                            right={
+                              <>
+                                <Badge variant="outline">{r.severity}</Badge>
+                                <IdTag id={r.id} />
+                              </>
+                            }
+                          >
+                            {r.description}
+                          </DataRow>
+                        ))}
+                      </DataList>
+                    ) : (
+                      <EmptyHint warn={false}>Sin riesgos.</EmptyHint>
+                    )}
+                  </div>
 
-              <div>
-                <GroupLabel count={a.analysis.observations.length}>
-                  Observaciones
-                </GroupLabel>
-                {a.analysis.observations.length > 0 ? (
-                  <DataList>
-                    {a.analysis.observations.map((o) => (
-                      <DataRow key={o.id} id={o.id} right={<IdTag id={o.id} />}>
-                        {o.description}
-                        {o.reason ? (
-                          <span className="text-muted-foreground"> — {o.reason}</span>
-                        ) : null}
-                      </DataRow>
-                    ))}
-                  </DataList>
-                ) : (
-                  <EmptyHint warn={false}>Sin observaciones.</EmptyHint>
-                )}
-              </div>
-            </div>
+                  <div>
+                    <GroupLabel count={a.analysis.observations.length}>
+                      Observaciones
+                    </GroupLabel>
+                    {a.analysis.observations.length > 0 ? (
+                      <DataList>
+                        {a.analysis.observations.map((o) => (
+                          <DataRow key={o.id} id={o.id} right={<IdTag id={o.id} />}>
+                            {o.description}
+                            {o.reason ? (
+                              <span className="text-muted-foreground"> — {o.reason}</span>
+                            ) : null}
+                          </DataRow>
+                        ))}
+                      </DataList>
+                    ) : (
+                      <EmptyHint warn={false}>Sin observaciones.</EmptyHint>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </ArtifactSection>
         </div>
       </div>

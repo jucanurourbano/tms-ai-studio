@@ -439,24 +439,28 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {style ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-primary">{style.chosen}</Badge>
-                  <Badge variant="outline">tamaño {a.context.size_class}</Badge>
-                  {style.adr_ref && <RefChip refId={style.adr_ref} />}
-                  <ConfidenceBadge value={style.confidence} />
-                </div>
-                <p className="text-sm">{style.rationale}</p>
-                <p className="text-xs text-muted-foreground">
-                  Perfil de alcance: {a.context.scope_profile.entities} entidades ·{" "}
-                  {a.context.scope_profile.modules} módulos ·{" "}
-                  {a.context.scope_profile.stories} historias ·{" "}
-                  {a.context.scope_profile.integrations_detected} integraciones.
-                </p>
-              </div>
-            ) : (
-              <EmptyHint>Estilo arquitectónico sin decidir.</EmptyHint>
+            {() => (
+              <>
+                {style ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-primary">{style.chosen}</Badge>
+                      <Badge variant="outline">tamaño {a.context.size_class}</Badge>
+                      {style.adr_ref && <RefChip refId={style.adr_ref} />}
+                      <ConfidenceBadge value={style.confidence} />
+                    </div>
+                    <p className="text-sm">{style.rationale}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Perfil de alcance: {a.context.scope_profile.entities} entidades ·{" "}
+                      {a.context.scope_profile.modules} módulos ·{" "}
+                      {a.context.scope_profile.stories} historias ·{" "}
+                      {a.context.scope_profile.integrations_detected} integraciones.
+                    </p>
+                  </div>
+                ) : (
+                  <EmptyHint>Estilo arquitectónico sin decidir.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -476,45 +480,49 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.components.length > 0 ? (
-              <div className="space-y-2">
-                {a.components.map((c) => (
-                  <div
-                    key={c.id}
-                    id={`ref-${c.id}`}
-                    className="print-atom rounded-lg border p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={c.id} />
-                      <Badge variant="outline" className="text-muted-foreground">
-                        {c.type}
-                      </Badge>
-                      <span className="text-sm font-medium">{c.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        · {c.layer}
-                      </span>
-                      <ConfidenceBadge value={c.confidence} />
-                    </div>
-                    <p className="mt-1.5 text-sm">{c.responsibility}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {c.depends_on.length > 0 && (
-                        <span className="inline-flex flex-wrap items-center gap-1">
-                          depende de:{" "}
-                          {c.depends_on.map((d) => (
-                            <RefChip key={d} refId={d} />
-                          ))}
-                        </span>
-                      )}
-                      <RefList label="épicas" refs={c.source_refs.epic_refs} />
-                      <RefList label="historias" refs={c.source_refs.story_refs} />
-                      <RefList label="entidades" refs={c.source_refs.entity_refs} />
-                      <RefList label="APIs" refs={c.source_refs.api_refs} />
-                    </div>
+            {() => (
+              <>
+                {a.components.length > 0 ? (
+                  <div className="space-y-2">
+                    {a.components.map((c) => (
+                      <div
+                        key={c.id}
+                        id={`ref-${c.id}`}
+                        className="print-atom rounded-lg border p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={c.id} />
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {c.type}
+                          </Badge>
+                          <span className="text-sm font-medium">{c.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            · {c.layer}
+                          </span>
+                          <ConfidenceBadge value={c.confidence} />
+                        </div>
+                        <p className="mt-1.5 text-sm">{c.responsibility}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {c.depends_on.length > 0 && (
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              depende de:{" "}
+                              {c.depends_on.map((d) => (
+                                <RefChip key={d} refId={d} />
+                              ))}
+                            </span>
+                          )}
+                          <RefList label="épicas" refs={c.source_refs.epic_refs} />
+                          <RefList label="historias" refs={c.source_refs.story_refs} />
+                          <RefList label="entidades" refs={c.source_refs.entity_refs} />
+                          <RefList label="APIs" refs={c.source_refs.api_refs} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint>Sin componentes.</EmptyHint>
+                ) : (
+                  <EmptyHint>Sin componentes.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -530,24 +538,28 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               <span>Componentes por capa y contexto del sistema (Mermaid)</span>
             }
           >
-            <div className="space-y-4">
-              <div>
-                <GroupLabel>Componentes por capa</GroupLabel>
-                {a.diagrams.component?.code ? (
-                  <MermaidDiagram code={a.diagrams.component.code} />
-                ) : (
-                  <EmptyHint warn={false}>Sin diagrama de componentes.</EmptyHint>
-                )}
-              </div>
-              <div>
-                <GroupLabel>Contexto del sistema</GroupLabel>
-                {a.diagrams.context?.code ? (
-                  <MermaidDiagram code={a.diagrams.context.code} />
-                ) : (
-                  <EmptyHint warn={false}>Sin diagrama de contexto.</EmptyHint>
-                )}
-              </div>
-            </div>
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <div>
+                    <GroupLabel>Componentes por capa</GroupLabel>
+                    {a.diagrams.component?.code ? (
+                      <MermaidDiagram code={a.diagrams.component.code} />
+                    ) : (
+                      <EmptyHint warn={false}>Sin diagrama de componentes.</EmptyHint>
+                    )}
+                  </div>
+                  <div>
+                    <GroupLabel>Contexto del sistema</GroupLabel>
+                    {a.diagrams.context?.code ? (
+                      <MermaidDiagram code={a.diagrams.context.code} />
+                    ) : (
+                      <EmptyHint warn={false}>Sin diagrama de contexto.</EmptyHint>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 4. Stack */}
@@ -566,44 +578,48 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.stack.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-left [&>th]:font-semibold">
-                      <th className="w-48">Capa</th>
-                      <th>Tecnología</th>
-                      <th>Alternativas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {a.stack.map((s) => (
-                      <tr
-                        key={s.id}
-                        className="odd:bg-muted/20 [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
-                      >
-                        <td className="font-mono text-xs text-muted-foreground">
-                          {s.layer}
-                        </td>
-                        <td>
-                          <span className="font-medium">{s.technology}</span>
-                          {s.version ? (
-                            <span className="text-muted-foreground"> {s.version}</span>
-                          ) : null}
-                          <div className="text-xs text-muted-foreground">
-                            {s.rationale}
-                          </div>
-                        </td>
-                        <td className="text-xs text-muted-foreground">
-                          {s.alternatives.join(", ") || "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyHint>Sin stack recomendado.</EmptyHint>
+            {() => (
+              <>
+                {a.stack.length > 0 ? (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-left [&>th]:font-semibold">
+                          <th className="w-48">Capa</th>
+                          <th>Tecnología</th>
+                          <th>Alternativas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {a.stack.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="odd:bg-muted/20 [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
+                          >
+                            <td className="font-mono text-xs text-muted-foreground">
+                              {s.layer}
+                            </td>
+                            <td>
+                              <span className="font-medium">{s.technology}</span>
+                              {s.version ? (
+                                <span className="text-muted-foreground"> {s.version}</span>
+                              ) : null}
+                              <div className="text-xs text-muted-foreground">
+                                {s.rationale}
+                              </div>
+                            </td>
+                            <td className="text-xs text-muted-foreground">
+                              {s.alternatives.join(", ") || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <EmptyHint>Sin stack recomendado.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -622,44 +638,48 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.adrs.length > 0 ? (
-              <div className="space-y-2">
-                {a.adrs.map((adr) => (
-                  <div
-                    key={adr.id}
-                    id={`ref-${adr.id}`}
-                    className="print-atom rounded-lg border p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={adr.id} />
-                      <span className="text-sm font-medium">{adr.title}</span>
-                      <Badge variant="outline" className="text-muted-foreground">
-                        {adr.status}
-                      </Badge>
-                      <ConfidenceBadge value={adr.confidence} />
-                    </div>
-                    <p className="mt-1.5 text-sm">{adr.decision}</p>
-                    <p className="text-xs text-muted-foreground">{adr.context}</p>
-                    {adr.consequences.length > 0 && (
-                      <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
-                        {adr.consequences.map((cs, i) => (
-                          <li key={i}>{cs}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {adr.source_refs.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                        origen:{" "}
-                        {adr.source_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
+            {() => (
+              <>
+                {a.adrs.length > 0 ? (
+                  <div className="space-y-2">
+                    {a.adrs.map((adr) => (
+                      <div
+                        key={adr.id}
+                        id={`ref-${adr.id}`}
+                        className="print-atom rounded-lg border p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={adr.id} />
+                          <span className="text-sm font-medium">{adr.title}</span>
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {adr.status}
+                          </Badge>
+                          <ConfidenceBadge value={adr.confidence} />
+                        </div>
+                        <p className="mt-1.5 text-sm">{adr.decision}</p>
+                        <p className="text-xs text-muted-foreground">{adr.context}</p>
+                        {adr.consequences.length > 0 && (
+                          <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+                            {adr.consequences.map((cs, i) => (
+                              <li key={i}>{cs}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {adr.source_refs.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                            origen:{" "}
+                            {adr.source_refs.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={false}>Sin ADRs adicionales.</EmptyHint>
+                ) : (
+                  <EmptyHint warn={false}>Sin ADRs adicionales.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -680,51 +700,55 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.integrations.length > 0 ? (
-              <div className="space-y-2">
-                {a.integrations.map((ig) => (
-                  <div
-                    key={ig.id}
-                    id={`ref-${ig.id}`}
-                    className="print-atom rounded-lg border p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={ig.id} />
-                      <span className="text-sm font-medium">{ig.name}</span>
-                      <Badge variant="outline" className="text-muted-foreground">
-                        {ig.direction} · {ig.protocol}
-                      </Badge>
-                      {ig.contract_known ? (
-                        <Badge
-                          variant="outline"
-                          className="border-emerald-300 bg-emerald-50 text-emerald-700"
-                        >
-                          contrato conocido
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="border-amber-300 bg-amber-50 text-amber-700"
-                        >
-                          contrato por definir
-                        </Badge>
-                      )}
-                      <ConfidenceBadge value={ig.confidence} />
-                    </div>
-                    <p className="mt-1.5 text-sm">{ig.purpose}</p>
-                    {ig.source_refs.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                        origen:{" "}
-                        {ig.source_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
+            {() => (
+              <>
+                {a.integrations.length > 0 ? (
+                  <div className="space-y-2">
+                    {a.integrations.map((ig) => (
+                      <div
+                        key={ig.id}
+                        id={`ref-${ig.id}`}
+                        className="print-atom rounded-lg border p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={ig.id} />
+                          <span className="text-sm font-medium">{ig.name}</span>
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {ig.direction} · {ig.protocol}
+                          </Badge>
+                          {ig.contract_known ? (
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-300 bg-emerald-50 text-emerald-700"
+                            >
+                              contrato conocido
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-300 bg-amber-50 text-amber-700"
+                            >
+                              contrato por definir
+                            </Badge>
+                          )}
+                          <ConfidenceBadge value={ig.confidence} />
+                        </div>
+                        <p className="mt-1.5 text-sm">{ig.purpose}</p>
+                        {ig.source_refs.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                            origen:{" "}
+                            {ig.source_refs.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={false}>Sin integraciones externas.</EmptyHint>
+                ) : (
+                  <EmptyHint warn={false}>Sin integraciones externas.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -745,28 +769,32 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.contracts.length > 0 ? (
-              <DataList>
-                {a.contracts.map((con) => (
-                  <DataRow
-                    key={con.id}
-                    right={
-                      <Badge variant="outline" className="text-muted-foreground">
-                        {con.kind}
-                      </Badge>
-                    }
-                  >
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                      <RefChip refId={con.from_ref} />
-                      <span className="text-muted-foreground">→</span>
-                      <RefChip refId={con.to_ref} />
-                      <span className="text-muted-foreground">{con.description}</span>
-                    </span>
-                  </DataRow>
-                ))}
-              </DataList>
-            ) : (
-              <EmptyHint warn={false}>Sin contratos entre componentes.</EmptyHint>
+            {() => (
+              <>
+                {a.contracts.length > 0 ? (
+                  <DataList>
+                    {a.contracts.map((con) => (
+                      <DataRow
+                        key={con.id}
+                        right={
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {con.kind}
+                          </Badge>
+                        }
+                      >
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <RefChip refId={con.from_ref} />
+                          <span className="text-muted-foreground">→</span>
+                          <RefChip refId={con.to_ref} />
+                          <span className="text-muted-foreground">{con.description}</span>
+                        </span>
+                      </DataRow>
+                    ))}
+                  </DataList>
+                ) : (
+                  <EmptyHint warn={false}>Sin contratos entre componentes.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -786,34 +814,38 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            {a.cross_cutting.length > 0 ? (
-              <div className="space-y-2">
-                {a.cross_cutting.map((xc) => (
-                  <div
-                    key={xc.id}
-                    id={`ref-${xc.id}`}
-                    className="print-atom rounded-lg border p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={xc.id} />
-                      <Badge className="bg-primary">{xc.concern}</Badge>
-                      <ConfidenceBadge value={xc.confidence} />
-                    </div>
-                    <p className="mt-1.5 text-sm">{xc.requirement}</p>
-                    <p className="text-xs text-muted-foreground">{xc.approach}</p>
-                    {xc.source_refs.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                        origen:{" "}
-                        {xc.source_refs.map((r) => (
-                          <RefChip key={r} refId={r} />
-                        ))}
+            {() => (
+              <>
+                {a.cross_cutting.length > 0 ? (
+                  <div className="space-y-2">
+                    {a.cross_cutting.map((xc) => (
+                      <div
+                        key={xc.id}
+                        id={`ref-${xc.id}`}
+                        className="print-atom rounded-lg border p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={xc.id} />
+                          <Badge className="bg-primary">{xc.concern}</Badge>
+                          <ConfidenceBadge value={xc.confidence} />
+                        </div>
+                        <p className="mt-1.5 text-sm">{xc.requirement}</p>
+                        <p className="text-xs text-muted-foreground">{xc.approach}</p>
+                        {xc.source_refs.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                            origen:{" "}
+                            {xc.source_refs.map((r) => (
+                              <RefChip key={r} refId={r} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={false}>Sin requisitos transversales.</EmptyHint>
+                ) : (
+                  <EmptyHint warn={false}>Sin requisitos transversales.</EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
 
@@ -835,58 +867,62 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               </span>
             }
           >
-            <div className="space-y-4">
-              <div className="rounded-lg border p-3 text-sm">
-                <GroupLabel>Cobertura de trazabilidad</GroupLabel>
-                <p>
-                  Épicas {cov.epics_mapped}/{cov.epics_total} · entidades{" "}
-                  {cov.entities_mapped}/{cov.entities_total} · RNF{" "}
-                  {cov.nfr_addressed}/{cov.nfr_total}
-                </p>
-                {(cov.uncovered_epic_refs.length > 0 ||
-                  cov.uncovered_entity_refs.length > 0 ||
-                  cov.uncovered_nfr_refs.length > 0) && (
-                  <div className="mt-1 space-y-0.5 text-xs text-amber-700">
-                    <UncoveredLine label="Épicas" refs={cov.uncovered_epic_refs} />
-                    <UncoveredLine
-                      label="Entidades"
-                      refs={cov.uncovered_entity_refs}
-                    />
-                    <UncoveredLine label="RNF" refs={cov.uncovered_nfr_refs} />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <GroupLabel count={a.analysis.risks.length}>Riesgos</GroupLabel>
-                {a.analysis.risks.length > 0 ? (
-                  <div className="space-y-2">
-                    {a.analysis.risks.map((r) => (
-                      <div key={r.id} className="print-atom rounded-lg border p-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <IdTag id={r.id} />
-                          <Badge
-                            variant="outline"
-                            className={SEVERITY_STYLE[r.severity]}
-                          >
-                            {r.severity}
-                          </Badge>
-                          {r.source_ref && <RefChip refId={r.source_ref} />}
-                        </div>
-                        <p className="mt-1.5 text-sm">{r.description}</p>
-                        {r.mitigation && (
-                          <p className="text-xs text-muted-foreground">
-                            Mitigación: {r.mitigation}
-                          </p>
-                        )}
+            {() => (
+              <>
+                <div className="space-y-4">
+                  <div className="rounded-lg border p-3 text-sm">
+                    <GroupLabel>Cobertura de trazabilidad</GroupLabel>
+                    <p>
+                      Épicas {cov.epics_mapped}/{cov.epics_total} · entidades{" "}
+                      {cov.entities_mapped}/{cov.entities_total} · RNF{" "}
+                      {cov.nfr_addressed}/{cov.nfr_total}
+                    </p>
+                    {(cov.uncovered_epic_refs.length > 0 ||
+                      cov.uncovered_entity_refs.length > 0 ||
+                      cov.uncovered_nfr_refs.length > 0) && (
+                      <div className="mt-1 space-y-0.5 text-xs text-amber-700">
+                        <UncoveredLine label="Épicas" refs={cov.uncovered_epic_refs} />
+                        <UncoveredLine
+                          label="Entidades"
+                          refs={cov.uncovered_entity_refs}
+                        />
+                        <UncoveredLine label="RNF" refs={cov.uncovered_nfr_refs} />
                       </div>
-                    ))}
+                    )}
                   </div>
-                ) : (
-                  <EmptyHint warn={false}>Sin riesgos.</EmptyHint>
-                )}
-              </div>
-            </div>
+
+                  <div>
+                    <GroupLabel count={a.analysis.risks.length}>Riesgos</GroupLabel>
+                    {a.analysis.risks.length > 0 ? (
+                      <div className="space-y-2">
+                        {a.analysis.risks.map((r) => (
+                          <div key={r.id} className="print-atom rounded-lg border p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <IdTag id={r.id} />
+                              <Badge
+                                variant="outline"
+                                className={SEVERITY_STYLE[r.severity]}
+                              >
+                                {r.severity}
+                              </Badge>
+                              {r.source_ref && <RefChip refId={r.source_ref} />}
+                            </div>
+                            <p className="mt-1.5 text-sm">{r.description}</p>
+                            {r.mitigation && (
+                              <p className="text-xs text-muted-foreground">
+                                Mitigación: {r.mitigation}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyHint warn={false}>Sin riesgos.</EmptyHint>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </ArtifactSection>
 
           {/* 10. Preguntas al Arquitecto */}
@@ -921,48 +957,52 @@ export function ArchitectureResultView({ job }: { job: ArchJobDetail }) {
               <FilterToggle onlyBlocking={onlyBlocking} onChange={setOnlyBlocking} />
             }
           >
-            {questions.length > 0 ? (
-              <div className="space-y-2">
-                {questions.map((q) => (
-                  <div
-                    key={q.id}
-                    id={`ref-${q.id}`}
-                    className={cn(
-                      "print-atom rounded-lg border p-3",
-                      q.blocking && "border-red-300 bg-red-50/40",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <IdTag id={q.id} />
-                      {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
-                      {q.linked_to_ref && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          ligada a <RefChip refId={q.linked_to_ref} />
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1.5 text-sm font-medium">{q.question}</p>
-                    <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
-                    <div className="print:hidden">
-                      <ArchitectValidationControls
-                        jobId={job.job_id}
-                        targetId={q.id}
-                        status={statusOf(q.id)}
-                        respuesta={respuestaOf(q.id)}
-                        onChanged={() => void reloadSummary()}
-                      />
-                    </div>
-                    <PrintValidationState
-                      status={statusOf(q.id)}
-                      respuesta={respuestaOf(q.id)}
-                    />
+            {() => (
+              <>
+                {questions.length > 0 ? (
+                  <div className="space-y-2">
+                    {questions.map((q) => (
+                      <div
+                        key={q.id}
+                        id={`ref-${q.id}`}
+                        className={cn(
+                          "print-atom rounded-lg border p-3",
+                          q.blocking && "border-red-300 bg-red-50/40",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IdTag id={q.id} />
+                          {q.blocking && <Badge className="bg-red-600">bloqueante</Badge>}
+                          {q.linked_to_ref && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              ligada a <RefChip refId={q.linked_to_ref} />
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-sm font-medium">{q.question}</p>
+                        <p className="text-xs text-muted-foreground">Motivo: {q.reason}</p>
+                        <div className="print:hidden">
+                          <ArchitectValidationControls
+                            jobId={job.job_id}
+                            targetId={q.id}
+                            status={statusOf(q.id)}
+                            respuesta={respuestaOf(q.id)}
+                            onChanged={() => void reloadSummary()}
+                          />
+                        </div>
+                        <PrintValidationState
+                          status={statusOf(q.id)}
+                          respuesta={respuestaOf(q.id)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyHint warn={false}>
-                {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
-              </EmptyHint>
+                ) : (
+                  <EmptyHint warn={false}>
+                    {onlyBlocking ? "Sin preguntas bloqueantes." : "Sin preguntas."}
+                  </EmptyHint>
+                )}
+              </>
             )}
           </ArtifactSection>
         </div>
