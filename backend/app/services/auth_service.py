@@ -23,7 +23,7 @@ from app.core.security import (
     verify_password,
 )
 from app.errors import AuthError, ConflictError, ForbiddenError, NotFoundError
-from app.models.user import User, UserRole
+from app.models.user import Specialty, User, UserRole
 from app.repositories.user_repository import UserRepository
 
 
@@ -145,7 +145,7 @@ class AuthService:
         full_name: Optional[str] = None,
         email: Optional[str] = None,
         institutional_email: Optional[str] = None,
-        position: Optional[str] = None,
+        specialty: Optional[Specialty] = None,
         available_for_assignment: Optional[bool] = None,
     ) -> User:
         """Edita identidad y perfil de equipo de un usuario (requiere `config` FULL)."""
@@ -168,7 +168,7 @@ class AuthService:
             full_name=full_name,
             email=normalized,
             institutional_email=institutional_email,
-            position=position,
+            specialty=specialty,
             available_for_assignment=available_for_assignment,
         )
         await self.session.commit()

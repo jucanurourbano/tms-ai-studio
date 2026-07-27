@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import AccessLevel, Module, satisfies
 from app.models.agent import AgentJob, AgentValidation
-from app.models.user import User, UserModuleGrant, UserRole
+from app.models.user import Specialty, User, UserModuleGrant, UserRole
 
 
 class UserRepository:
@@ -126,7 +126,7 @@ class UserRepository:
         full_name: Optional[str] = None,
         email: Optional[str] = None,
         institutional_email: Optional[str] = None,
-        position: Optional[str] = None,
+        specialty: Optional[Specialty] = None,
         available_for_assignment: Optional[bool] = None,
     ) -> User:
         """Actualiza identidad y perfil de equipo. Solo toca lo que llega informado.
@@ -140,8 +140,8 @@ class UserRepository:
             user.email = email
         if institutional_email is not None:
             user.institutional_email = institutional_email.strip() or None
-        if position is not None:
-            user.position = position.strip() or None
+        if specialty is not None:
+            user.specialty = specialty
         if available_for_assignment is not None:
             user.available_for_assignment = available_for_assignment
         await self.session.flush()

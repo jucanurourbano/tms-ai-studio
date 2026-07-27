@@ -155,7 +155,7 @@ class ScrumPlanningService:
             # El correo institucional es el que se exporta a ClickUp; si no está
             # informado se cae al de acceso para no dejar la tarea sin destinatario.
             "institutional_email": user.institutional_email or user.email,
-            "position": user.position,
+            "specialty": user.specialty.value if user.specialty else None,
             "role": user.role.value,
             "is_active": user.is_active,
         }
@@ -165,27 +165,150 @@ class ScrumPlanningService:
         users = await self._assignments().assignable_users()
         return [self._member_out(u) for u in users]
 
-    async def list_assignments(self, job_id: str) -> list[dict]:
-        """Asignaciones del plan, con los datos del responsable resueltos."""
-        rows = await self._assignments().list_for_job(job_id)
-        users = await self._assignments().users_by_ids([r.user_id for r in rows])
-        out: list[dict] = []
-        for row in rows:
+    @staticmethod
+    def _sprint_of_story(artifact: dict) -> dict[str, str]:
+        """``story_id`` -> ``sprint_id`` según el artefacto."""
+        mapa: dict[str, str] = {}
+        for sprint in artifact.get("sprints", []):
+            for sid in sprint.get("story_ids", []):
+                mapa[sid] = sprint.get("id")
+        return mapa
+
+    async def list_assignments(self, job_id: str) -> dict:
+        """Asignaciones EFECTIVAS del plan, con la cascada del sprint resuelta.
+
+        Regla: **la asignación por historia prevalece sobre la del sprint**. La
+        cascada no se materializa en ``story_assignments`` (ver
+        ``SprintAssignment``), se resuelve aquí al leer, y cada historia informa
+        de dónde viene su responsable con ``source``:
+          - ``story``  → asignada explícitamente.
+          - ``sprint`` → heredada del responsable del sprint.
+
+        Devuelve ``{"items": [...historias...], "sprints": [...]}``.
+        """
+        repo = self._assignments()
+        story_rows = await repo.list_for_job(job_id)
+        sprint_rows = await repo.list_sprints_for_job(job_id)
+
+        users = await repo.users_by_ids(
+            [r.user_id for r in story_rows] + [r.user_id for r in sprint_rows]
+        )
+
+        items: list[dict] = []
+        explicitas: set[str] = set()
+        for row in story_rows:
             user = users.get(row.user_id)
-            out.append(
+            explicitas.add(row.story_id)
+            items.append(
                 {
                     "story_id": row.story_id,
                     "user_id": row.user_id,
+                    "source": "story",
                     "assigned_at": (
                         row.assigned_at.isoformat() if row.assigned_at else None
                     ),
                     "assigned_by": row.assigned_by,
-                    # ``user`` puede faltar solo si se borró físicamente (la app
-                    # usa baja lógica), pero el listado no debe romperse por eso.
+                    # ``user`` solo faltaría con un borrado físico (la app usa baja
+                    # lógica), pero el listado no debe romperse por eso.
                     "user": self._member_out(user) if user is not None else None,
                 }
             )
-        return out
+
+        sprints: list[dict] = []
+        if sprint_rows:
+            artifact = await self.get_artifact(job_id) or {}
+            por_sprint: dict[str, list[str]] = {}
+            for sprint in artifact.get("sprints", []):
+                por_sprint[sprint.get("id")] = list(sprint.get("story_ids", []))
+
+            for row in sprint_rows:
+                user = users.get(row.user_id)
+                miembro = self._member_out(user) if user is not None else None
+                sprints.append(
+                    {
+                        "sprint_id": row.sprint_id,
+                        "user_id": row.user_id,
+                        "assigned_at": (
+                            row.assigned_at.isoformat() if row.assigned_at else None
+                        ),
+                        "assigned_by": row.assigned_by,
+                        "user": miembro,
+                    }
+                )
+                # Cascada: las historias del sprint SIN asignación propia.
+                for sid in por_sprint.get(row.sprint_id, []):
+                    if sid in explicitas:
+                        continue
+                    items.append(
+                        {
+                            "story_id": sid,
+                            "user_id": row.user_id,
+                            "source": "sprint",
+                            "assigned_at": (
+                                row.assigned_at.isoformat() if row.assigned_at else None
+                            ),
+                            "assigned_by": row.assigned_by,
+                            "user": miembro,
+                        }
+                    )
+
+        items.sort(key=lambda x: x["story_id"])
+        return {"items": items, "sprints": sprints}
+
+    async def assign_sprint(
+        self,
+        *,
+        job_id: str,
+        sprint_id: str,
+        user_id: Optional[str],
+        actor_id: Optional[str] = None,
+    ) -> dict:
+        """Asigna o desasigna un **sprint completo** (``user_id=None`` desasigna).
+
+        Sus historias sin responsable propio pasan a mostrarse a nombre de esa
+        persona (cascada derivada); las que ya tienen asignación individual la
+        conservan.
+        """
+        artifact = await self._require_artifact(job_id)
+        conocidos = {s.get("id") for s in artifact.get("sprints", [])}
+        if sprint_id not in conocidos:
+            raise IngestError(f"El sprint {sprint_id} no pertenece al plan {job_id}.")
+
+        repo = self._assignments()
+        if user_id is None:
+            await repo.unassign_sprint(job_id=job_id, sprint_id=sprint_id)
+            await self.session.commit()
+            return {"sprint_id": sprint_id, "user_id": None}
+
+        await self._require_assignable(user_id)
+        await repo.assign_sprint(
+            job_id=job_id,
+            sprint_id=sprint_id,
+            user_id=user_id,
+            assigned_by=actor_id,
+            when=datetime.now(timezone.utc),
+        )
+        await self.session.commit()
+        return {"sprint_id": sprint_id, "user_id": user_id}
+
+    async def _require_artifact(self, job_id: str) -> dict:
+        """Valida que el job sea un plan Scrum con artefacto y lo devuelve."""
+        job = await self.repo.get_job(job_id)
+        if job is None or job.agent_type != AgentType.SCRUM:
+            raise IngestError(f"No existe un job Scrum con id {job_id}.")
+        artifact = await self.get_artifact(job_id)
+        if artifact is None:
+            raise IngestError(f"El job Scrum {job_id} no tiene artefacto disponible.")
+        return artifact
+
+    async def _require_assignable(self, user_id: str) -> None:
+        """Valida que el destinatario pueda recibir trabajo."""
+        assignable = {u.id for u in await self._assignments().assignable_users()}
+        if user_id not in assignable:
+            raise IngestError(
+                "El usuario indicado no está disponible para asignación "
+                "(inactivo, dado de baja o marcado como no asignable)."
+            )
 
     async def assign_story(
         self,
@@ -201,13 +324,7 @@ class ScrumPlanningService:
         que el destinatario sea asignable: sin esto se podrían crear asignaciones
         a historias inventadas que nunca aparecerían en la UI.
         """
-        job = await self.repo.get_job(job_id)
-        if job is None or job.agent_type != AgentType.SCRUM:
-            raise IngestError(f"No existe un job Scrum con id {job_id}.")
-
-        artifact = await self.get_artifact(job_id)
-        if artifact is None:
-            raise IngestError(f"El job Scrum {job_id} no tiene artefacto disponible.")
+        artifact = await self._require_artifact(job_id)
         known = {s.get("id") for s in artifact.get("stories", [])}
         if story_id not in known:
             raise IngestError(f"La historia {story_id} no pertenece al plan {job_id}.")
@@ -218,13 +335,7 @@ class ScrumPlanningService:
             await self.session.commit()
             return {"story_id": story_id, "user_id": None}
 
-        assignable = {u.id for u in await repo.assignable_users()}
-        if user_id not in assignable:
-            raise IngestError(
-                "El usuario indicado no está disponible para asignación "
-                "(inactivo, dado de baja o marcado como no asignable)."
-            )
-
+        await self._require_assignable(user_id)
         await repo.assign(
             job_id=job_id,
             story_id=story_id,
@@ -236,14 +347,18 @@ class ScrumPlanningService:
         return {"story_id": story_id, "user_id": user_id}
 
     async def _assignee_emails(self, job_id: str) -> dict[str, str]:
-        """``story_id`` -> correo institucional del responsable (para el export)."""
-        rows = await self._assignments().list_for_job(job_id)
-        users = await self._assignments().users_by_ids([r.user_id for r in rows])
+        """``story_id`` -> correo institucional del responsable EFECTIVO.
+
+        Usa las asignaciones ya resueltas (``list_assignments``), así que una
+        historia que hereda el responsable de su sprint también sale asignada en
+        el export: es lo que el equipo ve en pantalla.
+        """
+        resueltas = await self.list_assignments(job_id)
         emails: dict[str, str] = {}
-        for row in rows:
-            user = users.get(row.user_id)
-            if user is not None:
-                emails[row.story_id] = user.institutional_email or user.email
+        for item in resueltas["items"]:
+            user = item.get("user")
+            if user:
+                emails[item["story_id"]] = user["institutional_email"]
         return emails
 
     # --- Export ClickUp (fase a: sin API, sin riesgo) -----------------------

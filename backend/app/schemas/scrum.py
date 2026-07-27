@@ -31,3 +31,13 @@ class AssignStoryRequest(BaseModel):
         default=None,
         description="Id del colaborador; null para retirar la asignación.",
     )
+
+
+class AssignSprintRequest(BaseModel):
+    """Asigna un sprint completo. ``user_id=None`` retira la asignación."""
+
+    sprint_id: str = Field(description="Id del sprint (``sprints[].id``).")
+    user_id: Optional[str] = Field(
+        default=None,
+        description="Id del colaborador; null para retirar la asignación.",
+    )

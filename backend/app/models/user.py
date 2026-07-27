@@ -11,6 +11,7 @@ El rol da el permiso base; ``user_module_grants`` añade accesos por usuario que
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
@@ -25,7 +26,24 @@ if TYPE_CHECKING:  # pragma: no cover - solo para tipado
     pass
 
 # Reexportado para que ``from app.models.user import UserRole`` siga funcionando.
-__all__ = ["User", "UserModuleGrant", "UserRole"]
+__all__ = ["Specialty", "User", "UserModuleGrant", "UserRole"]
+
+
+class Specialty(str, Enum):
+    """Especialidad técnica del colaborador (perfil de equipo).
+
+    Enum cerrado en vez de texto libre: la usa el selector "Asignar a" del plan
+    Scrum para decir de un vistazo quién hace qué, y con texto libre acabarían
+    conviviendo "Backend", "backend" y "BackEnd" sin poder agrupar ni filtrar.
+    ``FULLSTACK`` es de primera clase porque es el caso común del equipo.
+    """
+
+    BACKEND = "backend"
+    FRONTEND = "frontend"
+    DB = "db"
+    QA = "qa"
+    FULLSTACK = "fullstack"
+    OTRO = "otro"
 
 
 class User(Base, IdMixin, TimestampMixin):
@@ -54,8 +72,10 @@ class User(Base, IdMixin, TimestampMixin):
     institutional_email: Mapped[Optional[str]] = mapped_column(
         String(320), nullable=True
     )
-    #: Cargo o especialidad libre (backend, frontend, QA, analista funcional…).
-    position: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    #: Especialidad técnica (enum cerrado, ver :class:`Specialty`).
+    specialty: Mapped[Optional[Specialty]] = mapped_column(
+        pg_enum(Specialty, "user_specialty"), nullable=True
+    )
     #: Si aparece en el selector "Asignar a" del plan Scrum.
     available_for_assignment: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"

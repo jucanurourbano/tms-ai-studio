@@ -113,7 +113,7 @@ async def _crear_miembro(
     nombre: str = "Ana Pérez",
     role=UserRole.DEVELOPER,
     institucional: str | None = None,
-    cargo: str | None = None,
+    especialidad: str | None = None,
     disponible: bool = True,
 ) -> dict:
     r = await client.post(
@@ -132,8 +132,8 @@ async def _crear_miembro(
     cuerpo: dict = {}
     if institucional is not None:
         cuerpo["institutional_email"] = institucional
-    if cargo is not None:
-        cuerpo["position"] = cargo
+    if especialidad is not None:
+        cuerpo["specialty"] = especialidad
     if not disponible:
         cuerpo["available_for_assignment"] = False
     if cuerpo:
@@ -157,10 +157,10 @@ async def test_perfil_de_equipo_se_guarda_y_expone(client):
         admin,
         "ana.login@urbano.pe",
         institucional="ana.perez@urbano.com.pe",
-        cargo="Backend",
+        especialidad="backend",
     )
     assert u["institutional_email"] == "ana.perez@urbano.com.pe"
-    assert u["position"] == "Backend"
+    assert u["specialty"] == "backend"
     assert u["available_for_assignment"] is True
 
 
@@ -212,7 +212,7 @@ async def _me(client, token: str) -> str:
 async def test_asignar_y_listar(client, scrum_job):
     admin = await _bootstrap_admin(client)
     ana = await _crear_miembro(
-        client, admin, "ana@urbano.com.pe", nombre="Ana Pérez", cargo="Backend"
+        client, admin, "ana@urbano.com.pe", nombre="Ana Pérez", especialidad="backend"
     )
 
     r = await client.patch(
@@ -230,7 +230,7 @@ async def test_asignar_y_listar(client, scrum_job):
     assert items[0]["story_id"] == "US-001"
     assert items[0]["user_id"] == ana["id"]
     assert items[0]["user"]["full_name"] == "Ana Pérez"
-    assert items[0]["user"]["position"] == "Backend"
+    assert items[0]["user"]["specialty"] == "backend"
     assert items[0]["assigned_at"] is not None
     assert items[0]["assigned_by"] == await _me(client, admin)
 
@@ -442,3 +442,208 @@ async def test_export_json_incluye_assignee_email(client, scrum_job):
     filas = r.json()["data"]["content"]
     asignada = next(f for f in filas if f["external_key"] == "US-003")
     assert asignada["assignee_email"] == "ana.perez@urbano.com.pe"
+
+
+# --- asignación de SPRINT completo (cascada derivada) -----------------------
+
+
+async def test_asignar_sprint_cascada_a_sus_historias(client, scrum_job):
+    """Asignar el sprint hace que sus historias sin dueño se muestren a su nombre."""
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe", nombre="Ana")
+
+    r = await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+    assert r.status_code == 200, r.text
+
+    data = (
+        await client.get(
+            f"/api/v1/scrum/jobs/{scrum_job}/assignments", headers=_auth(admin)
+        )
+    ).json()["data"]
+
+    # US-001 y US-002 están en Sprint 1 -> heredadas. US-003 no (va al backlog).
+    por_historia = {i["story_id"]: i for i in data["items"]}
+    assert set(por_historia) == {"US-001", "US-002"}
+    assert all(i["source"] == "sprint" for i in por_historia.values())
+    assert all(i["user_id"] == ana["id"] for i in por_historia.values())
+
+    assert len(data["sprints"]) == 1
+    assert data["sprints"][0]["sprint_id"] == "Sprint 1"
+    assert data["sprints"][0]["user"]["full_name"] == "Ana"
+
+
+async def test_la_asignacion_por_historia_prevalece_sobre_la_del_sprint(
+    client, scrum_job
+):
+    """La historia asignada explícitamente NO se pisa al asignar el sprint."""
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe", nombre="Ana")
+    luis = await _crear_miembro(client, admin, "luis@urbano.com.pe", nombre="Luis")
+
+    # US-001 explícitamente a Luis; el sprint completo a Ana.
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/assignments",
+        headers=_auth(admin),
+        json={"story_id": "US-001", "user_id": luis["id"]},
+    )
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+
+    items = {
+        i["story_id"]: i
+        for i in (
+            await client.get(
+                f"/api/v1/scrum/jobs/{scrum_job}/assignments", headers=_auth(admin)
+            )
+        ).json()["data"]["items"]
+    }
+    assert items["US-001"]["user_id"] == luis["id"]
+    assert items["US-001"]["source"] == "story"
+    assert items["US-002"]["user_id"] == ana["id"]
+    assert items["US-002"]["source"] == "sprint"
+
+
+async def test_desasignar_el_sprint_deshace_la_cascada_y_conserva_lo_explicito(
+    client, scrum_job
+):
+    """La cascada es derivada: quitarla no deja filas huérfanas ni borra la excepción."""
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe", nombre="Ana")
+    luis = await _crear_miembro(client, admin, "luis@urbano.com.pe", nombre="Luis")
+
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/assignments",
+        headers=_auth(admin),
+        json={"story_id": "US-001", "user_id": luis["id"]},
+    )
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+    r = await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": None},
+    )
+    assert r.status_code == 200
+
+    data = (
+        await client.get(
+            f"/api/v1/scrum/jobs/{scrum_job}/assignments", headers=_auth(admin)
+        )
+    ).json()["data"]
+    assert data["sprints"] == []
+    # Solo sobrevive la asignación explícita.
+    assert [i["story_id"] for i in data["items"]] == ["US-001"]
+    assert data["items"][0]["user_id"] == luis["id"]
+
+
+async def test_reasignar_el_sprint_no_pisa_las_excepciones(client, scrum_job):
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe", nombre="Ana")
+    luis = await _crear_miembro(client, admin, "luis@urbano.com.pe", nombre="Luis")
+
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/assignments",
+        headers=_auth(admin),
+        json={"story_id": "US-001", "user_id": luis["id"]},
+    )
+    for uid in (ana["id"], luis["id"], ana["id"]):
+        r = await client.patch(
+            f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+            headers=_auth(admin),
+            json={"sprint_id": "Sprint 1", "user_id": uid},
+        )
+        assert r.status_code == 200
+
+    data = (
+        await client.get(
+            f"/api/v1/scrum/jobs/{scrum_job}/assignments", headers=_auth(admin)
+        )
+    ).json()["data"]
+    assert len(data["sprints"]) == 1  # una sola fila por sprint
+    items = {i["story_id"]: i for i in data["items"]}
+    assert items["US-001"]["user_id"] == luis["id"]  # la excepción intacta
+
+
+async def test_asignar_sprint_no_muta_el_artefacto(client, scrum_job):
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe")
+    antes = (
+        await client.get(
+            f"/api/v1/scrum/jobs/{scrum_job}/artifact", headers=_auth(admin)
+        )
+    ).json()["data"]
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+    despues = (
+        await client.get(
+            f"/api/v1/scrum/jobs/{scrum_job}/artifact", headers=_auth(admin)
+        )
+    ).json()["data"]
+    assert antes == despues
+
+
+async def test_sprint_inexistente_rechazado(client, scrum_job):
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe")
+    r = await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 99", "user_id": ana["id"]},
+    )
+    assert r.status_code >= 400
+    assert "no pertenece" in r.json()["message"]
+
+
+@pytest.mark.parametrize("role", [UserRole.ARQUITECTO, UserRole.DEVELOPER, UserRole.QA])
+async def test_solo_lectura_no_asigna_sprints(client, scrum_job, role):
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(client, admin, "ana@urbano.com.pe")
+    await _crear_miembro(client, admin, f"{role.value}@urbano.com.pe", role=role)
+    token = await _token(client, f"{role.value}@urbano.com.pe")
+    r = await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(token),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+    assert r.status_code == 403
+
+
+async def test_export_incluye_las_historias_heredadas_del_sprint(client, scrum_job):
+    """Lo que el equipo ve en pantalla es lo que sale en el CSV."""
+    admin = await _bootstrap_admin(client)
+    ana = await _crear_miembro(
+        client,
+        admin,
+        "ana@urbano.com.pe",
+        nombre="Ana",
+        institucional="ana.perez@urbano.com.pe",
+    )
+    await client.patch(
+        f"/api/v1/scrum/jobs/{scrum_job}/sprint-assignments",
+        headers=_auth(admin),
+        json={"sprint_id": "Sprint 1", "user_id": ana["id"]},
+    )
+
+    r = await client.get(
+        f"/api/v1/scrum/jobs/{scrum_job}/export?format=csv", headers=_auth(admin)
+    )
+    reader = list(csv.reader(io.StringIO(r.json()["data"]["content"])))
+    columna = reader[0].index("Assignee")
+    valores = {fila[1]: fila[columna] for fila in reader[1:]}
+    # Las dos del sprint heredan el responsable; la del backlog sigue vacía.
+    assert valores["Registrar guía"] == "ana.perez@urbano.com.pe"
+    assert valores["Consultar checkpoint"] == "ana.perez@urbano.com.pe"
+    assert valores["Anular guía"] == ""

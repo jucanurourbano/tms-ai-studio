@@ -245,6 +245,46 @@ class StoryAssignment(Base, IdMixin, TimestampMixin):
     )
 
 
+class SprintAssignment(Base, IdMixin, TimestampMixin):
+    """Asignación de un **sprint completo** a un colaborador.
+
+    Complementa :class:`StoryAssignment`: asignar un sprint hace que TODAS sus
+    historias sin responsable propio pasen a mostrarse a nombre de esa persona.
+
+    La cascada es **derivada, no materializada**: no se crean filas de
+    ``story_assignments`` al asignar el sprint. Se resuelve al leer con la regla
+    "historia > sprint". Así:
+      - retirar la asignación del sprint deshace la cascada sin dejar huérfanas;
+      - una asignación por historia sigue siendo una EXCEPCIÓN explícita en vez de
+        quedar sobreescrita por la del sprint;
+      - reasignar el sprint no pisa las excepciones que el equipo ya decidió.
+
+    Única por ``(job_id, sprint_id)``: un sprint tiene un responsable por plan.
+    """
+
+    __tablename__ = "sprint_assignments"
+
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Id del sprint dentro del artefacto (``sprints[].id``), no una FK.
+    sprint_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    assigned_by: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ux_sprint_assignment_job_sprint", "job_id", "sprint_id", unique=True),
+        Index("ix_sprint_assignments_user_id", "user_id"),
+    )
+
+
 class AgentValidation(Base, IdMixin, TimestampMixin):
     """Validación del ciclo de afinamiento. Persiste aparte, sin mutar el artefacto."""
 

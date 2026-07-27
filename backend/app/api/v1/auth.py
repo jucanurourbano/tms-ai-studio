@@ -204,7 +204,7 @@ async def update_user_profile(
         full_name=body.full_name,
         email=body.email,
         institutional_email=body.institutional_email,
-        position=body.position,
+        specialty=body.specialty,
         available_for_assignment=body.available_for_assignment,
     )
     return ApiResponse.ok(

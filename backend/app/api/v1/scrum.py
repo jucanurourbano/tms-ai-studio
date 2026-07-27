@@ -8,6 +8,7 @@ from app.dependencies.database import get_session
 from app.dependencies.permissions import require_module
 from app.models.user import User
 from app.schemas.scrum import (
+    AssignSprintRequest,
     AssignStoryRequest,
     CreatePlanRequest,
     ScrumValidationPatchRequest,
@@ -196,13 +197,14 @@ async def list_team(session: AsyncSession = Depends(get_session)) -> ApiResponse
 async def list_assignments(
     job_id: str, session: AsyncSession = Depends(get_session)
 ) -> ApiResponse:
-    """Asignaciones del plan con el responsable resuelto.
+    """Asignaciones EFECTIVAS del plan, con la cascada del sprint ya resuelta.
 
-    Viven **fuera del artefacto** (tabla ``story_assignments``), igual que las
-    validaciones: el ``ScrumArtifact`` no se muta nunca.
+    Viven **fuera del artefacto** (``story_assignments`` / ``sprint_assignments``),
+    igual que las validaciones: el ``ScrumArtifact`` no se muta nunca. Cada
+    historia indica en ``source`` si su responsable es explícito (``story``) o
+    heredado del sprint (``sprint``).
     """
-    items = await _service(session).list_assignments(job_id)
-    return ApiResponse.ok(data={"items": items})
+    return ApiResponse.ok(data=await _service(session).list_assignments(job_id))
 
 
 @router.patch(
@@ -228,6 +230,34 @@ async def patch_assignment(
     return ApiResponse.ok(
         data=data,
         message="Historia asignada" if body.user_id else "Asignación retirada",
+    )
+
+
+@router.patch(
+    "/jobs/{job_id}/sprint-assignments",
+    summary="Asignar o desasignar un sprint completo",
+)
+async def patch_sprint_assignment(
+    job_id: str,
+    body: AssignSprintRequest,
+    actor: User = _WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Asigna el sprint a un colaborador; ``user_id: null`` lo desasigna.
+
+    Sus historias **sin responsable propio** pasan a mostrarse a nombre de esa
+    persona (cascada derivada, no materializada: la asignación por historia
+    prevalece). Exige nivel FULL del módulo Scrum (`analista` y `admin`).
+    """
+    data = await _service(session).assign_sprint(
+        job_id=job_id,
+        sprint_id=body.sprint_id,
+        user_id=body.user_id,
+        actor_id=actor.id,
+    )
+    return ApiResponse.ok(
+        data=data,
+        message="Sprint asignado" if body.user_id else "Asignación de sprint retirada",
     )
 
 

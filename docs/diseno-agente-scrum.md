@@ -328,10 +328,27 @@ implementar (b).
 
 ### Asignación de responsables (listo para la fase (b))
 
-Quién ejecuta cada historia **no vive en el artefacto**: está en la tabla
-`story_assignments` (`job_id`, `story_id`, `user_id`, `assigned_at`,
-`assigned_by`), misma filosofía que las validaciones — el `ScrumArtifact` es la
-salida del agente y no se muta, y reasignar no obliga a regenerar el plan.
+Quién ejecuta cada historia **no vive en el artefacto**: está en dos tablas, misma
+filosofía que las validaciones — el `ScrumArtifact` es la salida del agente y no
+se muta, y reasignar no obliga a regenerar el plan:
+
+- `story_assignments` (`job_id`, `story_id`, `user_id`, `assigned_at`,
+  `assigned_by`) — responsable de una historia.
+- `sprint_assignments` (`job_id`, `sprint_id`, …) — responsable de un **sprint
+  completo**.
+
+**Resolución en cascada (regla `historia > sprint`).** Asignar un sprint hace que
+todas sus historias **sin responsable propio** se muestren a nombre de esa
+persona. La cascada es **derivada, no materializada**: no se escriben filas en
+`story_assignments`, se resuelve al leer (`ScrumPlanningService.list_assignments`,
+que devuelve `source: "story" | "sprint"` por historia). Motivo: retirar la
+asignación del sprint deshace la cascada sin dejar filas huérfanas, y una
+asignación por historia sigue siendo una **excepción explícita** que ni reasignar
+ni desasignar el sprint puede pisar.
+
+El export usa las asignaciones **efectivas**, así que una historia que hereda su
+responsable del sprint también sale asignada en el CSV/JSON: lo que el equipo ve
+en pantalla es lo que se importa.
 
 El mapeo (`ai/integrations/clickup/mapping.py`) recibe las asignaciones como
 parámetro (`story_rows(artifact, assignees={story_id: correo})`) y emite el campo
@@ -344,11 +361,23 @@ reconoce el importador de ClickUp.
 1. Resolver `assignee_email` → **id de miembro del workspace** (`GET /team` de
    ClickUp), porque la API de creación de tareas espera `assignees: [<user_id>]`,
    no correos. El importador CSV sí acepta el correo; la API, no.
-2. Enviar ese id en el `POST /list/{list_id}/task` dentro del guard fail-closed
-   ya existente, con `dry_run` mostrando a quién se asignaría cada tarea.
+2. Enviar ese id en el `POST /list/{list_id}/task` **dentro del guard
+   fail-closed** ya existente (`assert_target_authorized(list_id)`): el envío
+   crea las tareas **ya asignadas por correo institucional**, y sigue confinado al
+   espacio de **Sistemas** — resolver responsables no relaja el guard en nada, y
+   una lista fuera del espacio autorizado se rechaza antes de mirar el asignado.
+   `dry_run` (por defecto) muestra a quién se asignaría cada tarea antes de crear.
 3. Si el correo no corresponde a ningún miembro del workspace: **crear la tarea
    sin asignar** y registrar una `Observation` (nunca fallar la publicación
    entera por un responsable no encontrado, ni asignar a alguien distinto).
+4. La auditoría de `agent_external_links` gana el responsable enviado, para poder
+   responder "¿a quién se asignó esta tarea y desde qué historia?".
+
+**Estado en la UI:** la cabecera del plan ya tiene el botón **"Enviar a ClickUp"**
+*visible pero deshabilitado*, con el tooltip "Disponible en la próxima versión —
+las asignaciones ya quedarán vinculadas". Está ahí a propósito: comunica que la
+asignación que el equipo hace hoy **no se va a perder** cuando llegue (b). La
+alternativa (ocultarlo) dejaría la duda de si asignar sirve para algo.
 
 ---
 

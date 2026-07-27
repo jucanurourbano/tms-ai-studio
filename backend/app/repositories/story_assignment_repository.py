@@ -1,7 +1,12 @@
-"""Repositorio de asignaciones de historias (capa repositories).
+"""Repositorio de asignaciones de historias y sprints (capa repositories).
 
 Las asignaciones viven **fuera del artefacto** (misma filosofía que las
 validaciones): el ``ScrumArtifact`` no se muta nunca.
+
+Dos niveles: por **historia** (``story_assignments``) y por **sprint completo**
+(``sprint_assignments``). La cascada del sprint a sus historias se resuelve al
+LEER, con la regla "historia > sprint" (ver ``ScrumPlanningService``); aquí solo
+se persisten los hechos.
 """
 
 from datetime import datetime
@@ -10,7 +15,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.agent import StoryAssignment
+from app.models.agent import SprintAssignment, StoryAssignment
 from app.models.user import User
 
 
@@ -70,6 +75,66 @@ class StoryAssignmentRepository:
     async def unassign(self, *, job_id: str, story_id: str) -> bool:
         """Quita la asignación. ``True`` si había algo que quitar."""
         existing = await self.get(job_id, story_id)
+        if existing is None:
+            return False
+        await self.session.delete(existing)
+        await self.session.flush()
+        return True
+
+    # --- asignación de sprints completos ------------------------------------
+
+    async def list_sprints_for_job(self, job_id: str) -> list[SprintAssignment]:
+        """Asignaciones de sprint de un plan, en orden estable."""
+        rows = await self.session.scalars(
+            select(SprintAssignment)
+            .where(SprintAssignment.job_id == job_id)
+            .order_by(SprintAssignment.sprint_id.asc())
+        )
+        return list(rows)
+
+    async def get_sprint(
+        self, job_id: str, sprint_id: str
+    ) -> Optional[SprintAssignment]:
+        """Asignación de un sprint concreto, si existe."""
+        return await self.session.scalar(
+            select(SprintAssignment).where(
+                SprintAssignment.job_id == job_id,
+                SprintAssignment.sprint_id == sprint_id,
+            )
+        )
+
+    async def assign_sprint(
+        self,
+        *,
+        job_id: str,
+        sprint_id: str,
+        user_id: str,
+        assigned_by: Optional[str],
+        when: datetime,
+    ) -> SprintAssignment:
+        """Asigna (o reasigna) el sprint. Única por ``(job_id, sprint_id)``."""
+        existing = await self.get_sprint(job_id, sprint_id)
+        if existing is not None:
+            existing.user_id = user_id
+            existing.assigned_by = assigned_by
+            existing.assigned_at = when
+            await self.session.flush()
+            return existing
+
+        row = SprintAssignment(
+            job_id=job_id,
+            sprint_id=sprint_id,
+            user_id=user_id,
+            assigned_by=assigned_by,
+            assigned_at=when,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def unassign_sprint(self, *, job_id: str, sprint_id: str) -> bool:
+        """Quita la asignación del sprint. ``True`` si había algo que quitar."""
+        existing = await self.get_sprint(job_id, sprint_id)
         if existing is None:
             return False
         await self.session.delete(existing)

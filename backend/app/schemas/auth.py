@@ -12,7 +12,7 @@ from app.core.permissions import (
     UserRole,
     effective_modules,
 )
-from app.models.user import User
+from app.models.user import Specialty, User
 
 
 class RegisterRequest(BaseModel):
@@ -60,7 +60,7 @@ class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
     institutional_email: Optional[str] = Field(default=None, max_length=320)
-    position: Optional[str] = Field(default=None, max_length=120)
+    specialty: Optional[Specialty] = None
     available_for_assignment: Optional[bool] = None
 
 
@@ -114,7 +114,7 @@ class UserOut(BaseModel):
     created_at: Optional[datetime] = None
     # --- perfil de equipo (asignación de historias del Agente Scrum) ---
     institutional_email: Optional[str] = None
-    position: Optional[str] = None
+    specialty: Optional[Specialty] = None
     available_for_assignment: bool = True
     #: Accesos adicionales explícitos (para el editor del panel de usuarios).
     grants: list[ModuleGrantOut] = Field(default_factory=list)
@@ -132,7 +132,7 @@ class UserOut(BaseModel):
             is_active=user.is_active,
             created_at=user.created_at,
             institutional_email=user.institutional_email,
-            position=user.position,
+            specialty=user.specialty,
             available_for_assignment=user.available_for_assignment,
             grants=[
                 ModuleGrantOut(module=g.module, level=g.level) for g in user.grants

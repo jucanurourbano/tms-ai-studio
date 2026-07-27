@@ -9,6 +9,7 @@ from .agent import (
     EFSourceDoc,
     EFSourceDocType,
     JobStatus,
+    SprintAssignment,
     StoryAssignment,
     ValidationStatus,
     ValidationTargetType,
@@ -17,7 +18,7 @@ from .base import Base
 
 # Alias históricos del Agente EF (compatibilidad).
 from .ef import EFArtifactRow, EFJob, EFValidation
-from .user import User, UserModuleGrant, UserRole
+from .user import Specialty, User, UserModuleGrant, UserRole
 
 __all__ = [
     "AgentArtifactRow",
@@ -32,6 +33,8 @@ __all__ = [
     "EFSourceDocType",
     "EFValidation",
     "JobStatus",
+    "SprintAssignment",
+    "Specialty",
     "StoryAssignment",
     "User",
     "UserModuleGrant",
