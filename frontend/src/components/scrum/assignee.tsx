@@ -1,6 +1,6 @@
 "use client";
 
-import { UserPlus } from "lucide-react";
+import { UserPlus, Users } from "lucide-react";
 
 import { fairShare, isOverloaded, type MemberLoad } from "@/lib/scrum-assignments";
 import { SPECIALTY_LABELS } from "@/lib/permissions";
@@ -49,16 +49,25 @@ export function AssigneeAvatar({
 export function AssigneeBadge({
   member,
   compact = false,
+  inherited = false,
 }: {
   member?: TeamMember | null;
   compact?: boolean;
+  /** Heredado del sprint: se muestra atenuado para no confundirlo con lo explícito. */
+  inherited?: boolean;
 }) {
   if (!member) {
     return <span className="text-[11px] text-meta-foreground">sin asignar</span>;
   }
   if (compact) return <AssigneeAvatar member={member} />;
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
+    <span
+      className={cn(
+        "inline-flex min-w-0 items-center gap-1.5",
+        inherited && "opacity-70",
+      )}
+      title={inherited ? "Heredado del responsable del sprint" : undefined}
+    >
       <AssigneeAvatar member={member} />
       <span className="min-w-0 truncate text-xs">{member.full_name}</span>
       {member.specialty && (
@@ -84,6 +93,7 @@ export function AssigneeSelect({
   storyId,
   team,
   member,
+  inherited = false,
   readOnly = false,
   busy = false,
   onAssign,
@@ -91,11 +101,13 @@ export function AssigneeSelect({
   storyId: string;
   team: TeamMember[];
   member?: TeamMember | null;
+  /** El responsable viene heredado del sprint, no de esta historia. */
+  inherited?: boolean;
   readOnly?: boolean;
   busy?: boolean;
   onAssign: (storyId: string, userId: string | null) => void;
 }) {
-  if (readOnly) return <AssigneeBadge member={member} />;
+  if (readOnly) return <AssigneeBadge member={member} inherited={inherited} />;
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -106,12 +118,16 @@ export function AssigneeSelect({
       )}
       <select
         aria-label={`Asignar la historia ${storyId}`}
-        value={member?.id ?? ""}
+        value={inherited ? "" : (member?.id ?? "")}
         disabled={busy}
         onChange={(e) => onAssign(storyId, e.target.value || null)}
         className="h-7 min-w-0 max-w-[11rem] rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
       >
-        <option value="">Sin asignar</option>
+        <option value="">
+          {inherited && member
+            ? `Hereda del sprint (${member.full_name})`
+            : "Sin asignar"}
+        </option>
         {team.map((m) => (
           <option key={m.id} value={m.id}>
             {m.full_name}
@@ -179,5 +195,64 @@ export function SprintLoad({
         </span>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Selector "Asignar sprint a…" para la cabecera de un sprint.
+ *
+ * Asignar el sprint hace que TODAS sus historias sin responsable propio pasen a
+ * mostrarse a nombre de esa persona. Es la vía rápida del caso habitual ("este
+ * sprint lo lleva Ana"), y las excepciones se siguen marcando historia a historia.
+ */
+export function SprintAssigneeSelect({
+  sprintId,
+  team,
+  member,
+  readOnly = false,
+  busy = false,
+  onAssign,
+}: {
+  sprintId: string;
+  team: TeamMember[];
+  member?: TeamMember | null;
+  readOnly?: boolean;
+  busy?: boolean;
+  onAssign: (sprintId: string, userId: string | null) => void;
+}) {
+  if (readOnly) {
+    return member ? (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="text-[11px] text-meta-foreground">Responsable:</span>
+        <AssigneeBadge member={member} />
+      </span>
+    ) : null;
+  }
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 print:hidden">
+      {member ? (
+        <AssigneeAvatar member={member} />
+      ) : (
+        <Users className="h-3.5 w-3.5 shrink-0 text-meta-foreground" />
+      )}
+      <select
+        aria-label={`Asignar el sprint ${sprintId}`}
+        value={member?.id ?? ""}
+        disabled={busy}
+        onChange={(e) => onAssign(sprintId, e.target.value || null)}
+        title="Asigna el sprint completo: sus historias sin responsable propio pasarán a esta persona"
+        className="h-7 min-w-0 max-w-[13rem] rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+      >
+        <option value="">Asignar sprint a…</option>
+        {team.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.full_name}
+            {m.specialty ? ` — ${SPECIALTY_LABELS[m.specialty]}` : ""}
+          </option>
+        ))}
+      </select>
+    </span>
   );
 }

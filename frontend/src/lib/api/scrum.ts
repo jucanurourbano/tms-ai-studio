@@ -3,13 +3,13 @@
 import type { QuestionStatus } from "@/lib/types/ef";
 import type {
   AvailableEfJob,
+  PlanAssignments,
   PlanResult,
   ScrumArtifact,
   ScrumExport,
   ScrumJobDetail,
   ScrumJobList,
   ScrumValidationSummary,
-  StoryAssignment,
   TeamMember,
 } from "@/lib/types/scrum";
 
@@ -85,11 +85,9 @@ export const scrumApi = {
     return apiRequest<{ items: TeamMember[] }>("/scrum/team");
   },
 
-  /** Asignaciones del plan, con el responsable resuelto. */
-  assignments(jobId: string): Promise<{ items: StoryAssignment[] }> {
-    return apiRequest<{ items: StoryAssignment[] }>(
-      `/scrum/jobs/${jobId}/assignments`,
-    );
+  /** Asignaciones EFECTIVAS del plan (cascada del sprint ya resuelta). */
+  assignments(jobId: string): Promise<PlanAssignments> {
+    return apiRequest<PlanAssignments>(`/scrum/jobs/${jobId}/assignments`);
   },
 
   /** Asigna una historia; `userId = null` retira la asignación. */
@@ -102,6 +100,23 @@ export const scrumApi = {
       method: "PATCH",
       headers: JSON_HEADERS,
       body: JSON.stringify({ story_id: storyId, user_id: userId }),
+    });
+  },
+
+  /**
+   * Asigna un SPRINT completo; `userId = null` retira la asignación.
+   * Sus historias sin responsable propio pasan a mostrarse a nombre de esa
+   * persona (cascada resuelta en el backend).
+   */
+  assignSprint(
+    jobId: string,
+    sprintId: string,
+    userId: string | null,
+  ): Promise<{ sprint_id: string; user_id: string | null }> {
+    return apiRequest(`/scrum/jobs/${jobId}/sprint-assignments`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sprint_id: sprintId, user_id: userId }),
     });
   },
 };

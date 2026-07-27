@@ -5,6 +5,7 @@
 // calcula en el cliente combinando artefacto + asignaciones.
 
 import type {
+  SprintAssignment,
   Story,
   StoryAssignment,
   TeamMember,
@@ -52,6 +53,29 @@ export function computeSprintLoads(
     }
   }
   return [...acc.values()].sort((x, y) => y.points - x.points);
+}
+
+/**
+ * `story_id` -> origen del responsable (`story` explícito | `sprint` heredado).
+ * Permite distinguir en la UI una asignación decidida a mano de una heredada.
+ */
+export function sourceMap(
+  assignments: StoryAssignment[],
+): Map<string, "story" | "sprint"> {
+  const map = new Map<string, "story" | "sprint">();
+  for (const a of assignments) map.set(a.story_id, a.source);
+  return map;
+}
+
+/** `sprint_id` -> responsable del sprint completo. */
+export function sprintAssigneeMap(
+  sprints: SprintAssignment[],
+): Map<string, TeamMember> {
+  const map = new Map<string, TeamMember>();
+  for (const s of sprints) {
+    if (s.user) map.set(s.sprint_id, s.user);
+  }
+  return map;
 }
 
 /** Puntos del sprint que siguen sin responsable. */

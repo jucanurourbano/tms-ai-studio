@@ -7,23 +7,26 @@ import {
   isOverloaded,
   matchesPersonFilter,
   SIN_ASIGNAR,
+  sourceMap,
+  sprintAssigneeMap,
   unassignedPoints,
 } from "@/lib/scrum-assignments";
+import type { Specialty } from "@/lib/types/auth";
 import type { Story, StoryAssignment, TeamMember } from "@/lib/types/scrum";
 
-function member(id: string, name: string, position?: string): TeamMember {
+function member(id: string, name: string, specialty?: Specialty): TeamMember {
   return {
     id,
     full_name: name,
     institutional_email: `${id}@urbano.com.pe`,
-    position: position ?? null,
+    specialty: specialty ?? null,
     role: "developer",
     is_active: true,
   };
 }
 
-const ANA = member("u1", "Ana Pérez", "Backend");
-const LUIS = member("u2", "Luis Gómez", "Frontend");
+const ANA = member("u1", "Ana Pérez", "backend");
+const LUIS = member("u2", "Luis Gómez", "frontend");
 
 function story(id: string, points: number | null): Story {
   return { id, story_points: points } as unknown as Story;
@@ -37,14 +40,14 @@ const STORIES = new Map<string, Story>([
 ]);
 
 function asignacion(storyId: string, user: TeamMember): StoryAssignment {
-  return { story_id: storyId, user_id: user.id, user };
+  return { story_id: storyId, user_id: user.id, source: "story", user };
 }
 
 describe("assigneeMap", () => {
   it("indexa por historia y omite las asignaciones sin usuario legible", () => {
     const map = assigneeMap([
       asignacion("US-001", ANA),
-      { story_id: "US-002", user_id: "fantasma", user: null },
+      { story_id: "US-002", user_id: "fantasma", source: "story", user: null },
     ]);
     expect(map.get("US-001")?.id).toBe("u1");
     expect(map.has("US-002")).toBe(false);
@@ -140,5 +143,42 @@ describe("matchesPersonFilter", () => {
   it("«sin asignar» deja solo las historias sin responsable", () => {
     expect(matchesPersonFilter("US-002", SIN_ASIGNAR, assignees)).toBe(true);
     expect(matchesPersonFilter("US-001", SIN_ASIGNAR, assignees)).toBe(false);
+  });
+});
+
+describe("sourceMap", () => {
+  it("distingue la asignación explícita de la heredada del sprint", () => {
+    const map = sourceMap([
+      { story_id: "US-001", user_id: "u1", source: "story", user: ANA },
+      { story_id: "US-002", user_id: "u1", source: "sprint", user: ANA },
+    ]);
+    expect(map.get("US-001")).toBe("story");
+    expect(map.get("US-002")).toBe("sprint");
+    expect(map.has("US-003")).toBe(false);
+  });
+});
+
+describe("sprintAssigneeMap", () => {
+  it("indexa el responsable por sprint y omite los ilegibles", () => {
+    const map = sprintAssigneeMap([
+      { sprint_id: "Sprint 1", user_id: "u1", user: ANA },
+      { sprint_id: "Sprint 2", user_id: "fantasma", user: null },
+    ]);
+    expect(map.get("Sprint 1")?.full_name).toBe("Ana Pérez");
+    expect(map.has("Sprint 2")).toBe(false);
+  });
+});
+
+describe("carga con historias heredadas del sprint", () => {
+  it("las heredadas cuentan igual que las explícitas", () => {
+    // El backend ya devuelve la cascada resuelta, así que la carga no tiene que
+    // saber de dónde viene cada responsable.
+    const assignees = assigneeMap([
+      { story_id: "US-001", user_id: "u1", source: "story", user: ANA },
+      { story_id: "US-002", user_id: "u1", source: "sprint", user: ANA },
+    ]);
+    const loads = computeSprintLoads(["US-001", "US-002"], STORIES, assignees);
+    expect(loads).toHaveLength(1);
+    expect(loads[0]).toMatchObject({ stories: 2, points: 8 }); // 5 + 3
   });
 });

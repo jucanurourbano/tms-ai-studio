@@ -1,7 +1,7 @@
 "use client";
 
 import {
-Boxes,
+  Boxes,
   Coins,
   DollarSign,
   Download,

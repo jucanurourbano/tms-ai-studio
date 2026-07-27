@@ -239,11 +239,31 @@ export interface TeamMember {
   is_active: boolean;
 }
 
-/** Asignación de una historia, con el responsable ya resuelto. */
+/**
+ * Asignación EFECTIVA de una historia, con el responsable ya resuelto.
+ * `source` dice de dónde viene: explícita (`story`) o heredada del sprint
+ * (`sprint`). La cascada la resuelve el backend.
+ */
 export interface StoryAssignment {
   story_id: string;
+  user_id: string;
+  source: "story" | "sprint";
+  assigned_at?: string | null;
+  assigned_by?: string | null;
+  user?: TeamMember | null;
+}
+
+/** Responsable de un sprint completo. */
+export interface SprintAssignment {
+  sprint_id: string;
   user_id: string;
   assigned_at?: string | null;
   assigned_by?: string | null;
   user?: TeamMember | null;
+}
+
+/** Respuesta de `GET /scrum/jobs/{id}/assignments`. */
+export interface PlanAssignments {
+  items: StoryAssignment[];
+  sprints: SprintAssignment[];
 }

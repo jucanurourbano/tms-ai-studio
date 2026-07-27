@@ -1,7 +1,7 @@
 "use client";
 
 import {
-ChevronRight,
+  ChevronRight,
   Coins,
   DollarSign,
   Download,
@@ -12,6 +12,7 @@ ChevronRight,
   ListChecks,
   MessagesSquare,
   Printer,
+  Send,
   Target,
 } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +50,7 @@ import { BackToTop } from "@/components/artifact/back-to-top";
 import {
   AssigneeBadge,
   AssigneeSelect,
+  SprintAssigneeSelect,
   SprintLoad,
 } from "@/components/scrum/assignee";
 import { ScrumValidationControls } from "@/components/scrum/validation-controls";
@@ -76,6 +78,7 @@ import type {
   ScrumArtifact,
   ScrumJobDetail,
   ScrumValidationSummary,
+  SprintAssignment,
   Story,
   StoryAssignment,
   TeamMember,
@@ -85,6 +88,8 @@ import {
   computeSprintLoads,
   matchesPersonFilter,
   SIN_ASIGNAR,
+  sourceMap,
+  sprintAssigneeMap,
   unassignedPoints,
 } from "@/lib/scrum-assignments";
 import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
@@ -169,6 +174,9 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   // Equipo y asignaciones: viven FUERA del artefacto, así que se cargan aparte.
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [assignments, setAssignments] = useState<StoryAssignment[]>([]);
+  const [sprintAssignments, setSprintAssignments] = useState<SprintAssignment[]>(
+    [],
+  );
   const [assigningId, setAssigningId] = useState<string | null>(null);
   /** Filtro "ver historias de": id de colaborador, "" = todas. */
   const [personFilter, setPersonFilter] = useState("");
@@ -223,7 +231,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const loadAssignments = useCallback(() => {
     scrumApi
       .assignments(job.job_id)
-      .then((d) => setAssignments(d.items))
+      .then((d) => {
+        setAssignments(d.items);
+        setSprintAssignments(d.sprints);
+      })
       .catch(() => {
         /* la vista funciona sin asignaciones */
       });
@@ -238,6 +249,28 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         /* sin equipo, el selector queda vacío pero la vista no se rompe */
       });
   }, [loadAssignments]);
+
+  const onAssignSprint = useCallback(
+    async (sprintId: string, userId: string | null) => {
+      setAssigningId(sprintId);
+      try {
+        await scrumApi.assignSprint(job.job_id, sprintId, userId);
+        toast.success(
+          userId
+            ? "Sprint asignado · sus historias sin responsable propio lo heredan"
+            : "Asignación de sprint retirada",
+        );
+        loadAssignments();
+      } catch (err) {
+        toast.error("No se pudo asignar el sprint", {
+          description: err instanceof ApiError ? err.message : undefined,
+        });
+      } finally {
+        setAssigningId(null);
+      }
+    },
+    [job.job_id, loadAssignments],
+  );
 
   const onAssign = useCallback(
     async (storyId: string, userId: string | null) => {
@@ -359,6 +392,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   // Capa de asignación: derivada de artefacto + asignaciones (lógica pura y
   // testeada en `lib/scrum-assignments.ts`).
   const assigneeOf = assigneeMap(assignments);
+  const sourceOf = sourceMap(assignments);
+  const sprintAssigneeOf = sprintAssigneeMap(sprintAssignments);
   const loadsOfSprint = (storyIds: string[]) =>
     computeSprintLoads(storyIds, storyById, assigneeOf);
   const unassignedPointsOf = (storyIds: string[]) =>
@@ -547,6 +582,35 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               <FileDown className="h-3.5 w-3.5" />
               JSON
             </Button>
+            {/*
+              Envío directo a ClickUp: VISIBLE pero deshabilitado. Está aquí a
+              propósito — comunica que la asignación que el equipo hace hoy no se
+              va a perder cuando llegue la API. Ocultarlo dejaría la duda de si
+              asignar sirve para algo. El `<span>` envuelve al botón porque un
+              elemento `disabled` no emite eventos de ratón y el tooltip no se
+              mostraría.
+            */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Enviar a ClickUp
+                    </Button>
+                  </span>
+                }
+              />
+              <TooltipContent>
+                Disponible en la próxima versión — las asignaciones ya quedarán
+                vinculadas.
+              </TooltipContent>
+            </Tooltip>
             <Button
               variant="outline"
               size="sm"
@@ -748,6 +812,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                                   storyId={sid}
                                   team={team}
                                   member={assigneeOf.get(sid)}
+                                  inherited={sourceOf.get(sid) === "sprint"}
                                   readOnly={!puedeEditar}
                                   busy={assigningId === sid}
                                   onAssign={onAssign}
@@ -808,6 +873,16 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                           {sp.total_points}/{sp.capacity_points} pts
                         </Badge>
                         <span className="text-sm text-muted-foreground">{sp.goal}</span>
+                        <span className="ml-auto">
+                          <SprintAssigneeSelect
+                            sprintId={sp.id}
+                            team={team}
+                            member={sprintAssigneeOf.get(sp.id)}
+                            readOnly={!puedeEditar}
+                            busy={assigningId === sp.id}
+                            onAssign={onAssignSprint}
+                          />
+                        </span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {sp.story_ids.map((sid) => (
@@ -895,6 +970,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                             storyId={s.id}
                             team={team}
                             member={assigneeOf.get(s.id)}
+                            inherited={sourceOf.get(s.id) === "sprint"}
                             readOnly={!puedeEditar}
                             busy={assigningId === s.id}
                             onAssign={onAssign}
