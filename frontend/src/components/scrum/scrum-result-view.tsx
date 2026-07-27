@@ -540,8 +540,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             <div
               className={cn(
                 "rounded-xl border p-4 print:hidden",
+                // En verde, el rim-light esmeralda sustituye al borde plano (de
+                // ahí `border-transparent`: si no, doble anillo).
                 ready
-                  ? "border-emerald-300 bg-emerald-50"
+                  ? "gradient-border gradient-border-emerald border-transparent bg-emerald-50"
                   : "border-amber-300 bg-amber-50",
               )}
             >

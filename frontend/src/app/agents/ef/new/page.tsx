@@ -108,7 +108,7 @@ export default function NewAnalysisPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="mx-auto max-w-5xl p-6">
       <PageHeader
         icon="file-search"
         eyebrow="Especificar"

@@ -120,7 +120,7 @@ export default function LoginPage() {
         </div>
 
         {/* Tarjeta */}
-        <div className="rounded-2xl bg-card p-6 shadow-xl ring-1 ring-black/5">
+        <div className="gradient-border rounded-2xl bg-card p-6 shadow-xl ring-1 ring-black/5">
           {mode === "checking" && (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />

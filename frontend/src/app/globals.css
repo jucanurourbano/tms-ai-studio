@@ -211,6 +211,13 @@
   position: relative;
   isolation: isolate;
   background-image: var(--brand-gradient-deep);
+  /*
+   * Rim-light superior (toque futurista sobrio): una línea de luz de 1px en el
+   * canto alto, como el reflejo de un panel. Va como `box-shadow: inset` y no
+   * como `.gradient-border` porque los pseudos de este elemento ya están
+   * ocupados por los orbes (`::before`) y la constelación (`::after`).
+   */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 .hero-ai::before {
   content: "";
@@ -261,6 +268,66 @@
 /* Glow violeta suave detrás del icono de un agente activo (tarjetas del grid). */
 .icon-glow {
   box-shadow: 0 10px 26px -10px rgba(124, 58, 237, 0.6);
+}
+
+/*
+ * TOQUE FUTURISTA SOBRIO (tema claro, aire, precisión; sin neón ni
+ * glassmorphism pesado). Un solo recurso —el rim-light de 1px— aplicado con
+ * cuentagotas: la tarjeta de acceso y el banner de "listo".
+ *
+ * `.gradient-border`: borde con gradiente tenue (rim-light) en superficies
+ *   destacadas; se pinta como pseudo-elemento de 1px con máscara, sin ocupar
+ *   layout. Variante `-emerald` para el estado listo (semáforo en verde).
+ *
+ * Reglas de uso (aprendidas, no negociables):
+ *   1. NO aplicar a elementos que ya usan `::before`/`::after` —p. ej. `.hero-ai`,
+ *      cuyos pseudos pintan los orbes y la constelación. Misma especificidad: la
+ *      regla del rim va después y los borraría. El hero lleva su propio
+ *      rim-light como `box-shadow: inset` (ver `.hero-ai`).
+ *   2. Si el elemento ya tiene `border`, ponerlo `border-transparent`: el rim se
+ *      pinta en el borde de la caja de padding y, con un borde visible, se vería
+ *      un doble anillo.
+ *   3. El glow de los elementos primarios (botón) NO vive aquí: se hace con las
+ *      utilidades `shadow-*` de Tailwind para que **componga** con el
+ *      `focus-visible:ring-*` del botón (en Tailwind v4 el ring también es
+ *      box-shadow; una regla `box-shadow` en crudo lo anularía y mataría el
+ *      anillo de foco — regresión de accesibilidad).
+ */
+.gradient-border {
+  position: relative;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.5),
+    rgba(168, 85, 247, 0.12) 55%,
+    transparent
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.gradient-border-emerald::before {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.6),
+    rgba(52, 211, 153, 0.15) 55%,
+    transparent
+  );
+}
+@media print {
+  .gradient-border::before {
+    display: none;
+  }
 }
 
 /*

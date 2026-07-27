@@ -9,7 +9,7 @@ import Link from "next/link";
 export function DashboardHero() {
   return (
     <section className="hero-ai relative mb-6 overflow-hidden rounded-2xl px-6 py-10 text-white shadow-sm sm:px-10 sm:py-12">
-      <div className="relative max-w-2xl">
+      <div className="relative max-w-full">
         <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/90 ring-1 ring-white/25">
           <Sparkles className="h-3.5 w-3.5" />
           ISDF · Urbano TI
@@ -18,7 +18,12 @@ export function DashboardHero() {
         <h1 className="mt-4 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
           TMS AI Studio
         </h1>
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
+        {/*
+          El bloque ocupa todo el ancho (título y CTAs respiran), pero el
+          tagline conserva una medida legible: a 6xl la línea pasaría de 110
+          caracteres y el ojo perdería el renglón (sistema tipográfico, B1).
+        */}
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/85 sm:text-base">
           Agentes de IA que asisten el ciclo de vida del desarrollo de software
           —del entendimiento del negocio a la planificación ágil— con
           trazabilidad de extremo a extremo.
