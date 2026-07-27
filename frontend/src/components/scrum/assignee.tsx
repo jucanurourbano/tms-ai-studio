@@ -4,6 +4,7 @@ import { UserPlus, Users } from "lucide-react";
 
 import { fairShare, isOverloaded, type MemberLoad } from "@/lib/scrum-assignments";
 import { SPECIALTY_LABELS } from "@/lib/permissions";
+import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 import type { TeamMember } from "@/lib/types/scrum";
 
@@ -116,12 +117,12 @@ export function AssigneeSelect({
       ) : (
         <UserPlus className="h-3.5 w-3.5 shrink-0 text-meta-foreground" />
       )}
-      <select
+      <NativeSelect
         aria-label={`Asignar la historia ${storyId}`}
         value={inherited ? "" : (member?.id ?? "")}
         disabled={busy}
         onChange={(e) => onAssign(storyId, e.target.value || null)}
-        className="h-7 min-w-0 max-w-[11rem] rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+        className="h-8 min-w-0 max-w-[11rem] text-xs"
       >
         <option value="">
           {inherited && member
@@ -134,7 +135,7 @@ export function AssigneeSelect({
             {m.specialty ? ` — ${SPECIALTY_LABELS[m.specialty]}` : ""}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </span>
   );
 }
@@ -237,13 +238,13 @@ export function SprintAssigneeSelect({
       ) : (
         <Users className="h-3.5 w-3.5 shrink-0 text-meta-foreground" />
       )}
-      <select
+      <NativeSelect
         aria-label={`Asignar el sprint ${sprintId}`}
         value={member?.id ?? ""}
         disabled={busy}
         onChange={(e) => onAssign(sprintId, e.target.value || null)}
         title="Asigna el sprint completo: sus historias sin responsable propio pasarán a esta persona"
-        className="h-7 min-w-0 max-w-[13rem] rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+        className="h-8 min-w-0 max-w-[13rem] text-xs"
       >
         <option value="">Asignar sprint a…</option>
         {team.map((m) => (
@@ -252,7 +253,7 @@ export function SprintAssigneeSelect({
             {m.specialty ? ` — ${SPECIALTY_LABELS[m.specialty]}` : ""}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </span>
   );
 }

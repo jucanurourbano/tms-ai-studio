@@ -196,74 +196,78 @@
  * tabla sigue aprovechando todo el ancho y el párrafo de al lado se lee bien.
  * 68ch es la banda cómoda para 13-15px.
  */
-.prose-measure {
-  max-width: 68ch;
-}
-
-/*
- * CAMPOS DE FORMULARIO — un solo contrato para inputs, selects y buscadores.
- *
- * - Altura 40px: cómoda con el ratón y por encima del mínimo táctil en móvil
- *   (donde sube a 44px, ver más abajo). La anterior de 32px obligaba a apuntar.
- * - Foco violeta de marca con **glow sutil**: el anillo dice "aquí escribes" y el
- *   glow lo separa del borde en reposo sin gritar.
- * - `aria-invalid` pinta el estado de error sin necesidad de clases extra.
- */
-.field-base {
-  height: 2.5rem;
-  width: 100%;
-  min-width: 0;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--input);
-  background-color: transparent;
-  padding-inline: 0.75rem;
-  font-size: 0.875rem;
-  color: var(--foreground);
-  outline: none;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-.field-base::placeholder {
-  color: var(--meta-foreground);
-}
-.field-base:focus-visible {
-  border-color: var(--brand);
-  box-shadow:
-    0 0 0 3px color-mix(in oklch, var(--brand) 18%, transparent),
-    0 2px 10px -4px color-mix(in oklch, var(--brand) 55%, transparent);
-}
-.field-base[aria-invalid="true"] {
-  border-color: var(--destructive);
-}
-.field-base[aria-invalid="true"]:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 18%, transparent);
-}
-.field-base:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: color-mix(in oklch, var(--input) 50%, transparent);
-}
-/* En móvil, el mínimo táctil manda. */
-@media (max-width: 767px) {
-  .field-base {
-    height: 2.75rem;
-    font-size: 0.9375rem; /* evita el zoom automático de iOS al enfocar */
+@layer components {
+  .prose-measure {
+    max-width: 68ch;
   }
 }
 
-/*
- * SELECT nativo con el mismo lenguaje: se quita la flecha del sistema y se pinta
- * una propia (chevron en SVG embebido), para que un select y un input no parezcan
- * de dos aplicaciones distintas.
- */
-.field-select {
-  appearance: none;
-  padding-right: 2rem;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23787680' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.625rem center;
-  cursor: pointer;
+@layer components {
+  /*
+   * CAMPOS DE FORMULARIO — un solo contrato para inputs, selects y buscadores.
+   *
+   * - Altura 40px: cómoda con el ratón y por encima del mínimo táctil en móvil
+   *   (donde sube a 44px, ver más abajo). La anterior de 32px obligaba a apuntar.
+   * - Foco violeta de marca con **glow sutil**: el anillo dice "aquí escribes" y el
+   *   glow lo separa del borde en reposo sin gritar.
+   * - `aria-invalid` pinta el estado de error sin necesidad de clases extra.
+   */
+  .field-base {
+    height: 2.5rem;
+    width: 100%;
+    min-width: 0;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--input);
+    background-color: transparent;
+    padding-inline: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    outline: none;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+  .field-base::placeholder {
+    color: var(--meta-foreground);
+  }
+  .field-base:focus-visible {
+    border-color: var(--brand);
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, var(--brand) 18%, transparent),
+      0 2px 10px -4px color-mix(in oklch, var(--brand) 55%, transparent);
+  }
+  .field-base[aria-invalid="true"] {
+    border-color: var(--destructive);
+  }
+  .field-base[aria-invalid="true"]:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 18%, transparent);
+  }
+  .field-base:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: color-mix(in oklch, var(--input) 50%, transparent);
+  }
+  /* En móvil, el mínimo táctil manda. */
+  @media (max-width: 767px) {
+    .field-base {
+      height: 2.75rem;
+      font-size: 0.9375rem; /* evita el zoom automático de iOS al enfocar */
+    }
+  }
+
+  /*
+   * SELECT nativo con el mismo lenguaje: se quita la flecha del sistema y se pinta
+   * una propia (chevron en SVG embebido), para que un select y un input no parezcan
+   * de dos aplicaciones distintas.
+   */
+  .field-select {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23787680' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    cursor: pointer;
+  }
 }
 
 /* Resaltado temporal al navegar a una referencia (linked_to_ref / conflicting_refs). */

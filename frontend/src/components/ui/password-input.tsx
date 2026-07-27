@@ -1,9 +1,8 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { useId, useState } from "react";
 
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,7 +43,8 @@ export function PasswordInput({
 
   return (
     <div className="relative">
-      <Input
+      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-meta-foreground" />
+      <input
         id={inputId}
         // El tipo alterna: `text` muestra la contraseña en claro. No se guarda
         // ninguna preferencia — cada campo arranca oculto.
@@ -56,7 +56,8 @@ export function PasswordInput({
         required={required}
         minLength={minLength}
         autoComplete={autoComplete}
-        className={cn("pr-9", className)}
+        // Sitio a ambos lados: candado a la izquierda, ojito a la derecha.
+        className={cn("field-base pl-9 pr-10", className)}
       />
       <button
         type="button"
@@ -66,7 +67,7 @@ export function PasswordInput({
         aria-pressed={visible}
         aria-controls={inputId}
         title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
-        className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-meta-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-meta-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
       >
         {visible ? (
           <EyeOff className="h-4 w-4" />

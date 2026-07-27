@@ -98,6 +98,7 @@ import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import { usePrintExpand } from "@/lib/use-print-expand";
 import { useAuth } from "@/lib/auth/auth-context";
+import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
 // --- badges de dominio -------------------------------------------------------
@@ -589,11 +590,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           {team.length > 0 && (
             <label className="inline-flex items-center gap-1.5 text-xs text-meta-foreground print:hidden">
               Ver historias de
-              <select
+              <NativeSelect
                 value={personFilter}
                 onChange={(e) => setPersonFilter(e.target.value)}
                 aria-label="Filtrar historias por responsable"
-                className="h-7 max-w-[12rem] rounded-md border border-input bg-background px-1.5 text-xs text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-8 max-w-[12rem] text-xs"
               >
                 <option value="">Todas</option>
                 <option value={SIN_ASIGNAR}>Sin asignar</option>
@@ -602,7 +603,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                     {m.full_name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
 

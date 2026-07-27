@@ -1,12 +1,12 @@
 "use client";
 
-import { Loader2, LogIn, ShieldPlus } from "lucide-react";
+import { Loader2, LogIn, Mail, ShieldPlus, User } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { IconInput } from "@/components/ui/icon-input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
@@ -204,10 +204,10 @@ function LoginForm({
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Correo</Label>
-          <Input
+        <Field label="Correo" htmlFor="email" required>
+          <IconInput
             id="email"
+            icon={Mail}
             type="email"
             autoComplete="email"
             required
@@ -215,11 +215,11 @@ function LoginForm({
             onChange={(e) => onEmail(e.target.value)}
             placeholder="nombre@urbano.com.pe"
             disabled={submitting}
+            invalid={!!error}
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Contraseña</Label>
+        <Field label="Contraseña" htmlFor="password" required>
           <PasswordInput
             id="password"
             autoComplete="current-password"
@@ -229,7 +229,7 @@ function LoginForm({
             placeholder="••••••••"
             disabled={submitting}
           />
-        </div>
+        </Field>
 
         {error && (
           <div
@@ -293,10 +293,10 @@ function BootstrapForm({
       </p>
 
       <form onSubmit={onSubmit} className="mt-5 space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="fullName">Nombre completo</Label>
-          <Input
+        <Field label="Nombre completo" htmlFor="fullName" required>
+          <IconInput
             id="fullName"
+            icon={User}
             autoComplete="name"
             required
             value={fullName}
@@ -304,12 +304,12 @@ function BootstrapForm({
             placeholder="Nombre Apellido"
             disabled={submitting}
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="bEmail">Correo</Label>
-          <Input
+        <Field label="Correo" htmlFor="bEmail" required>
+          <IconInput
             id="bEmail"
+            icon={Mail}
             type="email"
             autoComplete="email"
             required
@@ -318,10 +318,14 @@ function BootstrapForm({
             placeholder="nombre@urbano.com.pe"
             disabled={submitting}
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="bPassword">Contraseña</Label>
+        <Field
+          label="Contraseña"
+          htmlFor="bPassword"
+          required
+          hint="Mínimo 8 caracteres."
+        >
           <PasswordInput
             id="bPassword"
             autoComplete="new-password"
@@ -332,10 +336,25 @@ function BootstrapForm({
             placeholder="Mínimo 8 caracteres"
             disabled={submitting}
           />
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="bConfirm">Confirmar contraseña</Label>
+        <Field
+          label="Confirmar contraseña"
+          htmlFor="bConfirm"
+          required
+          // Estado en vivo: se avisa en cuanto ambas tienen contenido, sin
+          // esperar al submit.
+          error={
+            confirm.length > 0 && confirm !== password
+              ? "Las contraseñas no coinciden."
+              : null
+          }
+          success={
+            confirm.length > 0 && confirm === password
+              ? "Las contraseñas coinciden."
+              : null
+          }
+        >
           <PasswordInput
             id="bConfirm"
             autoComplete="new-password"
@@ -345,7 +364,7 @@ function BootstrapForm({
             placeholder="Repite la contraseña"
             disabled={submitting}
           />
-        </div>
+        </Field>
 
         {error && (
           <div

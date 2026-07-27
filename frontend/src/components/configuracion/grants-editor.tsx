@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   Dialog,
   DialogContent,
@@ -211,17 +212,17 @@ export function GrantsEditor({
                 {/* El nivel solo aplica al módulo marcado. `preventDefault` en el
                     click evita que interactuar con el select alterne el checkbox
                     del <label> que lo envuelve. */}
-                <select
+                <NativeSelect
                   aria-label={`Nivel de acceso a ${MODULE_LABELS[modulo]}`}
                   value={nivel ?? "full"}
                   disabled={saving || !marcado}
                   onChange={(e) => setNivel(modulo, e.target.value as AccessLevel)}
                   onClick={(e) => e.preventDefault()}
-                  className="h-7 shrink-0 rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                  className="h-8 w-32 shrink-0 text-xs"
                 >
                   <option value="full">Edición</option>
                   <option value="read">Solo lectura</option>
-                </select>
+                </NativeSelect>
                 <span className="w-16 shrink-0 text-right text-[11px] text-amber-600">
                   {sinEfecto ? "sin efecto" : ""}
                 </span>

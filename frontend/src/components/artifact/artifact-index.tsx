@@ -4,6 +4,7 @@ import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useScrollSpy } from "@/lib/use-scroll-spy";
+import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
 export interface IndexChild {
@@ -85,11 +86,10 @@ export function ArtifactIndex({
         <label htmlFor="artifact-nav" className="sr-only">
           Ir a la sección
         </label>
-        <select
+        <NativeSelect
           id="artifact-nav"
           value={active ?? sections[0]?.id ?? ""}
           onChange={(e) => jumpTo(e.target.value)}
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {sections.map((s) => (
             <optgroup key={s.id} label={s.label}>
@@ -106,7 +106,7 @@ export function ArtifactIndex({
               ))}
             </optgroup>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* Escritorio: índice lateral navegable con scrollspy */}

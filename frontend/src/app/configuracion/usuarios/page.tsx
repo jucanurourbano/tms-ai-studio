@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { Loader2, Mail, ShieldAlert, User, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,8 +13,8 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { IconInput } from "@/components/ui/icon-input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
@@ -274,21 +274,21 @@ export default function UsuariosPage() {
             onSubmit={onRegister}
             className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
           >
-            <div className="space-y-1.5">
-              <Label htmlFor="fullName">Nombre completo</Label>
-              <Input
+            <Field label="Nombre completo" htmlFor="fullName" required>
+              <IconInput
                 id="fullName"
+                icon={User}
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Nombre Apellido"
                 disabled={submitting}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="newEmail">Correo</Label>
-              <Input
+            </Field>
+            <Field label="Correo" htmlFor="newEmail" required>
+              <IconInput
                 id="newEmail"
+                icon={Mail}
                 type="email"
                 required
                 value={email}
@@ -296,9 +296,17 @@ export default function UsuariosPage() {
                 placeholder="nombre@urbano.com.pe"
                 disabled={submitting}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="newPassword">Contraseña</Label>
+            </Field>
+            <Field
+              label="Contraseña"
+              htmlFor="newPassword"
+              required
+              error={
+                password.length > 0 && password.length < 8
+                  ? "Mínimo 8 caracteres."
+                  : null
+              }
+            >
               <PasswordInput
                 id="newPassword"
                 required
@@ -309,23 +317,21 @@ export default function UsuariosPage() {
                 placeholder="Mínimo 8 caracteres"
                 disabled={submitting}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="newRole">Rol</Label>
-              <select
+            </Field>
+            <Field label="Rol" htmlFor="newRole">
+              <NativeSelect
                 id="newRole"
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
                 disabled={submitting}
-                className="flex h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
               >
                 {ALL_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </option>
                 ))}
-              </select>
-            </div>
+              </NativeSelect>
+            </Field>
             <div className="sm:col-span-2 lg:col-span-4">
               <Button
                 type="submit"
@@ -378,7 +384,7 @@ export default function UsuariosPage() {
                   setRoleFilter(e.target.value as UserRole | "todos")
                 }
                 aria-label="Filtrar por rol"
-                className="text-xs sm:w-40"
+                className="text-xs sm:w-44"
               >
                 <option value="todos">Todos los roles</option>
                 {ALL_ROLES.map((r) => (
@@ -393,7 +399,7 @@ export default function UsuariosPage() {
                   setStatusFilter(e.target.value as EstadoFiltro)
                 }
                 aria-label="Filtrar por estado"
-                className="text-xs sm:w-44"
+                className="text-xs sm:w-48"
               >
                 <option value="todos">Activos e inactivos</option>
                 <option value="activos">Solo activos</option>

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   Dialog,
   DialogContent,
@@ -24,9 +25,6 @@ import {
   SPECIALTY_LABELS,
 } from "@/lib/permissions";
 import type { AuthUser, Specialty, UserRole } from "@/lib/types/auth";
-
-const SELECT_CLASS =
-  "flex h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
 /**
  * Edición de un usuario: identidad, rol y perfil de equipo.
@@ -157,12 +155,11 @@ export function UserEditDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-specialty">Especialidad</Label>
-              <select
+              <NativeSelect
                 id="edit-specialty"
                 value={specialty}
                 disabled={saving}
                 onChange={(e) => setSpecialty(e.target.value as Specialty | "")}
-                className={SELECT_CLASS}
               >
                 <option value="">Sin especificar</option>
                 {ALL_SPECIALTIES.map((s) => (
@@ -170,23 +167,22 @@ export function UserEditDialog({
                     {SPECIALTY_LABELS[s]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-role">Rol</Label>
-              <select
+              <NativeSelect
                 id="edit-role"
                 value={role}
                 disabled={saving || !canEditRole || isSelf}
                 onChange={(e) => setRole(e.target.value as UserRole)}
-                className={SELECT_CLASS}
               >
                 {ALL_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {isSelf && (
                 <p className="text-[11px] text-meta-foreground">
                   No puedes cambiar tu propio rol.
@@ -200,16 +196,15 @@ export function UserEditDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-available">Disponible para asignación</Label>
-              <select
+              <NativeSelect
                 id="edit-available"
                 value={available ? "si" : "no"}
                 disabled={saving}
                 onChange={(e) => setAvailable(e.target.value === "si")}
-                className={SELECT_CLASS}
               >
                 <option value="si">Sí, aparece en «Asignar a»</option>
                 <option value="no">No asignable</option>
-              </select>
+              </NativeSelect>
             </div>
           </div>
 
