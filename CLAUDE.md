@@ -257,6 +257,58 @@ LOAD_SOURCES → CONTEXT → COMPONENTS → STACK → ADRS → CONTRACTS → DIA
 
 ---
 
+## 5.1 Vista de artefacto: CENTRO DE COMANDO (patrón único de TODOS los agentes)
+
+La página de un job **no es un documento**: es un **hub**. El mismo patrón sirve
+para EF, Scrum y Arquitectura, y es el que debe seguir cualquier agente nuevo
+(BD, API, Backend…). Vive en `frontend/src/components/artifact/`.
+
+- **El hub** (`hub-card.tsx`): cabecera (título, versión, semáforo, mini-stats,
+  acciones) + **grid de tarjetas-sección** que **ES el índice** — no hay índice
+  lateral. Cada tarjeta lleva icono con el **acento del módulo**, conteos, una
+  **línea de insight** con el dato que importa y, si reclama acción (bloqueantes
+  sin responder, historias fuera de sprint, contratos por definir), **borde rojo
+  + badge**. El hub cabe en una pantalla.
+- **El panel lateral universal** (`artifact-panel.tsx`): TODO el contenido se
+  explora aquí. Media pantalla desde la derecha con el hub atenuado pero visible;
+  ancho 50% por defecto, botón a 70%, borde arrastrable (40–85%) y preferencia
+  persistida; **pantalla completa en móvil**. Cabecera fija: volver, icono,
+  título, conteo, **buscador local**, switcher de sección y cerrar; debajo,
+  **sub-pestañas** cuando la sección las tiene; cuerpo con scroll propio.
+- **Las secciones son DATOS, no JSX incrustado** (`HubSection[]`): `id` (slug del
+  hash), título, icono, conteos, insight, urgencia y un `render(ctx)` — o `tabs`
+  con un `render` cada una. Esa misma definición alimenta la tarjeta, el panel y
+  el PDF; **no hay dos versiones del contenido**.
+- **Navegación entre paneles**: `ArtifactNavProvider` + `RefChip`. Cada vista
+  declara sus rutas por prefijo (`artifact-refs.ts`, gana el prefijo más largo):
+  pulsar `BR-003` dentro de Preguntas abre Modelo → Reglas con la fila resaltada
+  y **"← volver"** en la cabecera (mini-historial dentro del sheet). Un id que
+  **pertenece a otro artefacto** (un `REQ-F-…` citado por el Scrum) **no finge un
+  destino**: se avisa con un toast.
+- **Deep-linking**: la URL sigue al panel (`#requisitos`, `#modelo/reglas`);
+  compartir el enlace abre el job con ese panel y esa pestaña.
+- **Atajos**: `Esc` cierra; `←`/`→` cambian de sección. El listener de teclado va
+  en **fase de captura** (el diálogo detiene la propagación antes de `window`) y
+  el foco inicial entra en el panel, **no** en el selector de sección.
+- **Buscador local**: filtra la sección abierta (`artifact-search.ts`, sin
+  acentos) y las **sub-pestañas muestran las coincidencias** en vez del total,
+  apagando las que no tienen ninguna.
+- **Preguntas**: el modo enfocado (una a una, progreso, Confirmar/Corregir) vive
+  DENTRO del panel (`focused-questions.tsx`) junto a la vista Lista; arranca en
+  "una a una" si queda alguna pendiente.
+- **EXPORT PDF INTACTO** (`artifact-print-doc.tsx`): el informe **no usa
+  paneles**. Portada + índice derivado + todos los capítulos seguidos,
+  reutilizando el `render` de cada sección con `forPrint: true`. Reglas:
+  - El sheet es `print:hidden`: nunca contamina la exportación.
+  - Una pestaña que solo **filtra** otra (Must sobre Todas) lleva `printSkip`, o
+    el PDF duplica el contenido.
+  - `printNow(isReady)` espera al contenido **asíncrono** antes de abrir el
+    diálogo: sin ello el PDF de Arquitectura salía sin los diagramas Mermaid.
+- **Motion**: entrada del sheet 200ms ease-out, cambio de sección con fade corto,
+  hover de tarjeta con elevación; `prefers-reduced-motion` ya neutraliza todo.
+
+---
+
 ## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
@@ -459,6 +511,8 @@ tms-ai-studio/
 │   ├── setup-entorno.md
 │   └── diseno-agente-scrum.md
 ├── frontend/                 # Next.js (cliente puro de la API)
+│   └── src/components/artifact/   # centro de comando: hub-card, artifact-panel,
+│                                  # artifact-print-doc, artifact-nav, primitives
 └── backend/
     ├── main.py               # FastAPI
     ├── requirements.txt
