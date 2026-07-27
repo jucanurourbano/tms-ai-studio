@@ -116,6 +116,27 @@ LOAD_EF → EPICS → STORIES → CRITERIA → ESTIMATE → PRIORITIZE
 - **D9** Estimación: **LLM** con enum Fibonacci cerrado + `confidence`;
   re-estimación en refine.
 
+### Asignación de historias al equipo (fuera del artefacto)
+
+- Tabla **`story_assignments`** (`job_id`, `story_id`, `user_id`, `assigned_at`,
+  `assigned_by`; migración `0008`), **única por `(job_id, story_id)`**: una
+  historia tiene como máximo un responsable y reasignar actualiza la fila.
+- Vive **FUERA del `ScrumArtifact`**, igual que las validaciones: el artefacto es
+  la salida del agente y **no se muta**; quién ejecuta cada historia es una
+  decisión del equipo, posterior e independiente, revisable sin regenerar el plan.
+- Endpoints: `GET /scrum/team` (colaboradores asignables: activos, vigentes y
+  `available_for_assignment`), `GET /scrum/jobs/{id}/assignments` y
+  `PATCH /scrum/jobs/{id}/assignments` (`user_id: null` desasigna). El equipo vive
+  bajo `/scrum` (nivel READ) y no bajo `/auth` para no abrir el panel de usuarios
+  a quien no tiene `config`. **Asignar exige Scrum FULL** → `analista` y `admin`.
+- Al asignar se valida que el plan exista, que la historia pertenezca a su
+  artefacto y que el destinatario sea asignable.
+- **Export ClickUp**: columna `Assignee` (CSV) / `assignee_email` (JSON) con el
+  correo institucional del responsable (fallback al de acceso). Las asignaciones
+  se inyectan en el mapeo (`story_rows(artifact, assignees=…)`), no en el
+  artefacto. Lo que falta para la fase (b) está en
+  `docs/diseno-agente-scrum.md` §7.
+
 ### Restricción de seguridad ClickUp (crítica)
 
 La cuenta de ClickUp es **compartida** por la organización. El agente **solo**
@@ -229,7 +250,23 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
 
 - **Modelo `User`** (`backend/app/models/user.py`, tabla `users`, migración
   `0005_users`): `id` (ULID), `email` **único**, `full_name`, `password_hash`,
-  `role`, `is_active`, timestamps.
+  `role`, `is_active`, timestamps. Más:
+  - `deleted_at` (**baja lógica**, migración `0007`).
+  - **Perfil de equipo** (migración `0008`): `institutional_email` (el que se
+    exporta a ClickUp; puede diferir del de acceso), `position`
+    (cargo/especialidad) y `available_for_assignment`.
+- **Baja lógica, NO borrado físico ni anonimización.** Los jobs
+  (`agent_jobs.created_by`) y las validaciones (`agent_validations.answered_by`)
+  referencian a su autor: anonimizar dejaría el historial sin respuesta a "¿quién
+  hizo esto?" y de forma irreversible. Un usuario con `deleted_at` no inicia
+  sesión ni aparece en los listados, su ficha se conserva y la baja se revierte.
+  Su correo **sigue reservado** (la única de la tabla cubre esas filas):
+  reutilizarlo exige reactivar, no crear otra cuenta.
+- **Salvaguardas de gestión** (todas con test): no eliminarse a sí mismo, no
+  dejar la plataforma sin ningún **administrador activo** (aplicada también a
+  desactivar, porque `config` FULL es concedible por grant y sin ella un no-admin
+  podía desactivar a todos los admins sin poder promover a nadie), y un admin no
+  cambia su propio rol ni edita sus propios grants.
 - **Roles funcionales por fase ISDF** (migración `0006_roles_por_fase`; sustituyen
   al par binario `admin`|`member`, cuyos usuarios pasaron a `analista`).
 - **Hashing:** **bcrypt vía `passlib`** (`bcrypt` pinneado `<4.1` por
@@ -250,6 +287,14 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   - `GET /auth/users` — listado (**`config` READ**).
   - `PATCH /auth/users/{id}` — activar/desactivar (**`config` FULL**; un admin no
     puede desactivarse a sí mismo).
+  - `PATCH /auth/users/{id}/profile` — nombre, correo de acceso y **perfil de
+    equipo** (**`config` FULL**; aplica solo lo informado, 409 si el correo está
+    tomado).
+  - `POST /auth/users/{id}/password` — **restablecer** contraseña (**`config`
+    FULL**; operación administrativa: no pide la anterior).
+  - `GET /auth/users/{id}/activity` — huella del usuario (jobs + validaciones) y
+    `recommend_deactivate` (**`config` READ**).
+  - `DELETE /auth/users/{id}` — **baja lógica** (**`config` FULL**).
   - `PATCH /auth/users/{id}/role` — cambia el rol (**rol `admin` estricto**; un
     admin no puede cambiar su propio rol).
   - `PUT /auth/users/{id}/grants` — reemplaza los accesos adicionales
@@ -273,9 +318,14 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   sesión, `/login` → dashboard; **sin permiso para la ruta → dashboard con aviso**
   (`lib/route-permissions.ts`; las rutas `/new` exigen FULL). Pantalla `/login` con
   identidad Urbano; sidebar con **badge del rol** y **cerrar sesión**.
-  **Panel de usuarios** (`/configuracion/usuarios`, módulo `config`): tabla
-  (nombre/email/rol/accesos/estado/fecha), alta, activar/desactivar, **select de
-  rol** y **editor de accesos adicionales** por usuario.
+  **Panel de usuarios** (`/configuracion/usuarios`, módulo `config`): alta,
+  búsqueda por nombre/correo, filtros por rol y estado, contador, y por usuario
+  un menú **kebab (⋮)** con Editar (identidad + rol + perfil de equipo), Accesos
+  adicionales, Restablecer contraseña, Activar/Desactivar y Eliminar — las tres
+  últimas con confirmación, y la baja exigiendo escribir el nombre y avisando de
+  la actividad registrada. **Responsive**: tabla en `md+`, una card por usuario
+  por debajo. Todos los campos de contraseña de la app (login, bootstrap, alta y
+  restablecimiento) usan `PasswordInput`, con toggle mostrar/ocultar.
 
 ### 6.1 Permisos por fase ISDF (matriz)
 
@@ -403,7 +453,8 @@ tms-ai-studio/
     │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura}.py
     │   ├── dependencies/         # current_user (401) + permissions (403)
     │   ├── middlewares/  models/    # models: agent, user (+ grants)
-    │   ├── repositories/  services/  schemas/  utils/
+    │   ├── repositories/         # + story_assignment_repository
+    │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
     ├── shared/responses/api_response.py
     └── ai/
