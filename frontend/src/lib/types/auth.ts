@@ -24,6 +24,15 @@ export type ModuleKey =
   | "devops"
   | "config";
 
+/** Especialidad técnica del colaborador (enum cerrado del backend). */
+export type Specialty =
+  | "backend"
+  | "frontend"
+  | "db"
+  | "qa"
+  | "fullstack"
+  | "otro";
+
 /** Nivel de acceso a un módulo. `full` implica `read`. */
 export type AccessLevel = "read" | "full";
 
@@ -48,7 +57,7 @@ export interface AuthUser {
   created_at?: string | null;
   /** Perfil de equipo (asignación de historias del Agente Scrum). */
   institutional_email?: string | null;
-  position?: string | null;
+  specialty?: Specialty | null;
   available_for_assignment: boolean;
   grants: ModuleGrant[];
   modules: EffectiveModules;
@@ -67,7 +76,7 @@ export interface UpdateProfileInput {
   full_name?: string;
   email?: string;
   institutional_email?: string;
-  position?: string;
+  specialty?: Specialty | null;
   available_for_assignment?: boolean;
 }
 

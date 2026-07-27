@@ -17,8 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { ALL_ROLES, ROLE_LABELS } from "@/lib/permissions";
-import type { AuthUser, UserRole } from "@/lib/types/auth";
+import {
+  ALL_ROLES,
+  ALL_SPECIALTIES,
+  ROLE_LABELS,
+  SPECIALTY_LABELS,
+} from "@/lib/permissions";
+import type { AuthUser, Specialty, UserRole } from "@/lib/types/auth";
 
 const SELECT_CLASS =
   "flex h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -54,7 +59,9 @@ export function UserEditDialog({
   const [institutional, setInstitutional] = useState(
     user.institutional_email ?? "",
   );
-  const [position, setPosition] = useState(user.position ?? "");
+  const [specialty, setSpecialty] = useState<Specialty | "">(
+    user.specialty ?? "",
+  );
   const [available, setAvailable] = useState(user.available_for_assignment);
   const [role, setRole] = useState<UserRole>(user.role);
   const [saving, setSaving] = useState(false);
@@ -65,7 +72,7 @@ export function UserEditDialog({
       setFullName(user.full_name);
       setEmail(user.email);
       setInstitutional(user.institutional_email ?? "");
-      setPosition(user.position ?? "");
+      setSpecialty(user.specialty ?? "");
       setAvailable(user.available_for_assignment);
       setRole(user.role);
     }
@@ -81,7 +88,8 @@ export function UserEditDialog({
         email: email.trim(),
         // Cadena vacía = borrar el institucional (vuelve a usarse el de acceso).
         institutional_email: institutional.trim(),
-        position: position.trim(),
+        // "" = sin especialidad declarada (se envía null).
+        specialty: specialty === "" ? null : specialty,
         available_for_assignment: available,
       });
       if (canEditRole && !isSelf && role !== user.role) {
@@ -148,14 +156,21 @@ export function UserEditDialog({
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-position">Cargo / especialidad</Label>
-              <Input
-                id="edit-position"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                placeholder="Backend, Frontend, QA…"
+              <Label htmlFor="edit-specialty">Especialidad</Label>
+              <select
+                id="edit-specialty"
+                value={specialty}
                 disabled={saving}
-              />
+                onChange={(e) => setSpecialty(e.target.value as Specialty | "")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Sin especificar</option>
+                {ALL_SPECIALTIES.map((s) => (
+                  <option key={s} value={s}>
+                    {SPECIALTY_LABELS[s]}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-role">Rol</Label>

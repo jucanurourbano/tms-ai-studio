@@ -9,6 +9,7 @@ import type {
   AccessLevel,
   EffectiveModules,
   ModuleKey,
+  Specialty,
   UserRole,
 } from "@/lib/types/auth";
 
@@ -86,4 +87,35 @@ export const ALL_MODULES: ModuleKey[] = [
   "scrum",
   "devops",
   "config",
+];
+
+/** Etiqueta legible de la especialidad (espejo del enum `Specialty`). */
+export const SPECIALTY_LABELS: Record<Specialty, string> = {
+  backend: "Backend",
+  frontend: "Frontend",
+  db: "Base de datos",
+  qa: "QA",
+  fullstack: "Full stack",
+  otro: "Otro",
+};
+
+export const ALL_SPECIALTIES: Specialty[] = [
+  "fullstack",
+  "backend",
+  "frontend",
+  "db",
+  "qa",
+  "otro",
+];
+
+/**
+ * Módulos del atajo **Full stack**: los cuatro que toca alguien que construye de
+ * punta a punta. Es el caso común del equipo, y marcarlos de a uno era el paso
+ * más tedioso del panel.
+ */
+export const FULLSTACK_MODULES: ModuleKey[] = [
+  "backend",
+  "frontend",
+  "bd",
+  "api",
 ];

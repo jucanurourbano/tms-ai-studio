@@ -26,7 +26,7 @@ import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { absoluteTime, relativeTime } from "@/lib/format";
-import { ALL_ROLES, ROLE_LABELS } from "@/lib/permissions";
+import { ALL_ROLES, ROLE_LABELS, SPECIALTY_LABELS } from "@/lib/permissions";
 import type { AuthUser, RolesCatalog, UserRole } from "@/lib/types/auth";
 import { cn } from "@/lib/utils";
 
@@ -344,7 +344,7 @@ export default function UsuariosPage() {
               <TableHead className={TH_META}>Nombre</TableHead>
               <TableHead className={TH_META}>Correo</TableHead>
               <TableHead className={TH_META}>Rol</TableHead>
-              <TableHead className={TH_META}>Cargo</TableHead>
+              <TableHead className={TH_META}>Especialidad</TableHead>
               <TableHead className={TH_META}>Estado</TableHead>
               <TableHead className={TH_META}>Registrado</TableHead>
               <TableHead className={cn(TH_META, "text-right")}>Acciones</TableHead>
@@ -389,7 +389,7 @@ export default function UsuariosPage() {
                       <RoleBadge role={u.role} />
                     </TableCell>
                     <TableCell className="text-xs text-meta-foreground">
-                      {u.position || "—"}
+                      {u.specialty ? SPECIALTY_LABELS[u.specialty] : "—"}
                     </TableCell>
                     <TableCell>
                       <ActiveBadge active={u.is_active} />
@@ -461,9 +461,9 @@ export default function UsuariosPage() {
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <RoleBadge role={u.role} />
                       <ActiveBadge active={u.is_active} />
-                      {u.position && (
+                      {u.specialty && (
                         <span className="text-[11px] text-meta-foreground">
-                          {u.position}
+                          {SPECIALTY_LABELS[u.specialty]}
                         </span>
                       )}
                     </div>

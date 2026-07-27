@@ -3,6 +3,7 @@
 import { UserPlus } from "lucide-react";
 
 import { fairShare, isOverloaded, type MemberLoad } from "@/lib/scrum-assignments";
+import { SPECIALTY_LABELS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { TeamMember } from "@/lib/types/scrum";
 
@@ -29,7 +30,7 @@ export function AssigneeAvatar({
 }) {
   return (
     <span
-      title={`${member.full_name}${member.position ? ` · ${member.position}` : ""}`}
+      title={`${member.full_name}${member.specialty ? ` · ${SPECIALTY_LABELS[member.specialty]}` : ""}`}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary ring-1 ring-primary/20",
         size === "sm" ? "h-5 w-5 text-[9px]" : "h-7 w-7 text-[11px]",
@@ -60,9 +61,9 @@ export function AssigneeBadge({
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <AssigneeAvatar member={member} />
       <span className="min-w-0 truncate text-xs">{member.full_name}</span>
-      {member.position && (
+      {member.specialty && (
         <span className="shrink-0 text-[11px] text-meta-foreground">
-          · {member.position}
+          · {SPECIALTY_LABELS[member.specialty]}
         </span>
       )}
     </span>
@@ -114,7 +115,7 @@ export function AssigneeSelect({
         {team.map((m) => (
           <option key={m.id} value={m.id}>
             {m.full_name}
-            {m.position ? ` — ${m.position}` : ""}
+            {m.specialty ? ` — ${SPECIALTY_LABELS[m.specialty]}` : ""}
           </option>
         ))}
       </select>

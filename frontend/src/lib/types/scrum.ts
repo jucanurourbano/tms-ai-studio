@@ -222,6 +222,8 @@ export interface ScrumExport {
 }
 
 
+import type { Specialty } from "@/lib/types/auth";
+
 // --- Equipo y asignación de historias ---------------------------------------
 // Las asignaciones viven FUERA del artefacto (tabla `story_assignments`), igual
 // que las validaciones: el ScrumArtifact nunca se muta.
@@ -232,7 +234,7 @@ export interface TeamMember {
   full_name: string;
   /** Correo institucional (con fallback al de acceso). Es el que va a ClickUp. */
   institutional_email: string;
-  position?: string | null;
+  specialty?: Specialty | null;
   role: string;
   is_active: boolean;
 }

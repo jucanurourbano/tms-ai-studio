@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Layers, Loader2, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,29 +15,42 @@ import {
 } from "@/components/ui/dialog";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { ALL_MODULES, MODULE_LABELS } from "@/lib/permissions";
-import type { AccessLevel, AuthUser, RolesCatalog } from "@/lib/types/auth";
+import {
+  ALL_MODULES,
+  FULLSTACK_MODULES,
+  MODULE_LABELS,
+} from "@/lib/permissions";
+import type {
+  AccessLevel,
+  AuthUser,
+  ModuleKey,
+  RolesCatalog,
+} from "@/lib/types/auth";
+import { cn } from "@/lib/utils";
 
-/** Valor del selector por módulo: sin grant, lectura o edición. */
-type Choice = "none" | AccessLevel;
+/** Selección en curso: módulo -> nivel concedido. Módulo ausente = sin grant. */
+type Seleccion = Partial<Record<ModuleKey, AccessLevel>>;
 
-const CHOICE_LABEL: Record<Choice, string> = {
-  none: "—",
+const LEVEL_LABEL: Record<AccessLevel, string> = {
   read: "Solo lectura",
   full: "Edición",
 };
 
-const SELECT_CLASS =
-  "h-7 rounded-md border border-input bg-background px-2 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
-
 /**
  * Editor de **accesos adicionales** de un usuario (tabla `user_module_grants`).
  *
- * Los grants SUMAN sobre el rol y nunca restan, así que el editor muestra, junto
- * a cada módulo, lo que ya concede el rol: si el rol da Edición, un grant de
- * lectura no cambia nada y conviene que el administrador lo vea antes de
- * guardar. Guardar envía el conjunto COMPLETO (semántica de *replace* del
- * endpoint `PUT /auth/users/{id}/grants`).
+ * Los módulos se marcan con **checkboxes múltiples** (varios de una pasada) en vez
+ * de un desplegable por módulo: el caso real es "dale a esta persona Backend,
+ * Frontend, BD y API", y hacerlo de a uno era el paso más tedioso del panel. De
+ * ahí también el atajo **Full stack**, que marca esos cuatro de golpe.
+ *
+ * Al marcar, el nivel por defecto es **Edición** (quien recibe un módulo extra
+ * suele necesitar trabajar en él); se puede bajar a Solo lectura por módulo.
+ *
+ * Los grants **SUMAN sobre el rol y nunca restan**: junto a cada módulo se
+ * muestra lo que ya concede el rol y se marca "sin efecto" cuando lo elegido no
+ * supera ese nivel. Guardar envía el conjunto COMPLETO (semántica de *replace*
+ * del endpoint `PUT /auth/users/{id}/grants`).
  */
 export function GrantsEditor({
   user,
@@ -54,10 +67,10 @@ export function GrantsEditor({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [choices, setChoices] = useState<Record<string, Choice>>({});
+  const [seleccion, setSeleccion] = useState<Seleccion>({});
 
-  // Lo que concede el ROL del usuario (no editable aquí; es contexto).
-  const porRol = useMemo<Record<string, AccessLevel | undefined>>(() => {
+  // Lo que concede el ROL del usuario (contexto, no editable aquí).
+  const porRol = useMemo<Partial<Record<string, AccessLevel>>>(() => {
     const fila = catalog?.roles.find((r) => r.value === user.role);
     return fila?.modules ?? {};
   }, [catalog, user.role]);
@@ -65,20 +78,47 @@ export function GrantsEditor({
   // Al abrir se parte del estado real del usuario.
   function abrir(abierto: boolean) {
     if (abierto) {
-      const inicial: Record<string, Choice> = {};
-      for (const modulo of ALL_MODULES) inicial[modulo] = "none";
+      const inicial: Seleccion = {};
       for (const g of user.grants) inicial[g.module] = g.level;
-      setChoices(inicial);
+      setSeleccion(inicial);
     }
     onOpenChange(abierto);
   }
 
+  function toggle(modulo: ModuleKey) {
+    setSeleccion((prev) => {
+      const next = { ...prev };
+      if (next[modulo]) delete next[modulo];
+      else next[modulo] = "full"; // por defecto, Edición
+      return next;
+    });
+  }
+
+  function setNivel(modulo: ModuleKey, level: AccessLevel) {
+    setSeleccion((prev) => ({ ...prev, [modulo]: level }));
+  }
+
+  /** Atajo: marca los cuatro módulos de construcción con Edición. */
+  function marcarFullStack() {
+    setSeleccion((prev) => {
+      const next = { ...prev };
+      for (const m of FULLSTACK_MODULES) next[m] = "full";
+      return next;
+    });
+  }
+
+  const total = Object.keys(seleccion).length;
+  const fullStackCompleto = FULLSTACK_MODULES.every(
+    (m) => seleccion[m] === "full",
+  );
+
   async function guardar() {
     setSaving(true);
     try {
-      const grants = ALL_MODULES.filter(
-        (m) => choices[m] && choices[m] !== "none",
-      ).map((m) => ({ module: m, level: choices[m] as AccessLevel }));
+      const grants = (Object.keys(seleccion) as ModuleKey[]).map((m) => ({
+        module: m,
+        level: seleccion[m] as AccessLevel,
+      }));
       await authApi.setGrants(user.id, grants);
       toast.success("Accesos adicionales actualizados");
       onOpenChange(false);
@@ -98,54 +138,94 @@ export function GrantsEditor({
         <DialogHeader>
           <DialogTitle>Accesos adicionales · {user.full_name}</DialogTitle>
           <DialogDescription>
-            Suman sobre lo que ya concede su rol; nunca restan. Deja «—» para no
-            añadir nada en ese módulo.
+            Marca los módulos que quieras añadir. Suman sobre lo que ya concede su
+            rol y nunca restan.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Atajos para el caso común */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={fullStackCompleto ? "secondary" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            disabled={saving}
+            onClick={marcarFullStack}
+            title="Marca Backend, Frontend, Base de datos y API con Edición"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Full stack
+          </Button>
+          {total > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              disabled={saving}
+              onClick={() => setSeleccion({})}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Quitar todos
+            </Button>
+          )}
+          <span className="ml-auto text-[11px] text-meta-foreground">
+            {total === 0
+              ? "Sin accesos adicionales"
+              : `${total} módulo${total === 1 ? "" : "s"} seleccionado${
+                  total === 1 ? "" : "s"
+                }`}
+          </span>
+        </div>
 
         <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto rounded-lg border">
           {ALL_MODULES.map((modulo) => {
             const rol = porRol[modulo];
-            const elegido = choices[modulo] ?? "none";
+            const nivel = seleccion[modulo];
+            const marcado = nivel !== undefined;
             // Un grant que no supera lo del rol no aporta nada: se avisa.
-            const redundante =
-              rol === "full" || (rol === "read" && elegido === "read");
+            const sinEfecto =
+              marcado && (rol === "full" || (rol === "read" && nivel === "read"));
             return (
-              <div
+              <label
                 key={modulo}
-                className="flex items-center gap-3 px-3 py-2 text-sm"
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-primary/[0.03]",
+                  marcado && "bg-primary/[0.04]",
+                )}
               >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  disabled={saving}
+                  onChange={() => toggle(modulo)}
+                  className="h-4 w-4 shrink-0 accent-primary"
+                />
                 <span className="min-w-0 flex-1 truncate">
                   {MODULE_LABELS[modulo]}
                 </span>
                 <span className="shrink-0 text-[11px] text-meta-foreground">
-                  {rol ? `por rol: ${CHOICE_LABEL[rol]}` : "sin acceso por rol"}
+                  {rol ? `por rol: ${LEVEL_LABEL[rol]}` : "sin acceso por rol"}
                 </span>
+                {/* El nivel solo aplica al módulo marcado. `preventDefault` en el
+                    click evita que interactuar con el select alterne el checkbox
+                    del <label> que lo envuelve. */}
                 <select
-                  aria-label={`Acceso adicional a ${MODULE_LABELS[modulo]}`}
-                  value={elegido}
-                  disabled={saving}
-                  onChange={(e) =>
-                    setChoices((prev) => ({
-                      ...prev,
-                      [modulo]: e.target.value as Choice,
-                    }))
-                  }
-                  className={SELECT_CLASS}
+                  aria-label={`Nivel de acceso a ${MODULE_LABELS[modulo]}`}
+                  value={nivel ?? "full"}
+                  disabled={saving || !marcado}
+                  onChange={(e) => setNivel(modulo, e.target.value as AccessLevel)}
+                  onClick={(e) => e.preventDefault()}
+                  className="h-7 shrink-0 rounded-md border border-input bg-background px-1.5 text-xs shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
                 >
-                  <option value="none">—</option>
-                  <option value="read">Solo lectura</option>
                   <option value="full">Edición</option>
+                  <option value="read">Solo lectura</option>
                 </select>
-                {elegido !== "none" && redundante && (
-                  <span
-                    className="shrink-0 text-[11px] text-amber-600"
-                    title="El rol ya concede este nivel o más; el acceso adicional no cambia nada."
-                  >
-                    sin efecto
-                  </span>
-                )}
-              </div>
+                <span className="w-16 shrink-0 text-right text-[11px] text-amber-600">
+                  {sinEfecto ? "sin efecto" : ""}
+                </span>
+              </label>
             );
           })}
         </div>
