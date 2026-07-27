@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Coordina la impresión con la revelación progresiva: como las secciones
- * colapsadas NO montan su contenido (lazy render), antes de imprimir hay que
+ * Coordina la impresión con el centro de comando: como el contenido vive en el
+ * panel lateral y NO en el flujo de la página, antes de imprimir hay que
  * forzar el montaje de todo el artefacto.
  *
- * `printMode` (cuando es true) hace que cada `ArtifactSection` renderice y
- * expanda su contenido para el PDF. `printNow` lo activa, espera al paint y
+ * `printMode` (cuando es true) hace que `ArtifactPrintDoc` monte y
+ * expanda el documento lineal completo. `printNow` lo activa, espera al paint y
  * lanza `window.print()`. También se escucha `beforeprint`/`afterprint` para
  * cubrir el Ctrl+P del navegador.
  */

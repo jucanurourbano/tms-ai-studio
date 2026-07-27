@@ -47,7 +47,7 @@ import { HubCard, HubGrid, HubHint } from "@/components/artifact/hub-card";
 import {
   FocusedQuestionFlow,
   type SheetQuestion,
-} from "@/components/artifact/question-sheet";
+} from "@/components/artifact/focused-questions";
 import {
   DataList,
   DataRow,

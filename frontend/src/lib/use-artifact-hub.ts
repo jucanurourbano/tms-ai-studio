@@ -171,8 +171,11 @@ export function useArtifactHub(sectionIds: readonly string[]) {
       if (e.key === "ArrowLeft") goPrev();
       else goNext();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Fase de CAPTURA: el sheet vive en un diálogo que detiene la propagación de
+    // algunas teclas antes de que burbujeen hasta `window`, y con el listener en
+    // fase de burbuja las flechas no llegaban nunca.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open, goPrev, goNext]);
 
   return {

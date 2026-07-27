@@ -15,13 +15,6 @@ import { AudienceBadge } from "@/components/ef/badges";
 import { RefChip } from "@/components/artifact/primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import type { QuestionStatus } from "@/lib/types/ef";
 import { cn } from "@/lib/utils";
 
@@ -39,46 +32,6 @@ const STATUS_LABEL: Record<QuestionStatus, string> = {
   confirmado: "Confirmada",
   corregido: "Corregida",
 };
-
-/**
- * Envoltorio TRANSITORIO en su propio sheet, para las vistas que aún no se han
- * migrado al centro de comando (Scrum y Arquitectura). Desaparece cuando las
- * tres vistas usen el panel universal.
- */
-export function QuestionSheet({
-  open,
-  onOpenChange,
-  questions,
-  statusOf,
-  title = "Responder preguntas",
-  renderControls,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  questions: SheetQuestion[];
-  statusOf: (id: string) => QuestionStatus;
-  title?: string;
-  renderControls: (q: SheetQuestion, onAnswered: () => void) => React.ReactNode;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-describedby={undefined}>
-        <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-        </SheetHeader>
-        <SheetBody>
-          {open && (
-            <FocusedQuestionFlow
-              questions={questions}
-              statusOf={statusOf}
-              renderControls={renderControls}
-            />
-          )}
-        </SheetBody>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 export function FocusedQuestionFlow({
   questions,

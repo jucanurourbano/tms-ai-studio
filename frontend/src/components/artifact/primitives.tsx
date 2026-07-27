@@ -1,8 +1,11 @@
 "use client";
 
-// Primitivas visuales compartidas por las vistas de artefacto (EF y Scrum).
-// Objetivo: presencia de producto (chips, cards con cabecera, listas hairline,
-// mini-stats, pills de estado) en vez de "texto tipo Wikipedia".
+// Primitivas visuales compartidas por las tres vistas de artefacto (EF, Scrum y
+// Arquitectura): chips de referencia e id, conteos, listas hairline, mini-stats,
+// pills de estado y las piezas del documento imprimible.
+//
+// La estructura (tarjetas del hub, panel lateral, capítulos del PDF) vive en
+// `hub-card`, `artifact-panel` y `artifact-print-doc`; aquí solo los átomos.
 
 import { Check, Minus } from "lucide-react";
 import Image from "next/image";
@@ -90,56 +93,6 @@ export function CountChip({ n }: { n?: number }) {
     >
       {empty ? "0 ⚠" : n}
     </span>
-  );
-}
-
-/**
- * Sección como card con cabecera propia (índice + título + conteo + acciones),
- * en vez de un título suelto sobre blanco infinito.
- */
-export function SectionCard({
-  id,
-  index,
-  title,
-  count,
-  actions,
-  className,
-  children,
-}: {
-  id?: string;
-  index?: string;
-  title: React.ReactNode;
-  count?: number;
-  actions?: React.ReactNode;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      id={id}
-      className={cn(
-        "scroll-mt-28 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 print:overflow-visible print:rounded-none print:ring-0",
-        className,
-      )}
-    >
-      <header className="print-heading flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5 print:border-b-2 print:border-violet-800/70 print:bg-transparent print:px-0">
-        {index && (
-          <span className="font-heading text-xs font-semibold tabular-nums text-meta-foreground print:text-violet-800">
-            {index}
-          </span>
-        )}
-        <h2 className="font-heading text-base font-semibold tracking-tight print:text-base print:text-violet-800">
-          {title}
-        </h2>
-        {count !== undefined && <CountChip n={count} />}
-        {actions && (
-          <div className="ml-auto flex items-center gap-1.5 print:hidden">
-            {actions}
-          </div>
-        )}
-      </header>
-      <div className="p-4 print:px-0 print:py-3">{children}</div>
-    </section>
   );
 }
 
@@ -409,27 +362,6 @@ export function PrintCover({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/** Índice del documento imprimible (lista numerada de secciones). */
-export function PrintToc({ items }: { items: string[] }) {
-  return (
-    <div className="hidden break-after-page print:block">
-      <h2 className="border-b-2 border-violet-800/70 pb-2 font-heading text-lg font-bold text-violet-800">
-        Contenido
-      </h2>
-      <ol className="mt-5 space-y-3 text-sm text-neutral-800">
-        {items.map((label, i) => (
-          <li key={label} className="flex gap-3">
-            <span className="w-5 shrink-0 text-right font-mono text-neutral-400">
-              {i + 1}
-            </span>
-            <span>{label}</span>
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }

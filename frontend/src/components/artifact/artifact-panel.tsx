@@ -115,10 +115,17 @@ export function ArtifactPanel({
   const section = current
     ? sections.find((s) => s.id === current.sectionId)
     : undefined;
+  const panelRef = useRef<HTMLDivElement>(null);
 
   return (
     <Sheet open={hub.open} onOpenChange={(o) => !o && hub.close()}>
       <SheetContent
+        ref={panelRef}
+        tabIndex={-1}
+        // El foco entra en el PANEL, no en el primer control. Por defecto caía en
+        // el selector de sección, y ahí una flecha del teclado cambiaba de
+        // sección sin que nadie lo pidiera.
+        initialFocus={panelRef}
         showCloseButton={false}
         aria-describedby={undefined}
         className="max-w-none md:w-[var(--panel-w)]"
@@ -210,9 +217,11 @@ function PanelInner({
               volver
             </Button>
           )}
+          {/* En móvil el icono cede su sitio: la cabecera tiene que caber en
+              390px con el título, el selector de sección y el cierre. */}
           <span
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md [&_svg]:h-4 [&_svg]:w-4",
+              "hidden h-7 w-7 shrink-0 items-center justify-center rounded-md sm:flex [&_svg]:h-4 [&_svg]:w-4",
               accent.soft,
             )}
             aria-hidden
@@ -332,7 +341,10 @@ function PanelInner({
   );
 }
 
-/** Cambia de sección sin volver al hub (también con ←/→). */
+/**
+ * Cambia de sección sin volver al hub (también con ←/→). En móvil solo queda el
+ * selector: las flechas son un lujo de escritorio y ahí el ancho manda.
+ */
 function SectionSwitcher({
   hub,
   sections,
@@ -347,6 +359,7 @@ function SectionSwitcher({
       <Button
         variant="ghost"
         size="icon-sm"
+        className="hidden md:inline-flex"
         onClick={hub.goPrev}
         title="Sección anterior (←)"
         aria-label="Sección anterior"
@@ -357,7 +370,7 @@ function SectionSwitcher({
         value={current}
         onChange={(e) => hub.openSection(e.target.value)}
         aria-label="Ir a otra sección"
-        className="max-w-[9.5rem] text-xs"
+        className="max-w-[7.5rem] text-xs md:max-w-[9.5rem]"
       >
         {sections.map((s) => (
           <option key={s.id} value={s.id}>
@@ -368,6 +381,7 @@ function SectionSwitcher({
       <Button
         variant="ghost"
         size="icon-sm"
+        className="hidden md:inline-flex"
         onClick={hub.goNext}
         title="Sección siguiente (→)"
         aria-label="Sección siguiente"
