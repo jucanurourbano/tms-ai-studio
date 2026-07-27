@@ -500,7 +500,7 @@ export function ResultView({ job }: { job: JobDetail }) {
             label="cobertura"
           />
         </StatRow>
-        <p className="prose-measure mt-3 text-sm text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           {a.summary}
         </p>
       </div>

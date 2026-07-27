@@ -2,53 +2,24 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense } from "react";
 
-import { JobsHistoryTable } from "@/components/history/jobs-history-table";
+import { JobsHistoryView } from "@/components/history/jobs-history-view";
 import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ApiError } from "@/lib/api/client";
+import { buttonVariants } from "@/components/ui/button";
 import { scrumApi } from "@/lib/api/scrum";
-import type { ScrumJobList } from "@/lib/types/scrum";
 
-const PAGE_SIZE = 20;
-
-export default function ScrumJobsHistoryPage() {
-  const [data, setData] = useState<ScrumJobList | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchList = useCallback(() => {
-    scrumApi
-      .listJobs(PAGE_SIZE, offset)
-      .then((d) => {
-        setData(d);
-        setError(null);
-      })
-      .catch((err) =>
-        setError(
-          err instanceof ApiError ? err.message : "No se pudo cargar el historial.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, [offset]);
-
-  useEffect(() => {
-    fetchList();
-  }, [fetchList]);
-
-  function goTo(newOffset: number) {
-    setLoading(true);
-    setOffset(newOffset);
-  }
-
-  const total = data?.total ?? 0;
-  const items = data?.items ?? [];
-  const from = total === 0 ? 0 : offset + 1;
-  const to = Math.min(offset + PAGE_SIZE, total);
-
+/**
+ * Historial del Agente scrum. Toda la mecánica (pestañas por estado con
+ * contadores, paginación de servidor, numeración, búsqueda y afordancia de clic)
+ * vive en `JobsHistoryView`, compartido con los demás agentes.
+ *
+ * El `Suspense` es obligatorio: `JobsHistoryView` lee la pestaña activa de la URL
+ * con `useSearchParams`, y sin límite de suspensión Next no puede prerenderizar
+ * esta página.
+ */
+export default function JobsHistoryPage() {
   return (
     <PageContainer className="animate-rise">
       <PageHeader
@@ -68,49 +39,20 @@ export default function ScrumJobsHistoryPage() {
         }
       />
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <JobsHistoryTable
-        rows={items}
-        basePath="/agents/scrum/jobs"
-        loading={loading}
-        emptyLabel="No hay planes todavía."
-        footer={
-    <div className="flex items-center justify-between text-xs text-meta-foreground">
-            <span>
-              {from}–{to} de {total}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={offset === 0 || loading}
-                onClick={() => goTo(Math.max(0, offset - PAGE_SIZE))}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={to >= total || loading}
-                onClick={() => goTo(offset + PAGE_SIZE)}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+      <Suspense
+        fallback={
+          <div className="h-64 animate-pulse rounded-xl bg-muted/40" />
         }
-      />
-
-
-      <p className="mt-3 text-xs text-meta-foreground">
-        El título y la fuente se heredan del EF de origen. El buscador filtra por
-        título dentro de la página actual.
-      </p>
+      >
+        <JobsHistoryView
+          basePath="/agents/scrum/jobs"
+          fetchJobs={(limit, offset, estado) =>
+            scrumApi.listJobs(limit, offset, estado)
+          }
+          emptyLabel="No hay planes todavía."
+          searchHint="El título y la fuente se heredan del EF de origen. El buscador filtra por título dentro de la página actual."
+        />
+      </Suspense>
     </PageContainer>
   );
 }

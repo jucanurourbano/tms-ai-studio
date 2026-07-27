@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,7 +27,8 @@ export interface DataColumn<T> {
   key: string;
   /** Etiqueta de cabecera; también la etiqueta del par en móvil. */
   label: string;
-  render: (row: T) => React.ReactNode;
+  /** ``index`` es la posición en la página, base 0. */
+  render: (row: T, index: number) => React.ReactNode;
   /** Números: alineados a la derecha con tipografía tabular. */
   numeric?: boolean;
   /** Ancho fijo de la columna en escritorio (clase Tailwind, p. ej. `w-24`). */
@@ -56,6 +59,7 @@ export function DataTable<T>({
   empty = "No hay datos.",
   toolbar,
   zebra = false,
+  onRowClick,
   footer,
   className,
 }: {
@@ -69,6 +73,13 @@ export function DataTable<T>({
   toolbar?: React.ReactNode;
   /** Franjas alternas: ayudan a seguir la fila en listas largas. */
   zebra?: boolean;
+  /**
+   * Hace la fila (y la card en móvil) **clicable entera**. Añade `cursor-pointer`
+   * y un chevron al final que se acentúa en hover, para que se note que lleva a
+   * algún sitio. Los controles internos que no deben navegar tienen que llamar a
+   * `stopPropagation` (lo hacen `JobIdChip` y el botón de acción).
+   */
+  onRowClick?: (row: T) => void;
   footer?: React.ReactNode;
   className?: string;
 }) {
@@ -115,6 +126,7 @@ export function DataTable<T>({
                   {col.label}
                 </th>
               ))}
+              {onRowClick && <th className="w-8" aria-label="Abrir" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -131,19 +143,21 @@ export function DataTable<T>({
             ) : vacia ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + (onRowClick ? 1 : 0)}
                   className="px-4 py-10 text-center text-sm text-muted-foreground"
                 >
                   {empty}
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr
                   key={rowKey(row)}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
-                    "transition-colors hover:bg-primary/[0.04]",
+                    "group/row transition-colors hover:bg-primary/[0.04]",
                     zebra && "odd:bg-muted/20",
+                    onRowClick && "cursor-pointer",
                   )}
                 >
                   {columns.map((col) => (
@@ -156,9 +170,18 @@ export function DataTable<T>({
                         col.nowrap && "whitespace-nowrap",
                       )}
                     >
-                      {col.render(row)}
+                      {col.render(row, index)}
                     </td>
                   ))}
+                  {onRowClick && (
+                    // Micro-affordance: apenas visible en reposo, nítido al pasar.
+                    <td className="pr-3 align-middle">
+                      <ChevronRight
+                        aria-hidden
+                        className="h-4 w-4 text-meta-foreground/40 transition-all group-hover/row:translate-x-0.5 group-hover/row:text-primary"
+                      />
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -183,16 +206,20 @@ export function DataTable<T>({
             {empty}
           </p>
         ) : (
-          rows.map((row) => (
+          rows.map((row, index) => (
             <article
               key={rowKey(row)}
-              className="rounded-xl border bg-card p-3 shadow-sm"
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn(
+                "rounded-xl border bg-card p-3 shadow-sm",
+                onRowClick && "cursor-pointer active:bg-primary/[0.04]",
+              )}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   {titleCol && (
                     <div className="text-sm font-semibold leading-snug">
-                      {titleCol.render(row)}
+                      {titleCol.render(row, index)}
                     </div>
                   )}
                   {metaCols.map((col) => (
@@ -200,14 +227,14 @@ export function DataTable<T>({
                       key={col.key}
                       className="mt-0.5 truncate text-xs text-meta-foreground"
                     >
-                      {col.render(row)}
+                      {col.render(row, index)}
                     </div>
                   ))}
                 </div>
                 {actionsCol && (
                   // Touch target: el contenedor reserva 44px de alto.
                   <div className="flex min-h-11 shrink-0 items-start">
-                    {actionsCol.render(row)}
+                    {actionsCol.render(row, index)}
                   </div>
                 )}
               </div>
@@ -215,7 +242,7 @@ export function DataTable<T>({
               {badgeCols.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {badgeCols.map((col) => (
-                    <span key={col.key}>{col.render(row)}</span>
+                    <span key={col.key}>{col.render(row, index)}</span>
                   ))}
                 </div>
               )}
@@ -233,7 +260,7 @@ export function DataTable<T>({
                           col.numeric && "font-mono tabular-nums",
                         )}
                       >
-                        {col.render(row)}
+                        {col.render(row, index)}
                       </dd>
                     </div>
                   ))}

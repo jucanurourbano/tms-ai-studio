@@ -236,11 +236,29 @@ export interface JobListItem {
   completed_at?: string | null;
 }
 
+/**
+ * Grupo de estado del historial. Misma clave en el query param de la API, en la
+ * respuesta y en la URL del historial (`?estado=completados`).
+ */
+export type JobStatusGroup =
+  | "completados"
+  | "avisos"
+  | "en_proceso"
+  | "fallidos"
+  | "todos";
+
+/** Contadores por grupo: siempre las cinco claves (el backend garantiza 0). */
+export type JobStatusCounts = Record<JobStatusGroup, number>;
+
 export interface JobList {
+  /** Total DEL FILTRO aplicado (lo que pagina la pestaña activa). */
   total: number;
   limit: number;
   offset: number;
   items: JobListItem[];
+  /** Recuento de los cinco grupos sobre TODOS los jobs del agente. */
+  status_counts?: JobStatusCounts;
+  estado?: JobStatusGroup;
 }
 
 export interface AnalyzeResult {

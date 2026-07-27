@@ -13,6 +13,8 @@ import type {
   TeamMember,
 } from "@/lib/types/scrum";
 
+import type { JobStatusGroup } from "@/lib/types/ef";
+
 import { apiRequest } from "./client";
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -44,8 +46,14 @@ export const scrumApi = {
     return apiRequest<ScrumArtifact>(`/scrum/jobs/${jobId}/artifact`);
   },
 
-  listJobs(limit = 20, offset = 0): Promise<ScrumJobList> {
-    return apiRequest<ScrumJobList>(`/scrum/jobs?limit=${limit}&offset=${offset}`);
+  listJobs(
+    limit = 20,
+    offset = 0,
+    estado: JobStatusGroup = "todos",
+  ): Promise<ScrumJobList> {
+    return apiRequest<ScrumJobList>(
+      `/scrum/jobs?limit=${limit}&offset=${offset}&estado=${estado}`,
+    );
   },
 
   getValidationSummary(jobId: string): Promise<ScrumValidationSummary> {

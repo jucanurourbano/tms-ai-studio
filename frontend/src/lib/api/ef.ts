@@ -5,6 +5,7 @@ import type {
   EFArtifact,
   JobDetail,
   JobList,
+  JobStatusGroup,
   QuestionStatus,
   RefineResult,
   ValidationSummary,
@@ -42,8 +43,14 @@ export const efApi = {
     return apiRequest<EFArtifact>(`/ef/jobs/${jobId}/artifact`);
   },
 
-  listJobs(limit = 20, offset = 0): Promise<JobList> {
-    return apiRequest<JobList>(`/ef/jobs?limit=${limit}&offset=${offset}`);
+  listJobs(
+    limit = 20,
+    offset = 0,
+    estado: JobStatusGroup = "todos",
+  ): Promise<JobList> {
+    return apiRequest<JobList>(
+      `/ef/jobs?limit=${limit}&offset=${offset}&estado=${estado}`,
+    );
   },
 
   getValidationSummary(jobId: string): Promise<ValidationSummary> {

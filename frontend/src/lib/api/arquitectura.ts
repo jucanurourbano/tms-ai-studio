@@ -10,6 +10,8 @@ import type {
   DesignResult,
 } from "@/lib/types/arquitectura";
 
+import type { JobStatusGroup } from "@/lib/types/ef";
+
 import { apiRequest } from "./client";
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -43,9 +45,13 @@ export const arquitecturaApi = {
     );
   },
 
-  listJobs(limit = 20, offset = 0): Promise<ArchJobList> {
+  listJobs(
+    limit = 20,
+    offset = 0,
+    estado: JobStatusGroup = "todos",
+  ): Promise<ArchJobList> {
     return apiRequest<ArchJobList>(
-      `/arquitectura/jobs?limit=${limit}&offset=${offset}`,
+      `/arquitectura/jobs?limit=${limit}&offset=${offset}&estado=${estado}`,
     );
   },
 
