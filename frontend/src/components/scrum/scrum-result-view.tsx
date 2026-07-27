@@ -46,6 +46,11 @@ import {
 } from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
 import { BackToTop } from "@/components/artifact/back-to-top";
+import {
+  AssigneeBadge,
+  AssigneeSelect,
+  SprintLoad,
+} from "@/components/scrum/assignee";
 import { ScrumValidationControls } from "@/components/scrum/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,7 +77,16 @@ import type {
   ScrumJobDetail,
   ScrumValidationSummary,
   Story,
+  StoryAssignment,
+  TeamMember,
 } from "@/lib/types/scrum";
+import {
+  assigneeMap,
+  computeSprintLoads,
+  matchesPersonFilter,
+  SIN_ASIGNAR,
+  unassignedPoints,
+} from "@/lib/scrum-assignments";
 import { useCelebrateOnTrue } from "@/lib/use-celebrate-on-true";
 import { useDisclosure } from "@/lib/use-disclosure";
 import { usePersistentState } from "@/lib/use-persistent-state";
@@ -152,6 +166,12 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const [refining, setRefining] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [expandedStories, setExpandedStories] = useState<Set<string>>(new Set());
+  // Equipo y asignaciones: viven FUERA del artefacto, así que se cargan aparte.
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [assignments, setAssignments] = useState<StoryAssignment[]>([]);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  /** Filtro "ver historias de": id de colaborador, "" = todas. */
+  const [personFilter, setPersonFilter] = useState("");
   const [indexCollapsed, setIndexCollapsed] = usePersistentState(
     "artifact:index-collapsed",
     false,
@@ -197,6 +217,45 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Equipo y asignaciones. Se piden en paralelo y no bloquean el artefacto: si
+  // fallan (p. ej. permisos), el plan se sigue viendo sin la capa de asignación.
+  const loadAssignments = useCallback(() => {
+    scrumApi
+      .assignments(job.job_id)
+      .then((d) => setAssignments(d.items))
+      .catch(() => {
+        /* la vista funciona sin asignaciones */
+      });
+  }, [job.job_id]);
+
+  useEffect(() => {
+    loadAssignments();
+    scrumApi
+      .team()
+      .then((d) => setTeam(d.items))
+      .catch(() => {
+        /* sin equipo, el selector queda vacío pero la vista no se rompe */
+      });
+  }, [loadAssignments]);
+
+  const onAssign = useCallback(
+    async (storyId: string, userId: string | null) => {
+      setAssigningId(storyId);
+      try {
+        await scrumApi.assignStory(job.job_id, storyId, userId);
+        toast.success(userId ? "Historia asignada" : "Asignación retirada");
+        loadAssignments();
+      } catch (err) {
+        toast.error("No se pudo asignar", {
+          description: err instanceof ApiError ? err.message : undefined,
+        });
+      } finally {
+        setAssigningId(null);
+      }
+    },
+    [job.job_id, loadAssignments],
+  );
 
   const reloadSummary = useCallback(async (): Promise<ScrumValidationSummary | null> => {
     try {
@@ -296,6 +355,21 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
   const ready = summary?.ready_for_next_stage ?? false;
   const checks = summary?.checks;
   const storyById = new Map<string, Story>(a.stories.map((s) => [s.id, s]));
+
+  // Capa de asignación: derivada de artefacto + asignaciones (lógica pura y
+  // testeada en `lib/scrum-assignments.ts`).
+  const assigneeOf = assigneeMap(assignments);
+  const loadsOfSprint = (storyIds: string[]) =>
+    computeSprintLoads(storyIds, storyById, assigneeOf);
+  const unassignedPointsOf = (storyIds: string[]) =>
+    unassignedPoints(storyIds, storyById, assigneeOf);
+
+  const visibleStories = a.stories.filter((s) =>
+    matchesPersonFilter(s.id, personFilter, assigneeOf),
+  );
+  const visibleBacklog = a.product_backlog.ordered_story_ids.filter((sid) =>
+    matchesPersonFilter(sid, personFilter, assigneeOf),
+  );
   const questions = onlyBlocking
     ? a.questions_for_po.filter((q) => q.blocking)
     : a.questions_for_po;
@@ -405,6 +479,28 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               <Eye className="h-3 w-3" />
               Modo lectura
             </span>
+          )}
+
+          {/* Filtro por responsable: la asignación es una lectura transversal del
+              plan, así que vive en la barra y afecta backlog e historias. */}
+          {team.length > 0 && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-meta-foreground print:hidden">
+              Ver historias de
+              <select
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+                aria-label="Filtrar historias por responsable"
+                className="h-7 max-w-[12rem] rounded-md border border-input bg-background px-1.5 text-xs text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Todas</option>
+                <option value={SIN_ASIGNAR}>Sin asignar</option>
+                {team.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.full_name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
@@ -609,7 +705,7 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
           >
             {() => (
               <>
-                {a.product_backlog.ordered_story_ids.length > 0 ? (
+                {visibleBacklog.length > 0 ? (
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full border-collapse text-sm">
                       <thead className="sticky top-0 z-[1] bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
@@ -619,10 +715,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                           <th className="text-left">Historia</th>
                           <th className="w-24 text-left">Prioridad</th>
                           <th className="w-20 text-right">Puntos</th>
+                          <th className="w-44 text-left">Asignado a</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/60">
-                        {a.product_backlog.ordered_story_ids.map((sid, i) => {
+                        {visibleBacklog.map((sid, i) => {
                           const s = storyById.get(sid);
                           return (
                             <tr
@@ -646,6 +743,16 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                               <td className="text-right font-mono tabular-nums">
                                 {s?.story_points ?? "—"}
                               </td>
+                              <td className="min-w-0">
+                                <AssigneeSelect
+                                  storyId={sid}
+                                  team={team}
+                                  member={assigneeOf.get(sid)}
+                                  readOnly={!puedeEditar}
+                                  busy={assigningId === sid}
+                                  onAssign={onAssign}
+                                />
+                              </td>
                             </tr>
                           );
                         })}
@@ -653,7 +760,11 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                     </table>
                   </div>
                 ) : (
-                  <EmptyHint>Backlog vacío.</EmptyHint>
+                  <EmptyHint>
+                    {personFilter
+                      ? "Ninguna historia del backlog coincide con ese responsable."
+                      : "Backlog vacío."}
+                  </EmptyHint>
                 )}
                 {a.product_backlog.rationale && (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -700,9 +811,20 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {sp.story_ids.map((sid) => (
-                          <RefChip key={sid} refId={sid} />
+                          <span key={sid} className="inline-flex items-center gap-1">
+                            <RefChip refId={sid} />
+                            {/* Avatar compacto: quién lleva cada historia del sprint. */}
+                            {assigneeOf.get(sid) && (
+                              <AssigneeBadge member={assigneeOf.get(sid)} compact />
+                            )}
+                          </span>
                         ))}
                       </div>
+                      <SprintLoad
+                        loads={loadsOfSprint(sp.story_ids)}
+                        capacityPoints={sp.capacity_points}
+                        unassignedPoints={unassignedPointsOf(sp.story_ids)}
+                      />
                     </div>
                   ))}
                   {a.unassigned_story_ids.length > 0 ? (
@@ -745,7 +867,12 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
             {() => (
               <>
                 <div className="space-y-3">
-                  {a.stories.map((s) => (
+                  {visibleStories.length === 0 && (
+                    <EmptyHint>
+                      Ninguna historia coincide con ese responsable.
+                    </EmptyHint>
+                  )}
+                  {visibleStories.map((s) => (
                     <div
                       key={s.id}
                       id={`ref-${s.id}`}
@@ -761,6 +888,22 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
                           </span>
                         )}
                         <ConfidenceBadge value={s.confidence} />
+                        {/* Asignar a: en el detalle de la historia, alineado a la
+                            derecha para no competir con los badges del dominio. */}
+                        <span className="ml-auto print:hidden">
+                          <AssigneeSelect
+                            storyId={s.id}
+                            team={team}
+                            member={assigneeOf.get(s.id)}
+                            readOnly={!puedeEditar}
+                            busy={assigningId === s.id}
+                            onAssign={onAssign}
+                          />
+                        </span>
+                        {/* En impresión el responsable se ve como texto. */}
+                        <span className="ml-auto hidden print:inline">
+                          {assigneeOf.get(s.id)?.full_name ?? "sin asignar"}
+                        </span>
                       </div>
                       <p className="mt-1.5 text-sm font-medium">{s.statement}</p>
 

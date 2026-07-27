@@ -9,6 +9,8 @@ import type {
   ScrumJobDetail,
   ScrumJobList,
   ScrumValidationSummary,
+  StoryAssignment,
+  TeamMember,
 } from "@/lib/types/scrum";
 
 import { apiRequest } from "./client";
@@ -74,5 +76,32 @@ export const scrumApi = {
     return apiRequest<ScrumExport>(
       `/scrum/jobs/${jobId}/export?format=${format}`,
     );
+  },
+
+  // --- Equipo y asignación de historias -------------------------------------
+
+  /** Colaboradores disponibles para asignar (nivel READ del módulo Scrum). */
+  team(): Promise<{ items: TeamMember[] }> {
+    return apiRequest<{ items: TeamMember[] }>("/scrum/team");
+  },
+
+  /** Asignaciones del plan, con el responsable resuelto. */
+  assignments(jobId: string): Promise<{ items: StoryAssignment[] }> {
+    return apiRequest<{ items: StoryAssignment[] }>(
+      `/scrum/jobs/${jobId}/assignments`,
+    );
+  },
+
+  /** Asigna una historia; `userId = null` retira la asignación. */
+  assignStory(
+    jobId: string,
+    storyId: string,
+    userId: string | null,
+  ): Promise<{ story_id: string; user_id: string | null }> {
+    return apiRequest(`/scrum/jobs/${jobId}/assignments`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ story_id: storyId, user_id: userId }),
+    });
   },
 };

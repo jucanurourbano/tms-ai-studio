@@ -220,3 +220,28 @@ export interface ScrumExport {
   filename: string;
   content: string | Record<string, unknown>[];
 }
+
+
+// --- Equipo y asignación de historias ---------------------------------------
+// Las asignaciones viven FUERA del artefacto (tabla `story_assignments`), igual
+// que las validaciones: el ScrumArtifact nunca se muta.
+
+/** Colaborador asignable (perfil mínimo que expone `GET /scrum/team`). */
+export interface TeamMember {
+  id: string;
+  full_name: string;
+  /** Correo institucional (con fallback al de acceso). Es el que va a ClickUp. */
+  institutional_email: string;
+  position?: string | null;
+  role: string;
+  is_active: boolean;
+}
+
+/** Asignación de una historia, con el responsable ya resuelto. */
+export interface StoryAssignment {
+  story_id: string;
+  user_id: string;
+  assigned_at?: string | null;
+  assigned_by?: string | null;
+  user?: TeamMember | null;
+}
