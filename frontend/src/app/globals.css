@@ -505,6 +505,27 @@
 }
 
 /*
+ * Panel lateral universal del artefacto: el sheet entra deslizándose (200ms
+ * ease-out, en `SheetContent`) y CAMBIAR DE SECCIÓN dentro del panel solo hace un
+ * fade corto — deslizar otra vez leería como "he abierto otro panel" cuando en
+ * realidad es el mismo, mostrando otra cosa.
+ */
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-panel-fade {
+  animation: panel-fade var(--dur-fast) var(--ease-out) both;
+}
+
+/*
  * Respeto a prefers-reduced-motion: neutraliza animaciones y transiciones (y el
  * scroll suave). El contenido aparece de inmediato, sin movimiento.
  */

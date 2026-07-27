@@ -36,12 +36,15 @@ function SheetContent({
     <DialogPrimitive.Portal data-slot="sheet-portal">
       <DialogPrimitive.Backdrop
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 bg-black/30 duration-200 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+        // El hub queda ATENUADO PERO VISIBLE detrás del panel: sigue siendo el
+        // contexto de lo que se está leyendo, no un fondo que estorba. De ahí un
+        // velo suave (20%) y sin desenfoque.
+        className="fixed inset-0 z-50 bg-black/20 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 print:hidden"
       />
       <DialogPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-md flex-col bg-background text-sm shadow-xl ring-1 ring-foreground/10 outline-none duration-200 ease-out data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-md flex-col bg-background text-sm shadow-xl ring-1 ring-foreground/10 outline-none duration-200 ease-out data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right print:hidden",
           className,
         )}
         {...props}

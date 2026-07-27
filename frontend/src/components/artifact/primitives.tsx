@@ -9,6 +9,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { useArtifactNav } from "@/components/artifact/artifact-nav";
 import { cn } from "@/lib/utils";
 
 /** Desplaza y resalta el elemento con id `ref-<refId>` (trazabilidad). */
@@ -27,6 +28,11 @@ export function jumpToRef(refId?: string | null) {
 /**
  * Chip de referencia CLICABLE (REQ-F-001, US-002…): monoespaciado, fondo suave,
  * borde sutil y hover violeta. Reemplaza los hipervínculos azules subrayados.
+ *
+ * Dentro del centro de comando (`ArtifactNavProvider`) el clic CAMBIA DE PANEL:
+ * pulsar BR-003 en Preguntas lleva a Modelo → Reglas con la fila resaltada y un
+ * "volver" en la cabecera. Sin proveedor —impresión, o cualquier vista que no sea
+ * un hub— conserva el comportamiento clásico de desplazarse por el documento.
  */
 export function RefChip({
   refId,
@@ -35,11 +41,12 @@ export function RefChip({
   refId?: string | null;
   className?: string;
 }) {
+  const nav = useArtifactNav();
   if (!refId) return null;
   return (
     <button
       type="button"
-      onClick={() => jumpToRef(refId)}
+      onClick={() => (nav ? nav.navigateToRef(refId) : jumpToRef(refId))}
       className={cn(
         "print-color inline-flex items-center rounded-md border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-foreground/75 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
         className,
