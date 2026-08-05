@@ -97,6 +97,16 @@ JOB_STATUS_GROUPS: dict[JobStatusGroup, tuple[JobStatus, ...]] = {
 }
 
 
+#: Estados en los que un job **ya produjo un artefacto utilizable**. Es lo que
+#: pueden consumir los agentes siguientes: un job fallido o en curso no tiene nada
+#: que ofrecer, y ofrecerlo en un selector de origen solo genera errores del gate.
+#: Los avisos SÍ cuentan: una cuarentena no invalida el artefacto.
+USABLE_JOB_STATUSES: tuple[JobStatus, ...] = (
+    JobStatus.COMPLETED,
+    JobStatus.COMPLETED_WITH_WARNINGS,
+)
+
+
 def group_of_status(status: JobStatus) -> JobStatusGroup:
     """Grupo al que pertenece un estado (para agregar contadores)."""
     for grupo, estados in JOB_STATUS_GROUPS.items():

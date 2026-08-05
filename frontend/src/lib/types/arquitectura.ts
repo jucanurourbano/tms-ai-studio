@@ -294,6 +294,8 @@ export interface DesignResult {
 
 export interface AvailableScrumJob {
   job_id: string;
+  /** Título heredado del EF de origen: evita obligar a leer un ULID. */
+  title?: string | null;
   status: JobStatus;
   ready_for_next_stage: boolean;
   blocking_pending: string[];

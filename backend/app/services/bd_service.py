@@ -21,6 +21,7 @@ from ai.errors import GateError, IngestError
 from ai.tools.ingest import compute_hash
 from app.config.settings import settings
 from app.models.agent import (
+    USABLE_JOB_STATUSES,
     AgentJob,
     AgentType,
     JobStatusGroup,
@@ -228,9 +229,18 @@ class BdModelingService:
         return await self.repo.count_jobs_by_group(agent_type=AgentType.BD)
 
     async def list_ready_architecture_jobs(self, limit: int, offset: int) -> list[dict]:
-        """Jobs de Arquitectura marcando si están listos para modelar datos."""
+        """Lista los jobs de Arquitectura que un selector de origen puede ofrecer.
+
+        Solo estados **utilizables** (completados y con avisos): un job fallido o
+        en curso no tiene artefacto que consumir, y ofrecerlo solo produce un
+        rechazo del gate. Los que no están listos SÍ se devuelven, marcados: el
+        selector los muestra como "casi listos" para que se vea qué falta.
+        """
         jobs, _ = await self.repo.list_jobs(
-            agent_type=AgentType.ARQUITECTURA, limit=limit, offset=offset
+            agent_type=AgentType.ARQUITECTURA,
+            limit=limit,
+            offset=offset,
+            statuses=USABLE_JOB_STATUSES,
         )
         out: list[dict] = []
         for job in jobs:

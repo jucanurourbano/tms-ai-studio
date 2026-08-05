@@ -16,6 +16,7 @@ from ai.errors import GateError, IngestError
 from ai.tools.ingest import compute_hash
 from app.config.settings import settings
 from app.models.agent import (
+    USABLE_JOB_STATUSES,
     AgentJob,
     AgentType,
     JobStatusGroup,
@@ -402,9 +403,18 @@ class ScrumPlanningService:
         }
 
     async def list_ready_ef_jobs(self, limit: int, offset: int) -> list[dict]:
-        """Lista jobs EF completados marcando si están listos para planificación."""
+        """Lista los jobs EF que un selector de origen puede ofrecer.
+
+        Solo estados **utilizables** (completados y con avisos): un job fallido o
+        en curso no tiene artefacto que consumir, y ofrecerlo solo produce un
+        rechazo del gate. Los que no están listos SÍ se devuelven, marcados: el
+        selector los muestra como "casi listos" para que se vea qué falta.
+        """
         jobs, _ = await self.repo.list_jobs(
-            agent_type=AgentType.EF, limit=limit, offset=offset
+            agent_type=AgentType.EF,
+            limit=limit,
+            offset=offset,
+            statuses=USABLE_JOB_STATUSES,
         )
         out: list[dict] = []
         for job in jobs:
@@ -412,6 +422,7 @@ class ScrumPlanningService:
             out.append(
                 {
                     "job_id": job.id,
+                    "title": job.title,
                     "status": job.status.value,
                     "ready_for_next_stage": summary.get("ready_for_next_stage", False),
                     "blocking_pending": summary.get("blocking_pending", []),

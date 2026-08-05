@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { JobStatusBadge, Mono } from "@/components/ef/badges";
 import { PageContainer } from "@/components/shell/page-container";
 import { PageHeader } from "@/components/shell/page-header";
+import { SourceJobPicker } from "@/components/source/source-job-picker";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/client";
 import { scrumApi } from "@/lib/api/scrum";
 import type { AvailableEfJob } from "@/lib/types/scrum";
-import { cn } from "@/lib/utils";
 
 export default function NewPlanPage() {
   const router = useRouter();
@@ -93,66 +92,27 @@ export default function NewPlanPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && <div className="text-sm text-red-600">{error}</div>}
-
-          <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
-            {jobs === null ? (
-              <div className="p-3 text-sm text-muted-foreground">Cargando…</div>
-            ) : jobs.length === 0 ? (
-              <div className="p-3 text-sm text-muted-foreground">
-                No hay análisis EF. Crea uno en el Agente EF primero.
-              </div>
-            ) : (
-              jobs.map((j) => {
-                const disabled = !j.ready_for_next_stage;
-                const active = selected === j.job_id;
-                return (
-                  <button
-                    key={j.job_id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      setSelected(j.job_id);
-                      setManual("");
-                    }}
-                    className={cn(
-                      "flex w-full items-center gap-2 p-2 text-left text-sm",
-                      active && "bg-accent",
-                      disabled
-                        ? "cursor-not-allowed opacity-60"
-                        : "hover:bg-muted/50",
-                    )}
-                  >
-                    <Mono>{j.job_id}</Mono>
-                    <JobStatusBadge status={j.status} />
-                    <span className="ml-auto text-xs">
-                      {j.ready_for_next_stage ? (
-                        <span className="text-emerald-700">listo ✓</span>
-                      ) : (
-                        <span className="text-amber-600">
-                          {j.blocking_pending.length} bloqueantes
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="manual">…o pega un id de job EF</Label>
-            <Input
-              id="manual"
-              value={manual}
-              onChange={(e) => {
-                setManual(e.target.value);
-                setSelected("");
-              }}
-              placeholder="01EF…"
-              className="font-mono text-xs"
-            />
-          </div>
+          <SourceJobPicker
+            jobs={jobs}
+            error={error}
+            value={selected}
+            onChange={(id) => {
+              setSelected(id);
+              setManual("");
+            }}
+            manualValue={manual}
+            onManualChange={(v) => {
+              setManual(v);
+              setSelected("");
+            }}
+            labels={{
+              singular: "análisis EF",
+              plural: "análisis EF",
+              jobsBasePath: "/agents/ef/jobs",
+              createHref: "/agents/ef/new",
+              createLabel: "Crear un análisis EF",
+            }}
+          />
 
           <div className="space-y-1.5 max-w-40">
             <Label htmlFor="capacity">Capacidad por sprint (puntos)</Label>

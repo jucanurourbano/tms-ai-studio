@@ -6,7 +6,7 @@ las métricas, respetando el flujo api -> services -> repositories.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -158,11 +158,16 @@ class AgentJobRepository:
         limit: int = 20,
         offset: int = 0,
         status_group: JobStatusGroup = JobStatusGroup.TODOS,
+        statuses: Optional[Sequence[JobStatus]] = None,
     ) -> tuple[list[AgentJob], int]:
         """Listado paginado de jobs (más recientes primero) + total del filtro.
 
         Si se pasa ``agent_type`` filtra por ese agente; si no, devuelve todos.
         ``status_group`` filtra por grupo de estado (ver ``JOB_STATUS_GROUPS``).
+        ``statuses`` filtra por estados concretos y **tiene prioridad** sobre el
+        grupo: lo usan los selectores de job de origen, que necesitan una
+        combinación (completados + avisos) que no es ninguno de los grupos del
+        historial y que no debe aparecer como pestaña.
 
         El filtro se aplica **en la consulta**, no sobre la página ya traída: si
         no, la paginación de cada pestaña mentiría (una página de 20 podría
@@ -174,7 +179,7 @@ class AgentJobRepository:
             base = base.where(AgentJob.agent_type == agent_type)
             count_stmt = count_stmt.where(AgentJob.agent_type == agent_type)
 
-        estados = JOB_STATUS_GROUPS.get(status_group)
+        estados = tuple(statuses) if statuses else JOB_STATUS_GROUPS.get(status_group)
         if estados:
             base = base.where(AgentJob.status.in_(estados))
             count_stmt = count_stmt.where(AgentJob.status.in_(estados))
