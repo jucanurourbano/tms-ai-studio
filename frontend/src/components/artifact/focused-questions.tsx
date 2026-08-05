@@ -16,7 +16,7 @@
 // muerta abierta es peor que quitarla de en medio.
 
 import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RefChip } from "@/components/artifact/primitives";
 import { AudienceBadge } from "@/components/ef/badges";
@@ -85,6 +85,8 @@ export function FocusedQuestionFlow({
   const [finished, setFinished] = useState(false);
   // Micro-transición: la tarjeta se atenúa un instante al saltar de pregunta.
   const [advancing, setAdvancing] = useState(false);
+  // Latido del contador al incrementarse: confirma que la respuesta se guardó.
+  const [bumping, setBumping] = useState(false);
 
   const total = questions.length;
   const answered = questions.filter((q) => statusOf(q.id) !== "pendiente").length;
@@ -107,6 +109,18 @@ export function FocusedQuestionFlow({
     const t = setTimeout(() => setAdvancing(false), 180);
     return () => clearTimeout(t);
   }, [advancing]);
+
+  // El contador late cuando sube (no en el primer render ni al bajar por un
+  // "volver a pendiente"): es la confirmación visual de que se guardó.
+  const answeredRef = useRef(answered);
+  useEffect(() => {
+    const subio = answered > answeredRef.current;
+    answeredRef.current = answered;
+    if (!subio) return;
+    setBumping(true);
+    const t = setTimeout(() => setBumping(false), 220);
+    return () => clearTimeout(t);
+  }, [answered]);
 
   // Sin acción siguiente que ofrecer, el estado de cierre se despide solo.
   // `onClose` es estable (`useCallback` del hub) y, cuando este efecto aplica,
@@ -160,25 +174,35 @@ export function FocusedQuestionFlow({
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Progreso del afinamiento */}
-      <div className="mb-3">
-        <div className="flex items-center gap-2 text-[11px] text-meta-foreground">
-          <span className="tabular-nums">
-            {answered} de {total} respondidas
+      {/* Progreso: la cifra manda. Ver subir el contador es la señal de que la
+          respuesta se guardó y de que quedan menos. */}
+      <div className="mb-4">
+        <div className="flex items-end gap-2">
+          <span
+            className={cn(
+              "font-heading text-3xl font-semibold leading-none tabular-nums transition-transform duration-200",
+              bumping && "scale-125 text-emerald-600",
+              allDone && "text-emerald-600",
+            )}
+          >
+            {answered}
+          </span>
+          <span className="pb-0.5 text-sm text-muted-foreground">
+            de {total} respondidas
           </span>
           {allDone && (
-            <span className="inline-flex items-center gap-1 font-medium text-emerald-600">
-              <CheckCircle2 className="h-3.5 w-3.5" /> completo
+            <span className="inline-flex items-center gap-1 pb-0.5 text-sm font-medium text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" /> completo
             </span>
           )}
-          <span className="ml-auto tabular-nums">
-            Pregunta {position + 1} de {total}
+          <span className="ml-auto pb-0.5 text-[11px] tabular-nums text-meta-foreground">
+            viendo {position + 1} de {total}
           </span>
         </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
           <div
             className={cn(
-              "h-full rounded-full transition-[width] duration-300 ease-out",
+              "h-full rounded-full transition-[width] duration-500 ease-out",
               allDone ? "bg-emerald-500" : "bg-primary",
             )}
             style={{ width: `${pct}%` }}
@@ -227,7 +251,12 @@ export function FocusedQuestionFlow({
           </p>
         )}
 
-        <div className="mt-4">{renderControls(current, handleAnswered)}</div>
+        {/* `key` por pregunta: aunque el control ya aísla su borrador, remontarlo
+            impide que CUALQUIER estado interno viaje entre preguntas. Es barato y
+            este bug ya corrompió datos una vez. */}
+        <div key={current.id} className="mt-4">
+          {renderControls(current, handleAnswered)}
+        </div>
       </div>
 
       <div className="mt-auto flex items-center gap-2 pt-3">
@@ -241,9 +270,12 @@ export function FocusedQuestionFlow({
           <ChevronLeft className="h-3.5 w-3.5" />
           Anterior
         </Button>
-        <span className="mx-auto text-[11px] tabular-nums text-meta-foreground">
-          {position + 1} / {total}
-        </span>
+        <ProgressDots
+          questions={questions}
+          statusOf={statusOf}
+          position={position}
+          onJump={setIndex}
+        />
         <Button
           variant="outline"
           size="sm"
@@ -340,6 +372,56 @@ function CompletionState({
       >
         Volver a revisar las respuestas
       </button>
+    </div>
+  );
+}
+
+/**
+ * Puntos de progreso: una pregunta, un punto. Sustituyen al "3 / 16" porque
+ * dicen dos cosas que el número no dice — **cuáles** quedan por responder y dónde
+ * está uno— y permiten saltar directamente a cualquiera.
+ *
+ * Con muchas preguntas los puntos se encogen en vez de desbordar el panel: perder
+ * grosor es aceptable, perder la fila entera no.
+ */
+function ProgressDots({
+  questions,
+  statusOf,
+  position,
+  onJump,
+}: {
+  questions: SheetQuestion[];
+  statusOf: (id: string) => QuestionStatus;
+  position: number;
+  onJump: (index: number) => void;
+}) {
+  return (
+    <div className="mx-auto flex min-w-0 flex-1 flex-wrap items-center justify-center gap-1 px-2">
+      {questions.map((q, i) => {
+        const estado = statusOf(q.id);
+        const actual = i === position;
+        return (
+          <button
+            key={q.id}
+            type="button"
+            onClick={() => onJump(i)}
+            title={`${q.id} · ${STATUS_LABEL[estado]}`}
+            aria-label={`Ir a ${q.id}, ${STATUS_LABEL[estado]}`}
+            aria-current={actual ? "step" : undefined}
+            className={cn(
+              "h-2 w-2 shrink-0 rounded-full transition-all duration-200",
+              estado === "pendiente"
+                ? "bg-muted-foreground/25 hover:bg-muted-foreground/50"
+                : estado === "corregido"
+                  ? "bg-amber-500/70 hover:bg-amber-500"
+                  : "bg-emerald-500/70 hover:bg-emerald-500",
+              // La actual se distingue por tamaño y anillo, no solo por color: el
+              // color ya está ocupado diciendo el estado.
+              actual && "h-2.5 w-2.5 ring-2 ring-primary/40 ring-offset-1",
+            )}
+          />
+        );
+      })}
     </div>
   );
 }
