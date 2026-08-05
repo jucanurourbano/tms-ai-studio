@@ -13,7 +13,12 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .enums import LogicalType, PrimaryKeyStrategy, ReferentialAction
+from .enums import (
+    LogicalType,
+    PrimaryKeyStrategy,
+    ReferentialAction,
+    RuleEnforcement,
+)
 
 
 class ColumnExtract(BaseModel):
@@ -78,3 +83,106 @@ class RelationsExtract(BaseModel):
 
     one_to_one: list[OneToOneOwnerExtract] = Field(default_factory=list)
     referential_actions: list[ReferentialActionExtract] = Field(default_factory=list)
+
+
+# --- CONSTRAINTS (BD4) -------------------------------------------------------
+
+
+class UniqueConstraintExtract(BaseModel):
+    """Restricción de unicidad propuesta (el nombre lo pone la convención)."""
+
+    columns: list[str] = Field(default_factory=list)
+    description: Optional[str] = None
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class CheckConstraintExtract(BaseModel):
+    """CHECK propuesto. ``expression`` se valida contra un vocabulario restringido.
+
+    ``suffix`` es solo el trozo final del nombre: el completo lo compone Python con
+    el patrón de la casa, para que el modelo no pueda producir un identificador
+    inválido ni demasiado largo para el motor.
+    """
+
+    suffix: Optional[str] = None
+    expression: str
+    description: Optional[str] = None
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class NotNullExtract(BaseModel):
+    """Columna que una regla del EF obliga a ser obligatoria."""
+
+    column: str
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class RuleMappingExtract(BaseModel):
+    """Dónde se hace cumplir una regla/validación del EF."""
+
+    rule_ref: str
+    enforcement: RuleEnforcement = RuleEnforcement.APPLICATION
+    note: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ConstraintsExtract(BaseModel):
+    """Salida del map de CONSTRAINTS (una tabla)."""
+
+    unique_constraints: list[UniqueConstraintExtract] = Field(default_factory=list)
+    check_constraints: list[CheckConstraintExtract] = Field(default_factory=list)
+    not_null_columns: list[NotNullExtract] = Field(default_factory=list)
+    rule_mappings: list[RuleMappingExtract] = Field(default_factory=list)
+
+
+# --- INDEXES (BD4) -----------------------------------------------------------
+
+
+class IndexExtract(BaseModel):
+    """Índice justificado por un patrón de acceso real del EF."""
+
+    table: str
+    columns: list[str] = Field(default_factory=list)
+    unique: bool = False
+    rationale: str
+    access_pattern_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class IndexesExtract(BaseModel):
+    """Salida del nodo INDEXES (una sola llamada para todo el esquema)."""
+
+    indexes: list[IndexExtract] = Field(default_factory=list)
+
+
+# --- CATALOGS (BD4) ----------------------------------------------------------
+
+
+class CatalogReferenceExtract(BaseModel):
+    """Tabla y columna que referenciarán al catálogo."""
+
+    table: str
+    column: str
+
+
+class CatalogExtract(BaseModel):
+    """Catálogo detectado con sus valores semilla **citados** en el EF."""
+
+    name: str
+    description: Optional[str] = None
+    referenced_by: Optional[CatalogReferenceExtract] = None
+    #: Filas literales del EF. Vacío es una respuesta legítima: se crea la tabla y
+    #: se pregunta al DBA por los valores (nunca se inventan).
+    rows: list[dict] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    evidence: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class CatalogsExtract(BaseModel):
+    """Salida del nodo CATALOGS."""
+
+    catalogs: list[CatalogExtract] = Field(default_factory=list)

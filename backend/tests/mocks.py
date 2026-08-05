@@ -531,6 +531,171 @@ class BdMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Analista de integridad de datos" in system:
+            payload = json.loads(user.split("TABLA Y REGLAS:\n", 1)[1])
+            table = payload["table"]
+            checks = []
+            mappings = []
+            # Una regla temporal: el CHECK con CURRENT_DATE debe rechazarse y la
+            # regla acabar reclasificada como `application`.
+            for validation in payload.get("validations", []):
+                columna = validation.get("column")
+                if columna and "fecha" in columna:
+                    checks.append(
+                        {
+                            "suffix": f"{columna}_no_futura",
+                            "expression": f"{columna} <= CURRENT_DATE",
+                            "description": "La fecha no puede ser futura.",
+                            "source_refs": [validation["id"]],
+                            "confidence": 0.7,
+                        }
+                    )
+                    mappings.append(
+                        {
+                            "rule_ref": validation["id"],
+                            "enforcement": "declarative",
+                            "note": "Se intentó como CHECK.",
+                            "confidence": 0.6,
+                        }
+                    )
+            # Un CHECK legítimo sobre una columna numérica de negocio (no sobre
+            # una FK ni la PK, que no admiten un rango con sentido).
+            de_fk = {c for fk in table.get("foreign_keys", []) for c in fk["columns"]}
+            numerica = next(
+                (
+                    c["name"]
+                    for c in table["columns"]
+                    if c["logical_type"] in ("decimal", "integer")
+                    and not c.get("is_primary_key")
+                    and c["name"] not in de_fk
+                ),
+                None,
+            )
+            if numerica:
+                checks.append(
+                    {
+                        "suffix": f"{numerica}_no_negativo",
+                        "expression": f"{numerica} >= 0",
+                        "description": f"{numerica} no puede ser negativo.",
+                        "source_refs": ["BR-001"],
+                        "confidence": 0.8,
+                    }
+                )
+            # Un UNIQUE sobre una columna de negocio (clave natural).
+            natural = next(
+                (
+                    c["name"]
+                    for c in table["columns"]
+                    if c["name"].startswith("numero") and not c.get("is_primary_key")
+                ),
+                None,
+            )
+            uniques = (
+                [
+                    {
+                        "columns": [natural],
+                        "description": "Clave natural del negocio.",
+                        "source_refs": ["BR-001"],
+                        "confidence": 0.85,
+                    }
+                ]
+                if natural
+                else []
+            )
+            for rule in payload.get("rules", []):
+                if rule["id"] not in {m["rule_ref"] for m in mappings}:
+                    mappings.append(
+                        {
+                            "rule_ref": rule["id"],
+                            "enforcement": "declarative",
+                            "note": "Cubierta por la clave foránea.",
+                            "confidence": 0.8,
+                        }
+                    )
+            return json.dumps(
+                {
+                    "unique_constraints": uniques,
+                    "check_constraints": checks,
+                    "not_null_columns": [],
+                    "rule_mappings": mappings,
+                },
+                ensure_ascii=False,
+            )
+        if "Afinador de acceso a datos" in system:
+            payload = json.loads(user.split("ESQUEMA Y PATRONES DE ACCESO:\n", 1)[1])
+            tabla = next(
+                (t for t in payload["tables"] if t["kind"] == "entity"),
+                payload["tables"][0],
+            )
+            propuestas = [
+                {
+                    # Índice justificado: cita un API real de la entrada.
+                    "table": tabla["name"],
+                    "columns": tabla["columns"][:2],
+                    "unique": False,
+                    "rationale": "El listado filtra por estas columnas.",
+                    "access_pattern_refs": [
+                        a["id"] for a in payload["access_patterns"]["apis"][:1]
+                    ],
+                    "confidence": 0.7,
+                },
+                {
+                    # Sin justificación: debe descartarse.
+                    "table": tabla["name"],
+                    "columns": tabla["columns"][-1:],
+                    "unique": False,
+                    "rationale": "Para mejorar el rendimiento.",
+                    "access_pattern_refs": [],
+                    "confidence": 0.4,
+                },
+                {
+                    # Sobre una tabla inexistente: debe descartarse.
+                    "table": "tabla_que_no_existe",
+                    "columns": ["x"],
+                    "unique": False,
+                    "rationale": "Inventado.",
+                    "access_pattern_refs": ["API-001"],
+                },
+            ]
+            return json.dumps({"indexes": propuestas}, ensure_ascii=False)
+        if "Detector de catálogos" in system:
+            payload = json.loads(user.split("CATÁLOGOS A DETECTAR:\n", 1)[1])
+            procesos = payload["evidence"]["processes"]
+            tabla = next(
+                (t for t in payload["tables"] if t["kind"] == "entity"),
+                payload["tables"][0],
+            )
+            catalogos = []
+            if procesos:
+                pasos = procesos[0].get("steps") or []
+                catalogos.append(
+                    {
+                        "name": f"{tabla['name'][:-1]}_estados",
+                        "description": "Estados del proceso.",
+                        "referenced_by": {
+                            "table": tabla["name"],
+                            "column": "estado_id",
+                        },
+                        "rows": [
+                            {"codigo": p.upper()[:30], "nombre": p} for p in pasos
+                        ],
+                        "source_refs": [procesos[0]["id"]],
+                        "evidence": ", ".join(pasos),
+                        "confidence": 0.8,
+                    }
+                )
+            # Catálogo sin evidencia ni refs: debe descartarse entero.
+            catalogos.append(
+                {
+                    "name": "motivos_inventados",
+                    "description": "Sin base en el EF.",
+                    "referenced_by": {"table": tabla["name"], "column": "motivo_id"},
+                    "rows": [{"codigo": "X", "nombre": "Inventado"}],
+                    "source_refs": [],
+                    "evidence": None,
+                }
+            )
+            return json.dumps({"catalogs": catalogos}, ensure_ascii=False)
         if "Modelador de relaciones" in system:
             payload = json.loads(user.split("RELACIONES A DECIDIR:\n", 1)[1])
             return json.dumps(

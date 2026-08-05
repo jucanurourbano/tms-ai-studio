@@ -479,11 +479,13 @@ async def test_grafo_produce_tablas_y_relaciones():
     result = await graph.ainvoke(state, config)
 
     art = result["artifact"]
-    assert [t["name"] for t in art["tables"]] == ["siniestros", "guias"]
-    assert art["metrics"]["tables_total"] == 2
+    # Las dos entidades del EF, en orden, más lo que aporten los nodos siguientes.
+    nombres = [t["name"] for t in art["tables"]]
+    assert nombres[:2] == ["siniestros", "guias"]
+    assert art["metrics"]["tables_total"] == len(nombres)
     assert art["metrics"]["columns_total"] > 0
-    # PK de cada tabla + la FK de REL-001.
-    assert art["metrics"]["constraints_total"] == 3
+    # Al menos la PK de cada tabla y la FK de REL-001.
+    assert art["metrics"]["constraints_total"] >= 3
     # Las correcciones sobre el LLM viajan como observaciones al artefacto.
     descripciones = " ".join(o["description"] for o in art["analysis"]["observations"])
     assert "campo_fantasma" in descripciones

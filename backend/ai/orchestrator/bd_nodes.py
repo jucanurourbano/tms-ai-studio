@@ -17,7 +17,10 @@ from langchain_core.runnables import RunnableConfig
 
 from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.bd.assemble import assemble_artifact, validate_artifact
+from ai.agents.bd.catalogs import run_catalogs
 from ai.agents.bd.common import merge_metrics
+from ai.agents.bd.constraints import run_constraints
+from ai.agents.bd.indexes import run_indexes
 from ai.agents.bd.load_sources import (
     assert_architecture_ready,
     extract_sources,
@@ -152,18 +155,62 @@ async def node_relations(state: DatabaseState, config: RunnableConfig) -> dict:
 
 
 async def node_constraints(state: DatabaseState, config: RunnableConfig) -> dict:
-    """CONSTRAINTS (BD4): reglas/validaciones del EF → constraints declarativas."""
-    return {"rule_mappings": []}
+    """CONSTRAINTS: reglas/validaciones del EF → integridad declarativa.
+
+    Toda regla del EF sale de aquí con un destino en ``rule_mappings``, incluso las
+    que no caben en el esquema.
+    """
+    tables, mappings, observations, skipped, tokens = await run_constraints(
+        _llm(config),
+        state.get("tables") or [],
+        state.get("sources") or {},
+        (state.get("target") or {}).get("engine") or "postgresql",
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.BD_TABLES_CONCURRENCY,
+    )
+    return {
+        "tables": tables,
+        "rule_mappings": mappings,
+        "model_observations": list(state.get("model_observations") or [])
+        + observations,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_indexes(state: DatabaseState, config: RunnableConfig) -> dict:
-    """INDEXES (BD4): índices de FK (det) + justificados por patrón de acceso."""
-    return {}
+    """INDEXES: índices de FK (deterministas) + los justificados por acceso real."""
+    tables, observations, skipped, tokens = await run_indexes(
+        _llm(config),
+        state.get("tables") or [],
+        state.get("sources") or {},
+        (state.get("target") or {}).get("engine") or "postgresql",
+        max_per_table=settings.BD_MAX_INDEXES_PER_TABLE,
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "tables": tables,
+        "model_observations": list(state.get("model_observations") or [])
+        + observations,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_catalogs(state: DatabaseState, config: RunnableConfig) -> dict:
-    """CATALOGS (BD4): catálogos detectados + semilla con evidencia citada."""
-    return {"seed_data": []}
+    """CATALOGS: catálogos detectados + semilla, solo con evidencia citada del EF."""
+    tables, seeds, observations, skipped, tokens = await run_catalogs(
+        _llm(config),
+        state.get("tables") or [],
+        state.get("sources") or {},
+        (state.get("target") or {}).get("engine") or "postgresql",
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "tables": tables,
+        "seed_data": seeds,
+        "model_observations": list(state.get("model_observations") or [])
+        + observations,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_ddl_gen(state: DatabaseState) -> dict:
