@@ -24,6 +24,8 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/agents/scrum", module: "scrum", level: "read" },
   { prefix: "/agents/arquitectura/new", module: "arquitectura", level: "full" },
   { prefix: "/agents/arquitectura", module: "arquitectura", level: "read" },
+  { prefix: "/agents/bd/new", module: "bd", level: "full" },
+  { prefix: "/agents/bd", module: "bd", level: "read" },
   { prefix: "/configuracion", module: "config", level: "read" },
 ];
 

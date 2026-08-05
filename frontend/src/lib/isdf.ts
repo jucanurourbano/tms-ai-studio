@@ -1,5 +1,6 @@
-// Navegación por fases del ISDF. Los agentes EF (ESPECIFICAR) y Scrum (GESTIONAR)
-// están activos; los demás se muestran visibles pero deshabilitados ("próximamente").
+// Navegación por fases del ISDF. Los agentes EF (ESPECIFICAR), Arquitectura y BD
+// (DISEÑAR) y Scrum (GESTIONAR) están activos; los demás se muestran visibles pero
+// deshabilitados ("próximamente").
 //
 // Los iconos se referencian por clave (string) y se resuelven a componentes lucide
 // en la sidebar, para mantener este módulo libre de dependencias de UI.
@@ -75,10 +76,11 @@ export const ISDF_NAV: PhaseNav[] = [
         key: "bd",
         module: "bd",
         name: "Base de Datos",
-        enabled: false,
+        href: "/agents/bd",
+        enabled: true,
         icon: "database",
         description:
-          "Diseña el modelo de datos y el esquema de base de datos.",
+          "Diseña el modelo de datos físico y genera el DDL desde una arquitectura lista.",
       },
     ],
   },
