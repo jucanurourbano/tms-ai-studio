@@ -20,6 +20,7 @@ from ai.agents.bd.assemble import assemble_artifact, validate_artifact
 from ai.agents.bd.catalogs import run_catalogs
 from ai.agents.bd.common import merge_metrics
 from ai.agents.bd.constraints import run_constraints
+from ai.agents.bd.critique import run_critique
 from ai.agents.bd.ddl.render import build_ddl_scripts, render_type
 from ai.agents.bd.ddl.validate import validate_ddl
 from ai.agents.bd.dictionary import build_data_dictionary
@@ -32,6 +33,7 @@ from ai.agents.bd.load_sources import (
     resolve_hashes,
 )
 from ai.agents.bd.model_map import build_model_map, resolve_audit_columns
+from ai.agents.bd.question_gen import generate_questions
 from ai.agents.bd.relations import run_relations
 from ai.agents.bd.state import DatabaseState
 from ai.agents.bd.tables import run_tables
@@ -267,13 +269,32 @@ async def node_er_diagram(state: DatabaseState) -> dict:
 
 
 async def node_critique(state: DatabaseState, config: RunnableConfig) -> dict:
-    """CRITIQUE (BD6): chequeos deterministas + riesgos (LLM)."""
-    return {"critique": {}}
+    """CRITIQUE: cobertura y hallazgos deterministas + riesgos (pase LLM)."""
+    critique, tokens = await run_critique(
+        state.get("tables") or [],
+        state.get("rule_mappings") or [],
+        state.get("validation") or {},
+        state.get("sources") or {},
+        state.get("model_map") or {},
+        state.get("seed_data") or [],
+        state.get("target") or {},
+        llm=_llm(config),
+        engine=(state.get("target") or {}).get("engine") or "postgresql",
+        authoritative_context=state.get("authoritative_context"),
+    )
+    # Las correcciones acumuladas en los nodos anteriores se publican aquí, junto
+    # a las observaciones de la crítica: ninguna se queda por el camino.
+    critique["observations"] = list(state.get("model_observations") or []) + list(
+        critique.get("observations") or []
+    )
+    for i, observation in enumerate(critique["observations"], start=1):
+        observation.setdefault("id", f"OBS-{i:03d}")
+    return {"critique": critique, "metrics": merge_metrics(state, tokens, [])}
 
 
 async def node_question_gen(state: DatabaseState) -> dict:
-    """QUESTION_GEN (BD6): preguntas al DBA, agrupadas por clase de vacío."""
-    return {"questions": []}
+    """QUESTION_GEN: preguntas al DBA, agrupadas por clase de vacío."""
+    return {"questions": generate_questions(state.get("critique") or {})}
 
 
 # --- ASSEMBLE / PERSIST -----------------------------------------------------

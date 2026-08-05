@@ -13,6 +13,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from ai.agents.arquitectura.schemas.enums import RiskSeverity
+
 from .enums import (
     LogicalType,
     PrimaryKeyStrategy,
@@ -186,3 +188,22 @@ class CatalogsExtract(BaseModel):
     """Salida del nodo CATALOGS."""
 
     catalogs: list[CatalogExtract] = Field(default_factory=list)
+
+
+# --- CRITIQUE (BD6) ----------------------------------------------------------
+
+
+class DbRiskExtract(BaseModel):
+    """Riesgo del modelo de datos propuesto por el pase LLM de crítica."""
+
+    description: str
+    severity: RiskSeverity = RiskSeverity.MEDIA
+    mitigation: Optional[str] = None
+    source_ref: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class DbCritiqueExtract(BaseModel):
+    """Salida del pase LLM de CRITIQUE: solo riesgos, sin cambios al modelo."""
+
+    risks: list[DbRiskExtract] = Field(default_factory=list)

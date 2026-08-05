@@ -696,6 +696,24 @@ class BdMapLLM:
                 }
             )
             return json.dumps({"catalogs": catalogos}, ensure_ascii=False)
+        if "Crítico del modelo de datos" in system:
+            return json.dumps(
+                {
+                    "risks": [
+                        {
+                            "description": (
+                                "La tabla de siniestros crece con cada evento y el "
+                                "EF no aporta volumetría ni política de archivado."
+                            ),
+                            "severity": "media",
+                            "mitigation": "Definir purga o partición con datos reales.",
+                            "source_ref": "TBL-001",
+                            "confidence": 0.6,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
         if "Modelador de relaciones" in system:
             payload = json.loads(user.split("RELACIONES A DECIDIR:\n", 1)[1])
             return json.dumps(
