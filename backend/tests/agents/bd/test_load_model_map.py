@@ -28,6 +28,7 @@ from ai.agents.scrum.schemas.examples import example_artifact as scrum_example
 from ai.errors import GateError
 from ai.orchestrator import build_bd_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
+from tests.mocks import BdMapLLM
 
 
 def _ef_dict():
@@ -54,7 +55,13 @@ async def _noop_persist(job_id, artifact, status, metrics):
 
 
 def _base_config():
-    return {"configurable": {"thread_id": "BD-1", "persist": _noop_persist}}
+    return {
+        "configurable": {
+            "thread_id": "BD-1",
+            "llm": BdMapLLM(),
+            "persist": _noop_persist,
+        }
+    }
 
 
 def _base_state(architecture_ready: bool = True, **extra):
@@ -390,7 +397,7 @@ def test_model_map_es_reproducible():
 
 
 async def test_grafo_end_to_end_con_stubs():
-    """El pipeline completo corre y produce un DatabaseArtifact válido y vacío."""
+    """El pipeline completo corre y produce un DatabaseArtifact válido."""
     graph = build_bd_graph(build_memory_checkpointer())
     result = await graph.ainvoke(_base_state(), _base_config())
 
@@ -408,8 +415,8 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["target"]["conventions"]["schema_name"] == "dbo"
     assert art["target"]["conventions"]["audit_columns"] is True
     assert art["target"]["conventions_source"].endswith("db_conventions.yaml@v0")
-    # Con los stubs todavía no hay tablas: el semáforo del DDL sigue en rojo.
-    assert art["tables"] == []
+    # El DDL aún no se genera (BD5): su semáforo sigue en rojo, y eso es correcto.
+    assert art["ddl_scripts"] == []
     assert art["metrics"]["ddl_valid"] is False
 
 

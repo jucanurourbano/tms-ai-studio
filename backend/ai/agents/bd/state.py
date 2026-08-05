@@ -32,6 +32,10 @@ class DatabaseState(TypedDict, total=False):
     target: dict  # motor + convenciones efectivas
     model_map: dict  # andamio determinista (tablas/columnas/relaciones candidatas)
     tables: list[dict]
+    #: Correcciones aplicadas sobre las propuestas del LLM (columnas inventadas,
+    #: tipos que contradicen al EF, cascadas sin base). Acaban como Observation:
+    #: ninguna corrección es silenciosa.
+    model_observations: list[dict]
     rule_mappings: list[dict]  # destino de cada BR-/VAL- del EF
     seed_data: list[dict]
     ddl_scripts: list[dict]

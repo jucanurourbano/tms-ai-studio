@@ -477,3 +477,85 @@ class ArchMapLLM:
                 ensure_ascii=False,
             )
         return "{}"
+
+
+class BdMapLLM:
+    """LLM mock del Agente BD: responde por nodo según el rol del system prompt.
+
+    Devuelve **a propósito** salidas imperfectas, para que los tests comprueben las
+    salvaguardas y no solo el camino feliz:
+
+    - TABLES: incluye una columna inventada (``campo_fantasma``) que el agente debe
+      descartar, y cambia el tipo de un campo que el EF declara (debe perder).
+    - RELATIONS: propone ``cascade`` sin citar ninguna regla (debe degradarse a
+      ``restrict``).
+    """
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Modelador físico de datos" in system:
+            payload = json.loads(user.split("TABLA A COMPLETAR:\n", 1)[1])
+            table = payload["table"]
+            columns = []
+            for col in table["columns"]:
+                columns.append(
+                    {
+                        "name": col["name"],
+                        # Cambia todo a `text`: solo debe prevalecer donde el tipo
+                        # del EF no estuviera declarado.
+                        "logical_type": "text",
+                        "nullable": col.get("nullable", True),
+                        "description": f"Descripción de {col['name']}.",
+                        "example": "ejemplo",
+                        "confidence": 0.7,
+                    }
+                )
+            columns.append(
+                {
+                    "name": "campo_fantasma",
+                    "logical_type": "string",
+                    "length": 10,
+                    "nullable": True,
+                    "description": "Columna que el EF no menciona.",
+                    "example": "x",
+                }
+            )
+            return json.dumps(
+                {
+                    "description": f"Tabla {table['name']} del modelo físico.",
+                    "primary_key": {
+                        "columns": [table["pk_column"]],
+                        "strategy": "surrogate",
+                        "rationale": "Clave subrogada por convención.",
+                    },
+                    "columns": columns,
+                },
+                ensure_ascii=False,
+            )
+        if "Modelador de relaciones" in system:
+            payload = json.loads(user.split("RELACIONES A DECIDIR:\n", 1)[1])
+            return json.dumps(
+                {
+                    "one_to_one": [
+                        {
+                            "relationship_ref": item["relationship_ref"],
+                            "owner": item["candidates"][-1],
+                            "rationale": "El detalle no existe sin su cabecera.",
+                            "confidence": 0.7,
+                        }
+                        for item in payload.get("one_to_one", [])
+                    ],
+                    "referential_actions": [
+                        {
+                            "relationship_ref": fk["relationship_ref"],
+                            # Sin `source_refs`: el agente debe rechazar la cascada.
+                            "on_delete": "cascade",
+                            "rationale": "Propuesta sin base en el EF.",
+                            "source_refs": [],
+                            "confidence": 0.5,
+                        }
+                        for fk in payload.get("foreign_keys", [])
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        return "{}"

@@ -17,6 +17,7 @@ from langchain_core.runnables import RunnableConfig
 
 from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.bd.assemble import assemble_artifact, validate_artifact
+from ai.agents.bd.common import merge_metrics
 from ai.agents.bd.load_sources import (
     assert_architecture_ready,
     extract_sources,
@@ -24,8 +25,11 @@ from ai.agents.bd.load_sources import (
     resolve_hashes,
 )
 from ai.agents.bd.model_map import build_model_map, resolve_audit_columns
+from ai.agents.bd.relations import run_relations
 from ai.agents.bd.state import DatabaseState
+from ai.agents.bd.tables import run_tables
 from ai.knowledge import default_schema, load_db_conventions
+from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
@@ -106,13 +110,45 @@ async def node_model_map(state: DatabaseState) -> dict:
 
 
 async def node_tables(state: DatabaseState, config: RunnableConfig) -> dict:
-    """TABLES (BD3): tipado y descripción de cada tabla candidata (LLM map)."""
-    return {"tables": []}
+    """TABLES: completa cada tabla candidata (LLM map por tabla, concurrencia N).
+
+    Las observaciones que devuelve el nodo son correcciones aplicadas sobre la
+    propuesta del modelo (columnas inventadas, tipos que contradicen al EF): se
+    acumulan en el estado para que CRITIQUE/ASSEMBLE las publiquen. Nada se
+    corrige en silencio.
+    """
+    tables, observations, skipped, tokens = await run_tables(
+        _llm(config),
+        state.get("model_map") or {},
+        state.get("sources") or {},
+        (state.get("target") or {}).get("engine") or "postgresql",
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.BD_TABLES_CONCURRENCY,
+    )
+    return {
+        "tables": tables,
+        "model_observations": list(state.get("model_observations") or [])
+        + observations,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_relations(state: DatabaseState, config: RunnableConfig) -> dict:
-    """RELATIONS (BD3): FK deterministas, puentes y 1:1 resuelto por LLM."""
-    return {}
+    """RELATIONS: FK deterministas (1:N y puentes) + 1:1 y cascadas por LLM."""
+    tables, observations, skipped, tokens = await run_relations(
+        _llm(config),
+        state.get("tables") or [],
+        state.get("model_map") or {},
+        state.get("sources") or {},
+        (state.get("target") or {}).get("engine") or "postgresql",
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "tables": tables,
+        "model_observations": list(state.get("model_observations") or [])
+        + observations,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_constraints(state: DatabaseState, config: RunnableConfig) -> dict:

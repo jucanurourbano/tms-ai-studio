@@ -138,12 +138,19 @@ def assemble_artifact(state: dict[str, Any]) -> tuple[DatabaseArtifact, bool]:
     validation = DdlValidation.model_validate(state.get("validation") or {})
     er_diagram = ErDiagram.model_validate(state.get("er_diagram") or {})
 
-    # Observaciones = crítica + descartes NO silenciosos.
+    # Observaciones = crítica + correcciones sobre el LLM + descartes. Las tres
+    # familias son NO silenciosas por regla del proyecto.
     observations = list(critique_obs)
     idx = len(observations)
-    for extra in discards:
+    for extra in list(state.get("model_observations") or []) + discards:
         idx += 1
-        observations.append(Observation(id=f"OBS-D-{idx:03d}", **extra))
+        observations.append(
+            Observation(
+                id=f"OBS-D-{idx:03d}",
+                description=extra.get("description", ""),
+                reason=extra.get("reason"),
+            )
+        )
 
     analysis = DatabaseAnalysis(
         risks=risks, observations=observations, coverage=coverage
