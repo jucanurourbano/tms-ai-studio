@@ -247,6 +247,8 @@ async def test_me_devuelve_rol_y_modulos_efectivos(client):
     assert data["role"] == "arquitecto"
     assert data["modules"] == {
         "arquitectura": "full",
+        # El arquitecto también diseña el modelo de datos físico (BD0).
+        "bd": "full",
         "ef": "read",
         "scrum": "read",
     }

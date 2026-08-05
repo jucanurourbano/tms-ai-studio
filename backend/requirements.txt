@@ -30,6 +30,13 @@ langchain-core==1.4.9
 langchain-anthropic==1.4.8
 anthropic
 
+# === SQL (Agente BD: render y validación de DDL sin BD ni red) ===
+# sqlglot parsea/transpila SQL en el dialecto destino (postgresql, sqlserver,
+# oracle, mysql) en Python puro: valida la sintaxis del DDL generado sin levantar
+# ningún motor. Pinneado como el resto del stack: un cambio de versión puede
+# alterar el parseo de un dialecto y romper la validación en silencio.
+sqlglot==30.15.0
+
 # === Parsers de documentos ===
 # v1 SIN OCR: se usa pypdf (ligero, sin dependencias pesadas). Se descartó docling
 # porque arrastra torch y modelos de layout/OCR innecesarios para el alcance v1.

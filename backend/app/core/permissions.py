@@ -16,9 +16,21 @@ Conceptos
 - **Grants** (``user_module_grants``): asignaciones adicionales por usuario que
   **SUMAN** sobre el rol y **nunca restan** (ver :func:`effective_modules`).
 
-Módulos deliberadamente sin rol asignado (solo ``admin``): ``bd`` y ``devops``.
-No se les inventó dueño porque el modelo de permisos acordado no los menciona;
-cuando el equipo decida a qué rol pertenecen, basta añadirlos a la matriz.
+La matriz sigue una regla de forma: cada rol tiene ``FULL`` en los módulos que
+**produce** y ``READ`` en los que quedan **hacia atrás en la cadena** ISDF (lo que
+necesita consultar para trabajar, sin poder modificarlo). Así ``arquitecto`` lee
+``ef``/``scrum`` y ``developer`` lee ``arquitectura``/``scrum``.
+
+Módulo ``bd``: ``FULL`` para ``arquitecto`` (diseña los datos, misma fase DISEÑAR)
+y ``READ`` para ``developer``, cuyos módulos (``api``/``backend``/``frontend``)
+están **después** de ``bd`` en la cadena y consumen su modelo físico. ``analista``
+no aparece: sus módulos (``ef``/``scrum``) están *antes* de ``bd``, y leer hacia
+adelante rompería la regla. Un caso puntual se cubre con un **grant** (que suma:
+un ``developer`` con grant de ``bd`` obtiene ``FULL``), sin tocar la matriz.
+
+Módulo deliberadamente sin rol asignado (solo ``admin``): ``devops``. No se le
+inventó dueño porque el modelo de permisos acordado no lo menciona; cuando el
+equipo decida a qué rol pertenece, basta añadirlo a la matriz.
 """
 
 from enum import Enum
@@ -81,12 +93,16 @@ ROLE_MATRIX: dict[UserRole, dict[Module, AccessLevel]] = {
     },
     UserRole.ARQUITECTO: {
         Module.ARQUITECTURA: AccessLevel.FULL,
+        # El modelo de datos físico es diseño: misma fase (DISEÑAR) y mismo dueño.
+        Module.BD: AccessLevel.FULL,
         Module.EF: AccessLevel.READ,
         Module.SCRUM: AccessLevel.READ,
     },
     UserRole.DEVELOPER: {
         **{module: AccessLevel.FULL for module in _CONSTRUCCION},
         Module.ARQUITECTURA: AccessLevel.READ,
+        # `bd` queda por detrás de api/backend/frontend: se consulta, no se edita.
+        Module.BD: AccessLevel.READ,
         Module.SCRUM: AccessLevel.READ,
     },
     UserRole.QA: {

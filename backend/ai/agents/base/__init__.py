@@ -8,9 +8,12 @@ Arquitectura, ...) lo reutilicen sin duplicar infraestructura:
 - ``graph``: compilación lineal de grafos LangGraph con checkpointer.
 - ``refine``: construcción del "contexto autoritativo" desde validaciones.
 - ``pipeline``: runner genérico de ``BackgroundTasks`` parametrizado por agente.
+- ``lineage``: recorrido transitivo de ``input_job_id`` para los agentes que
+  consumen a varios predecesores (BD consume Arquitectura + EF).
 """
 
 from .graph import build_linear_graph
+from .lineage import resolve_ancestor, resolve_lineage
 from .refine import build_authoritative_context
 from .structured import (
     ClaudeLLMClient,
@@ -25,5 +28,7 @@ __all__ = [
     "build_authoritative_context",
     "build_linear_graph",
     "complete_structured",
+    "resolve_ancestor",
+    "resolve_lineage",
     "run_structured_map",
 ]

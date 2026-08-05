@@ -32,6 +32,7 @@ ESPERADO: dict[UserRole, dict[Module, AccessLevel]] = {
     UserRole.ANALISTA: {Module.EF: FULL, Module.SCRUM: FULL},
     UserRole.ARQUITECTO: {
         Module.ARQUITECTURA: FULL,
+        Module.BD: FULL,
         Module.EF: READ,
         Module.SCRUM: READ,
     },
@@ -40,6 +41,7 @@ ESPERADO: dict[UserRole, dict[Module, AccessLevel]] = {
         Module.BACKEND: FULL,
         Module.FRONTEND: FULL,
         Module.ARQUITECTURA: READ,
+        Module.BD: READ,
         Module.SCRUM: READ,
     },
     UserRole.QA: {Module.QA: FULL, Module.SCRUM: READ},
@@ -101,14 +103,35 @@ def test_solo_admin_accede_a_configuracion():
         assert not can(role, (), Module.CONFIG, READ)
 
 
-def test_modulos_futuros_declarados_sin_dueño_salvo_admin():
-    """`bd` y `devops` existen en el enum pero solo los alcanza admin."""
-    for module in (Module.BD, Module.DEVOPS):
-        assert can(UserRole.ADMIN, (), module, FULL)
-        for role in UserRole:
-            if role is UserRole.ADMIN:
-                continue
-            assert not can(role, (), module, READ)
+def test_devops_declarado_sin_dueño_salvo_admin():
+    """`devops` existe en el enum pero solo lo alcanza admin (sin dueño acordado)."""
+    assert can(UserRole.ADMIN, (), Module.DEVOPS, FULL)
+    for role in UserRole:
+        if role is UserRole.ADMIN:
+            continue
+        assert not can(role, (), Module.DEVOPS, READ)
+
+
+def test_bd_es_del_arquitecto_y_el_developer_solo_lo_lee():
+    """`bd` (BD0): FULL para quien diseña datos, READ hacia adelante en la cadena.
+
+    El arquitecto diseña el modelo físico (misma fase DISEÑAR). El developer lo
+    **consume** desde api/backend/frontend, así que lo lee sin poder editarlo. El
+    analista no lo alcanza: sus módulos están *antes* de `bd` en la cadena.
+    """
+    assert can(UserRole.ARQUITECTO, (), Module.BD, FULL)
+    assert can(UserRole.DEVELOPER, (), Module.BD, READ)
+    assert not can(UserRole.DEVELOPER, (), Module.BD, FULL)
+    for role in (UserRole.ANALISTA, UserRole.PROCESOS, UserRole.QA):
+        assert not can(role, (), Module.BD, READ)
+
+
+def test_grant_de_bd_eleva_al_developer_a_full():
+    """Un developer con grant de `bd` obtiene FULL sin tocar la matriz (acordado)."""
+    grants = [(Module.BD, FULL)]
+    assert can(UserRole.DEVELOPER, grants, Module.BD, FULL)
+    # Y no abre nada más de la fase DISEÑAR.
+    assert not can(UserRole.DEVELOPER, grants, Module.ARQUITECTURA, FULL)
 
 
 # --- grants: SUMAN, nunca restan --------------------------------------------

@@ -1,0 +1,222 @@
+# =============================================================================
+# db_conventions.yaml — Convenciones de modelado físico de base de datos
+#
+#   ⚠️  PENDIENTE DE VALIDACIÓN POR EL EQUIPO DE ARQUITECTURA / DBA DE URBANO
+#
+# IMPORTANTE (léelo antes de usar):
+#   - Describe cómo Urbano nombra y modela la base de datos de sus **SISTEMAS DE
+#     NEGOCIO** (los que diseñan los agentes ISDF), NO la BD de TMS AI Studio.
+#   - Lo consume el Agente BD:
+#       * `naming`/`keys`/`audit`/`catalogs` se inyectan en los prompts (el LLM
+#         nombra y decide dentro de estas reglas, no improvisa).
+#       * `types` es el **mapa determinista** `logical_type` → tipo del motor. Lo
+#         usa el renderizador de DDL en Python; el LLM **nunca** escribe SQL: solo
+#         elige un `logical_type` del enum cerrado.
+#   - Los valores de abajo son un **BORRADOR razonable** puesto por el asistente
+#     para no dejar el archivo vacío. Cada bloque lleva "# REVISAR:" indicando qué
+#     confirmar. Al validar, sube `status` a `validado` y `version` a 1.
+#
+# Motores soportados (los cuatro de `database_relational` en tech_stack.yaml):
+#   postgresql | sqlserver | oracle | mysql
+# =============================================================================
+
+status: pendiente_de_validacion # REVISAR: cambiar a "validado" cuando el equipo confirme
+version: 0 # REVISAR: subir a 1 al validar
+
+# --- Nomenclatura -----------------------------------------------------------
+naming:
+  # REVISAR (CRÍTICO): ¿snake_case o PascalCase? SQL Server corporativo suele usar
+  # PascalCase; PostgreSQL/MySQL casi siempre snake_case.
+  case: snake_case # snake_case | PascalCase
+  # REVISAR: ¿nombres de tabla en plural ("guias") o singular ("guia")?
+  tables: plural # plural | singular
+  # REVISAR: ¿la PK subrogada se llama "id" o "<tabla_singular>_id"?
+  pk_column: "{table_singular}_id"
+  fk_column: "{referenced_table_singular}_id"
+  # Patrones de nombre de constraint/índice. `{columns}` se une con "_".
+  patterns:
+    primary_key: "pk_{table}"
+    foreign_key: "fk_{table}_{referenced_table}"
+    unique: "uq_{table}_{columns}"
+    check: "ck_{table}_{suffix}"
+    index: "ix_{table}_{columns}"
+  # Largo máximo de identificador POR MOTOR. El renderizador trunca de forma
+  # determinista (nunca genera un nombre que el motor rechace).
+  # REVISAR: Oracle admite 128 desde 12.2; 30 es el límite de 11g y anteriores.
+  max_identifier_length:
+    postgresql: 63
+    sqlserver: 128
+    oracle: 30
+    mysql: 64
+  # Palabras reservadas que NUNCA deben usarse como identificador sin comillas.
+  # El validador estructural las marca como aviso (no error).
+  reserved_words:
+    ["order", "group", "user", "table", "select", "from", "where", "index", "key"]
+
+# --- Claves -----------------------------------------------------------------
+keys:
+  # REVISAR (CRÍTICO): ¿claves subrogadas (identity/secuencia) o naturales?
+  # `surrogate_identity` es lo más común en sistemas de negocio.
+  pk_strategy: surrogate_identity # surrogate_identity | surrogate_uuid | natural
+  # Si la entidad tiene una clave natural evidente (nº de guía, DNI), además de la
+  # PK subrogada se declara un UNIQUE sobre ella (no se pierde la regla de negocio).
+  natural_key_as_unique: true
+  # Acción por defecto de las FK cuando el EF no dice nada. `restrict` es la
+  # opción conservadora: nunca borra en cascada por inferencia.
+  default_on_delete: restrict # cascade | restrict | set_null | no_action
+  default_on_update: no_action
+
+# --- Columnas de auditoría --------------------------------------------------
+audit:
+  # OJO: estas columnas se añaden SOLO si el ArchitectureArtifact declaró un
+  # `cross_cutting` de auditoría (`concern: audit`). Sin esa base no se inventan:
+  # se emite una pregunta al DBA. No se hereda la convención de TMS AI Studio.
+  columns:
+    - { name: created_at, logical_type: timestamp, nullable: false }
+    - { name: created_by, logical_type: string, length: 60, nullable: true }
+    - { name: updated_at, logical_type: timestamp, nullable: true }
+    - { name: updated_by, logical_type: string, length: 60, nullable: true }
+  # REVISAR: ¿el estándar de la casa es baja lógica (deleted_at) o borrado físico?
+  # Por defecto NO se añade: si hace falta, se pregunta.
+  soft_delete: false
+  soft_delete_column: deleted_at
+  # Los catálogos no llevan auditoría (son datos de configuración, no transaccionales).
+  skip_for_kinds: [catalog]
+
+# --- Catálogos --------------------------------------------------------------
+catalogs:
+  # Forma canónica de una tabla de catálogo (estados, motivos, tipos).
+  # REVISAR: ¿el equipo usa `codigo`+`nombre` o solo `nombre`?
+  columns:
+    - { name: codigo, logical_type: string, length: 30, nullable: false, unique: true }
+    - { name: nombre, logical_type: string, length: 100, nullable: false }
+    - { name: activo, logical_type: boolean, nullable: false, default: "true" }
+    - { name: orden, logical_type: integer, nullable: true }
+  # Sufijos de nombre que delatan un catálogo en el EF (detección determinista).
+  name_hints: ["estado", "estados", "motivo", "motivos", "tipo", "tipos",
+               "categoria", "categorias", "concepto", "conceptos"]
+  # Nº máximo de campos para considerar a una entidad candidata a catálogo.
+  max_fields: 4
+
+# --- Valores por defecto cuando el EF no precisa ----------------------------
+# Se aplican SIEMPRE con pregunta al DBA (no bloqueante): el diseño avanza, pero
+# el vacío queda visible. Nunca se aplican en silencio.
+defaults:
+  string_length: 100
+  code_length: 30
+  name_length: 150
+  description_length: 500
+  decimal: { precision: 12, scale: 2 }
+  # REVISAR: ¿los importes de la casa usan 2 decimales? ¿los pesos/volúmenes 3?
+  money: { precision: 12, scale: 2 }
+
+# --- Esquema ----------------------------------------------------------------
+schema:
+  # REVISAR: nombre del esquema por motor (Postgres: public; SQL Server: dbo).
+  postgresql: public
+  sqlserver: dbo
+  oracle: null # Oracle usa el esquema del usuario; se omite el prefijo.
+  mysql: null # MySQL: el esquema ES la base de datos.
+
+# --- Mapa de tipos: logical_type → tipo físico por motor ---------------------
+# ESTE BLOQUE ES CONTRATO CON EL RENDERIZADOR DE DDL, no texto para el prompt.
+# Placeholders admitidos: {length}, {precision}, {scale}.
+# El LLM elige la CLAVE (logical_type) de un enum cerrado; Python renderiza.
+types:
+  string:
+    postgresql: "VARCHAR({length})"
+    sqlserver: "NVARCHAR({length})"
+    oracle: "VARCHAR2({length})"
+    mysql: "VARCHAR({length})"
+  text:
+    postgresql: "TEXT"
+    sqlserver: "NVARCHAR(MAX)"
+    oracle: "CLOB"
+    mysql: "TEXT"
+  integer:
+    postgresql: "INTEGER"
+    sqlserver: "INT"
+    oracle: "NUMBER(10)"
+    mysql: "INT"
+  bigint:
+    postgresql: "BIGINT"
+    sqlserver: "BIGINT"
+    oracle: "NUMBER(19)"
+    mysql: "BIGINT"
+  decimal:
+    postgresql: "NUMERIC({precision},{scale})"
+    sqlserver: "DECIMAL({precision},{scale})"
+    oracle: "NUMBER({precision},{scale})"
+    mysql: "DECIMAL({precision},{scale})"
+  boolean:
+    postgresql: "BOOLEAN"
+    sqlserver: "BIT"
+    oracle: "NUMBER(1)"
+    mysql: "TINYINT(1)"
+  date:
+    postgresql: "DATE"
+    sqlserver: "DATE"
+    oracle: "DATE"
+    mysql: "DATE"
+  time:
+    postgresql: "TIME"
+    sqlserver: "TIME"
+    oracle: "INTERVAL DAY(0) TO SECOND(0)"
+    mysql: "TIME"
+  timestamp:
+    postgresql: "TIMESTAMP"
+    sqlserver: "DATETIME2"
+    oracle: "TIMESTAMP"
+    mysql: "DATETIME"
+  timestamptz:
+    postgresql: "TIMESTAMPTZ"
+    sqlserver: "DATETIMEOFFSET"
+    oracle: "TIMESTAMP WITH TIME ZONE"
+    mysql: "TIMESTAMP"
+  uuid:
+    postgresql: "UUID"
+    sqlserver: "UNIQUEIDENTIFIER"
+    oracle: "RAW(16)"
+    mysql: "CHAR(36)"
+  json:
+    postgresql: "JSONB"
+    sqlserver: "NVARCHAR(MAX)"
+    oracle: "CLOB"
+    mysql: "JSON"
+  binary:
+    postgresql: "BYTEA"
+    sqlserver: "VARBINARY(MAX)"
+    oracle: "BLOB"
+    mysql: "BLOB"
+
+# --- Cláusula de identidad (PK autoincremental) por motor -------------------
+# La usa el renderizador cuando `pk_strategy: surrogate_identity`.
+identity:
+  postgresql: "GENERATED BY DEFAULT AS IDENTITY"
+  sqlserver: "IDENTITY(1,1)"
+  oracle: "GENERATED BY DEFAULT AS IDENTITY"
+  mysql: "AUTO_INCREMENT"
+
+# --- Sinónimos de tipo del EF → logical_type --------------------------------
+# El `data_type` del EFArtifact es texto libre en español ("texto", "número",
+# "fecha", vacío...). MODEL_MAP normaliza con esta tabla; lo que NO matchea se
+# marca `type_ambiguous` y se pregunta al DBA (nunca se adivina).
+type_synonyms:
+  string: ["texto", "cadena", "string", "varchar", "char", "alfanumerico",
+           "alfanumérico", "nombre", "codigo", "código", "text corto"]
+  text: ["texto largo", "descripcion larga", "descripción larga", "observaciones",
+         "comentario", "comentarios", "clob", "memo"]
+  integer: ["entero", "numero entero", "número entero", "int", "integer",
+            "cantidad", "contador", "correlativo"]
+  bigint: ["entero largo", "bigint", "long"]
+  decimal: ["decimal", "numerico", "numérico", "numero decimal", "número decimal",
+            "monto", "importe", "precio", "peso", "volumen", "porcentaje", "moneda"]
+  boolean: ["booleano", "boolean", "bool", "si/no", "sí/no", "logico", "lógico",
+            "bit", "flag", "indicador"]
+  date: ["fecha", "date"]
+  time: ["hora", "time"]
+  timestamp: ["fecha y hora", "fecha/hora", "datetime", "timestamp",
+              "fecha hora", "marca de tiempo"]
+  uuid: ["uuid", "guid", "identificador unico", "identificador único"]
+  json: ["json", "jsonb", "estructura", "documento json"]
+  binary: ["binario", "archivo", "adjunto", "imagen", "blob", "pdf"]
