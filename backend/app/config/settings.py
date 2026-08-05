@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     # Cobertura mínima (épicas/entidades) para el contenido mínimo del semáforo.
     ARCH_COVERAGE_THRESHOLD: float = 1.0
 
+    # --- Pipeline del Agente BD ---
+    # Concurrencia del map de TABLES (una pasada por entidad del EF).
+    BD_TABLES_CONCURRENCY: int = 3
+    # Cobertura mínima de ENTIDADES para el contenido mínimo del semáforo. La de
+    # campos/validaciones/reglas NO entra al gate: genera preguntas (mismo criterio
+    # que los RNF en Arquitectura).
+    BD_COVERAGE_THRESHOLD: float = 1.0
+    # Tope de índices NO derivados de FK por tabla, para evitar sobre-indexado. Los
+    # descartados quedan como Observation (nunca un cap silencioso).
+    BD_MAX_INDEXES_PER_TABLE: int = 3
+
     # --- Integración ClickUp (cuenta COMPARTIDA: guard fail-closed) ---
     # Sin allowlist configurada, el módulo NO escribe nada (ver CLAUDE.md).
     CLICKUP_API_TOKEN: str = ""
