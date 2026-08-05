@@ -21,7 +21,9 @@ multi-agente (D1). **Autenticación real** (JWT + usuarios con roles) y **permis
 por fase ISDF** (matriz rol → módulo/nivel + accesos adicionales) protegiendo
 toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** **completo**
 (backend + frontend; bloques A0→A7 implementados, ver §5 y
-`docs/diseno-agente-arquitectura.md`). Siguiente eslabón: **Agente BD**.
+`docs/diseno-agente-arquitectura.md`). Agente **BD** **completo** (backend +
+frontend; bloques BD0→BD8 implementados, ver §5.2 y `docs/diseno-agente-bd.md`).
+Siguiente eslabón: **Agente API**.
 
 ---
 
@@ -260,8 +262,8 @@ LOAD_SOURCES → CONTEXT → COMPONENTS → STACK → ADRS → CONTRACTS → DIA
 ## 5.1 Vista de artefacto: CENTRO DE COMANDO (patrón único de TODOS los agentes)
 
 La página de un job **no es un documento**: es un **hub**. El mismo patrón sirve
-para EF, Scrum y Arquitectura, y es el que debe seguir cualquier agente nuevo
-(BD, API, Backend…). Vive en `frontend/src/components/artifact/`.
+para EF, Scrum, Arquitectura y BD, y es el que debe seguir cualquier agente nuevo
+(API, Backend…). Vive en `frontend/src/components/artifact/`.
 
 - **El hub** (`hub-card.tsx`): cabecera (título, versión, semáforo, mini-stats,
   acciones) + **grid de tarjetas-sección** que **ES el índice** — no hay índice
@@ -308,6 +310,51 @@ para EF, Scrum y Arquitectura, y es el que debe seguir cualquier agente nuevo
   hover de tarjeta con elevación; `prefers-reduced-motion` ya neutraliza todo.
 
 ---
+
+---
+
+## 5.2 Agente BD (diseño validado e implementado)
+
+> Diseño completo en **`docs/diseno-agente-bd.md`**. Cuarto agente del ISDF (fase
+> **DISEÑAR**). Consume el `ArchitectureArtifact` (gate `ready_for_next_stage`) y,
+> transitivamente, el `EFArtifact` —su materia prima— para producir el **modelo de
+> datos físico**. Habilita al **Agente API**.
+
+Pipeline **LangGraph** (15 nodos, solo 6 llaman al LLM):
+
+```
+LOAD_SOURCES → MODEL_MAP → TABLES → RELATIONS → CONSTRAINTS → INDEXES → CATALOGS
+             → DDL_GEN → VALIDATE → DICTIONARY → ER_DIAGRAM
+             → CRITIQUE → QUESTION_GEN → ASSEMBLE → PERSIST
+```
+
+- **REGLA RECTORA: el LLM NUNCA escribe SQL.** Elige un `logical_type` de un enum
+  cerrado y Python renderiza el DDL al dialecto del motor. Por eso el DDL es válido
+  por construcción y **regenerarlo para otro motor cuesta cero llamadas al modelo**
+  (`GET /bd/jobs/{id}/ddl?engine=`).
+- **`MODEL_MAP` es el cortafuegos anti-invención**: fija en Python qué tablas y
+  columnas existen (una por entidad/campo del EF + puentes N:M). El LLM solo tipa y
+  describe; los **catálogos** son la única ampliación posible, y exigen evidencia
+  textual del EF. Un valor de catálogo inventado sería el peor error de este agente:
+  un dato falso con aspecto de verdad.
+- **Contrato `DatabaseArtifact v1.0.0`**: `target` (motor + convenciones efectivas),
+  `tables[]` (columnas con `logical_type`+`type`, PK, FK, unique, check, índices),
+  `ddl_scripts[]`, `seed_data[]`, `data_dictionary[]`, `er_diagram` (Mermaid),
+  `design_decisions[]`, **`rule_mappings[]`** (toda `BR-`/`VAL-` del EF con su
+  destino: `declarative`|`application`|`trigger`), `validation`, `analysis`
+  (risks/observations/coverage), `questions_for_dba[]`, `metrics`.
+- **Validación del DDL en capas, sin LLM**: L1 estructural + L2 sqlglot en el
+  dialecto real (ambas en el pipeline), L3a **ejecución contra SQLite en memoria**
+  (tests) y L3b motor real (opt-in). El artefacto declara si se **parseó** o se
+  **ejecutó**: no presenta como certificación lo que no lo es.
+- **Motor**: `database_relational` de `tech_stack.yaml` está **VALIDADA** →
+  **PostgreSQL 16**. Si la arquitectura no decide motor, se usa el default con
+  `engine_decided=false` + pregunta bloqueante.
+- **Semáforo** (habilita al Agente API): sin bloqueantes **y** ≥1 tabla **y** todas
+  con PK **y** cobertura de entidades ≥ umbral **y** DDL válido.
+- **Preguntas al DBA agrupadas por clase de vacío**: 40 columnas sin tipo son UNA
+  pregunta con los refs enumerados, no 40 que entierran la que importa.
+- Sin migraciones de BD. Permisos: `arquitecto` FULL, `developer` READ (§6.1).
 
 ## 6. Autenticación y usuarios
 
@@ -413,13 +460,17 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
 | `admin` | todo (+ `config`) | — |
 | `procesos` | `ef` | — |
 | `analista` | `ef`, `scrum` | — |
-| `arquitecto` | `arquitectura` | `ef`, `scrum` |
-| `developer` | `api`, `backend`, `frontend` | `arquitectura`, `scrum` |
+| `arquitecto` | `arquitectura`, `bd` | `ef`, `scrum` |
+| `developer` | `api`, `backend`, `frontend` | `arquitectura`, `bd`, `scrum` |
 | `qa` | `qa` | `scrum` |
 
-- **`bd` y `devops` NO tienen rol asignado** (solo `admin`): el modelo acordado no
-  los menciona y no se les inventó dueño. Añadirlos a la matriz cuando el equipo
-  decida a quién pertenecen.
+- La matriz sigue una regla de forma: **FULL en lo que el rol produce, READ en lo
+  que queda hacia atrás en la cadena**. Por eso `bd` es FULL del `arquitecto` (misma
+  fase DISEÑAR) y READ del `developer` (sus módulos van después y lo consumen), y
+  `analista` no lo alcanza: los suyos van antes.
+- **`devops` NO tiene rol asignado** (solo `admin`): el modelo acordado no lo
+  menciona y no se le inventó dueño. Añadirlo a la matriz cuando el equipo decida a
+  quién pertenece.
 - **Grants** (`user_module_grants`, única por `(user_id, module)`): accesos extra
   por usuario que **SUMAN** sobre el rol y **nunca restan** — si el rol da `FULL`
   y el grant dice `READ`, gana `FULL`. `User.grants` usa `lazy="selectin"`.
@@ -487,6 +538,9 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
 - **REGLA DE PRESUPUESTO:** nunca ejecutar análisis contra la **API real de
   Anthropic** sin autorización explícita del usuario. Desarrollo y tests
   **siempre con mocks**. Tampoco escrituras reales a ClickUp sin autorización.
+  La regla está **protegida por un cortafuegos autouse** en `tests/conftest.py`:
+  un test que caiga en el cliente real falla con un mensaje que dice cómo
+  arreglarlo, en vez de salir a la red (`tests/test_budget_guard.py` lo cubre).
 - **REGLA DE RESPALDO:** hacer **push al remoto después de CADA fase commiteada**.
 
 ---
@@ -530,9 +584,10 @@ tms-ai-studio/
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
-        ├── agents/ef/            # (Scrum: ai/agents/scrum/ + ai/agents/base/)
+        ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, base/)
+        │                         # bd/ddl/: render + validación del DDL (sin LLM)
         ├── memory/
-        ├── knowledge/            # glosario logístico
+        ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml
         ├── tools/{parsers,chunker,validation}/
-        └── prompts/ef/           # (Scrum: ai/prompts/scrum/)
+        └── prompts/ef/           # (+ scrum/, arquitectura/, bd/)
 ```
