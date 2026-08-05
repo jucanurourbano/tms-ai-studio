@@ -42,6 +42,22 @@ def test_tech_stack_carga_y_marca_pendiente_de_validacion():
         assert layers[layer]["allowed"]
 
 
+def test_el_motor_relacional_esta_validado_y_es_postgresql_16():
+    """Capa confirmada por el equipo de Urbano: PostgreSQL 16.
+
+    Es la única validada por ahora, así que el `status` GLOBAL sigue pendiente: el
+    archivo no puede dar por buenas las demás capas (lenguaje, framework, nube)
+    solo porque el motor ya esté decidido.
+    """
+    layer = load_tech_stack()["layers"]["database_relational"]
+    assert layer["validated"] is True
+    assert layer["default"] == "PostgreSQL"
+    assert layer["default_version"] == "16"
+    # Los otros motores siguen en la lista blanca (integraciones con legados).
+    assert set(layer["allowed"]) == {"PostgreSQL", "SQL Server", "Oracle", "MySQL"}
+    assert load_tech_stack()["status"] == "pendiente_de_validacion"
+
+
 def test_tech_stack_block_es_allow_list_para_el_prompt():
     block = tech_stack_block()
     # Debe comunicar que es una allow-list y arrastrar el estado.

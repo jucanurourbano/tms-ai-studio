@@ -134,7 +134,7 @@ def resolve_engine(
             )
         return {
             "engine": engine,
-            "version": None,
+            "version": _default_version_for(engine),
             "source_ref": None,
             "decided": True,
             "reason": "Motor indicado explícitamente en la petición.",
@@ -155,9 +155,10 @@ def resolve_engine(
                     f"{choice.get('technology')}."
                 ),
             }
+        fallback, fallback_version = _fallback_engine()
         return {
-            "engine": _fallback_engine(),
-            "version": None,
+            "engine": fallback,
+            "version": fallback_version,
             "source_ref": choice.get("id"),
             "decided": False,
             "reason": (
@@ -167,9 +168,10 @@ def resolve_engine(
             ),
         }
 
+    fallback, fallback_version = _fallback_engine()
     return {
-        "engine": _fallback_engine(),
-        "version": None,
+        "engine": fallback,
+        "version": fallback_version,
         "source_ref": None,
         "decided": False,
         "reason": (
@@ -179,11 +181,24 @@ def resolve_engine(
     }
 
 
-def _fallback_engine() -> str:
-    """Motor por defecto del stack de la casa (o PostgreSQL si el YAML no lo dice)."""
+def _fallback_engine() -> tuple[str, Optional[str]]:
+    """Motor por defecto del stack de la casa, con su versión de referencia.
+
+    Se usa cuando la arquitectura no decidió motor. Arrastra ``default_version``
+    para que el DDL se genere contra una versión concreta y no contra "PostgreSQL
+    a secas": la capa ``database_relational`` del stack está validada
+    (PostgreSQL 16), aunque el resto del archivo siga en borrador.
+    """
     layers = load_tech_stack().get("layers", {}) or {}
-    default = (layers.get(DB_STACK_LAYER, {}) or {}).get("default", "")
-    return _normalize_engine(default) or "postgresql"
+    layer = layers.get(DB_STACK_LAYER, {}) or {}
+    engine = _normalize_engine(layer.get("default", "")) or "postgresql"
+    return engine, layer.get("default_version")
+
+
+def _default_version_for(engine: str) -> Optional[str]:
+    """Versión de referencia del stack, si el motor pedido es el de la casa."""
+    fallback, version = _fallback_engine()
+    return version if engine == fallback else None
 
 
 def resolve_hashes(

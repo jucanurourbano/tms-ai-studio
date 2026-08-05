@@ -374,14 +374,20 @@ def _build_seed(
             ),
         }
 
-    columnas = [c["name"] for c in catalog["columns"] if not c["is_primary_key"]]
-    limpias = [{k: v for k, v in row.items() if k in columnas} for row in rows]
+    disponibles = [c["name"] for c in catalog["columns"] if not c["is_primary_key"]]
+    limpias = [{k: v for k, v in row.items() if k in disponibles} for row in rows]
     limpias = [row for row in limpias if row]
     if not limpias:
         return None, {
             "description": f"Semilla de {catalog['name']} descartada.",
             "reason": "ninguna fila usa las columnas del catálogo.",
         }
+
+    # Solo se listan las columnas que las filas traen de verdad. Incluir el resto
+    # haría que el INSERT pasara NULL explícito a columnas que tienen DEFAULT
+    # (`activo`), y un NULL explícito NO activa el default: la inserción falla.
+    presentes = {k for row in limpias for k in row}
+    columnas = [c for c in disponibles if c in presentes]
 
     return {
         "id": "",

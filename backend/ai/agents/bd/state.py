@@ -39,6 +39,9 @@ class DatabaseState(TypedDict, total=False):
     rule_mappings: list[dict]  # destino de cada BR-/VAL- del EF
     seed_data: list[dict]
     ddl_scripts: list[dict]
+    #: Ciclos de FK detectados al ordenar las tablas: no impiden crear el esquema
+    #: (las FK van en un script aparte) pero VALIDATE los reporta como aviso.
+    ddl_cycles: list[str]
     validation: dict  # resultado determinista de la validación del DDL
     data_dictionary: list[dict]
     er_diagram: dict

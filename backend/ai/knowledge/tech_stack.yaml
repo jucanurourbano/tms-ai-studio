@@ -15,14 +15,19 @@
 #     para no dejar el archivo vacío. NO reflejan (aún) el stack real de Urbano.
 #     Cada capa lleva un comentario "# REVISAR:" indicando qué debes confirmar,
 #     podar o reemplazar.  Al validar, sube `status` a `validado` y `version` a 1.
+#   - Las capas ya confirmadas por el equipo llevan `validated: true` y pierden su
+#     comentario "# REVISAR". Hoy solo lo está `database_relational`
+#     (PostgreSQL 16), así que el `status` global sigue pendiente.
 #
 # Formato por capa:
-#   default:     tecnología recomendada por defecto (la más frecuente en la casa)
-#   allowed:     lista blanca de tecnologías permitidas para esa capa
-#   notes:       contexto para el agente (cuándo preferir una alternativa)
+#   default:         tecnología recomendada por defecto (la más frecuente en la casa)
+#   default_version: versión de referencia, si el equipo la fijó
+#   allowed:         lista blanca de tecnologías permitidas para esa capa
+#   validated:       true si el equipo de Urbano ya confirmó esta capa
+#   notes:           contexto para el agente (cuándo preferir una alternativa)
 # =============================================================================
 
-status: pendiente_de_validacion   # REVISAR: cambiar a "validado" cuando el equipo confirme
+status: pendiente_de_validacion   # REVISAR: pasar a "validado" cuando TODAS las capas lo estén
 version: 0                        # REVISAR: subir a 1 al validar
 
 layers:
@@ -48,11 +53,17 @@ layers:
     notes: "Angular es común en TI corporativa; React si el equipo ya lo domina."
 
   database_relational:
-    # REVISAR (CRÍTICO): motor relacional de la casa. Logística suele usar
-    # SQL Server u Oracle; PostgreSQL si hay preferencia por open source.
-    default: "SQL Server"
-    allowed: ["SQL Server", "Oracle", "PostgreSQL", "MySQL"]
-    notes: "Motor transaccional principal para los sistemas de negocio."
+    # ✅ VALIDADO por el equipo de Urbano: PostgreSQL 16 es el motor de la casa.
+    # Es la única capa confirmada hasta ahora; el resto del archivo sigue siendo
+    # borrador (por eso `status` global continúa en pendiente_de_validacion).
+    validated: true
+    default: "PostgreSQL"
+    default_version: "16"
+    allowed: ["PostgreSQL", "SQL Server", "Oracle", "MySQL"]
+    notes: >-
+      Motor transaccional principal para los sistemas de negocio: PostgreSQL 16.
+      Los demás siguen en la lista blanca porque pueden aparecer en integraciones
+      con sistemas legados, pero un diseño nuevo se modela sobre PostgreSQL.
 
   cache:
     # REVISAR: ¿se usa caché distribuida? Si no aplica, el agente lo omite.

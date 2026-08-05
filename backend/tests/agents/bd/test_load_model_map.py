@@ -157,14 +157,20 @@ def test_override_fuera_del_allow_list_se_rechaza():
 
 
 def test_sin_motor_en_la_arquitectura_hay_fallback_declarado():
-    """El pipeline corre, pero `decided=False` deja el vacío visible."""
+    """El pipeline corre con el motor validado de la casa, pero lo declara.
+
+    `decided=False` deja el vacío visible aunque el fallback sea correcto: que
+    PostgreSQL 16 sea el estándar de Urbano no significa que ESTE diseño lo haya
+    decidido, y el semáforo debe reflejarlo.
+    """
     sources = _sources()
     sources["architecture"]["stack"] = [
         {"id": "STK-001", "layer": "framework_backend", "technology": "Spring Boot"}
     ]
     info = resolve_engine(sources)
     assert info["decided"] is False
-    assert info["engine"] in ("sqlserver", "postgresql", "oracle", "mysql")
+    assert info["engine"] == "postgresql"
+    assert info["version"] == "16"
     assert "no decidió motor" in info["reason"]
 
 
@@ -415,9 +421,10 @@ async def test_grafo_end_to_end_con_stubs():
     assert art["target"]["conventions"]["schema_name"] == "dbo"
     assert art["target"]["conventions"]["audit_columns"] is True
     assert art["target"]["conventions_source"].endswith("db_conventions.yaml@v0")
-    # El DDL aún no se genera (BD5): su semáforo sigue en rojo, y eso es correcto.
-    assert art["ddl_scripts"] == []
-    assert art["metrics"]["ddl_valid"] is False
+    # El motor de este job es SQL Server (lo dice STK-002 del ejemplo), así que el
+    # DDL sale en ese dialecto aunque el estándar de la casa sea PostgreSQL: manda
+    # lo que decidió la arquitectura, no la preferencia global.
+    assert all(s["engine"] == "sqlserver" for s in art["ddl_scripts"])
 
 
 async def test_el_andamio_esta_disponible_para_los_nodos_siguientes():

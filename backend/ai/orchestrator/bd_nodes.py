@@ -20,6 +20,10 @@ from ai.agents.bd.assemble import assemble_artifact, validate_artifact
 from ai.agents.bd.catalogs import run_catalogs
 from ai.agents.bd.common import merge_metrics
 from ai.agents.bd.constraints import run_constraints
+from ai.agents.bd.ddl.render import build_ddl_scripts, render_type
+from ai.agents.bd.ddl.validate import validate_ddl
+from ai.agents.bd.dictionary import build_data_dictionary
+from ai.agents.bd.er_diagram import build_er_diagram
 from ai.agents.bd.indexes import run_indexes
 from ai.agents.bd.load_sources import (
     assert_architecture_ready,
@@ -214,23 +218,52 @@ async def node_catalogs(state: DatabaseState, config: RunnableConfig) -> dict:
 
 
 async def node_ddl_gen(state: DatabaseState) -> dict:
-    """DDL_GEN (BD5): render determinista del DDL en el dialecto del motor."""
-    return {"ddl_scripts": []}
+    """DDL_GEN: renderiza el DDL en el dialecto del motor. Sin LLM.
+
+    Aquí es donde el ``logical_type`` de cada columna se convierte por fin en
+    sintaxis de un motor concreto (decisión DB2): el tipo físico se escribe en la
+    propia columna para que el artefacto muestre exactamente lo que dice el script.
+    """
+    engine = (state.get("target") or {}).get("engine") or "postgresql"
+    tables = state.get("tables") or []
+    for table in tables:
+        for column in table.get("columns", []):
+            column["type"] = render_type(column, engine)
+
+    scripts, cycles = build_ddl_scripts(tables, state.get("seed_data") or [], engine)
+    return {"tables": tables, "ddl_scripts": scripts, "ddl_cycles": cycles}
 
 
 async def node_validate(state: DatabaseState) -> dict:
-    """VALIDATE (BD5): validación determinista del DDL (estructural + sqlglot)."""
-    return {"validation": {}}
+    """VALIDATE: validación determinista del DDL (L1 estructural + L2 sqlglot).
+
+    Un DDL con errores **no** tumba el pipeline: queda registrado, el job termina
+    con advertencias y el semáforo se mantiene en rojo. Entregar un esquema roto
+    avisando es útil; caerse, no.
+    """
+    validation = validate_ddl(
+        state.get("tables") or [],
+        state.get("seed_data") or [],
+        state.get("ddl_scripts") or [],
+        (state.get("target") or {}).get("engine") or "postgresql",
+        cycles=state.get("ddl_cycles") or [],
+    )
+    return {"validation": validation}
 
 
 async def node_dictionary(state: DatabaseState) -> dict:
-    """DICTIONARY (BD5): diccionario derivado de las tablas (sin LLM)."""
-    return {"data_dictionary": []}
+    """DICTIONARY: diccionario derivado de las tablas (sin una segunda pasada LLM)."""
+    return {
+        "data_dictionary": build_data_dictionary(
+            state.get("tables") or [],
+            (state.get("target") or {}).get("engine") or "postgresql",
+        )
+    }
 
 
 async def node_er_diagram(state: DatabaseState) -> dict:
-    """ER_DIAGRAM (BD5): Mermaid ``erDiagram`` determinista desde las tablas."""
-    return {"er_diagram": {}}
+    """ER_DIAGRAM: Mermaid ``erDiagram`` determinista desde el modelo."""
+    return {"er_diagram": build_er_diagram(state.get("tables") or [])}
 
 
 async def node_critique(state: DatabaseState, config: RunnableConfig) -> dict:
