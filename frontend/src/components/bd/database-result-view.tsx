@@ -47,6 +47,7 @@ import {
 } from "@/components/artifact/artifact-panel";
 import { ArtifactPrintDoc } from "@/components/artifact/artifact-print-doc";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
+import { ValidationHint } from "@/components/artifact/validation-controls";
 import {
   FocusedQuestionFlow,
   type SheetQuestion,
@@ -401,6 +402,17 @@ export function DatabaseResultView({ job }: { job: DbJobDetail }) {
       </DataList>
     );
   };
+
+  // BD es hoy el último eslabón construido: con el semáforo en verde no hay
+  // siguiente agente que ofrecer, así que el panel se cierra solo al terminar.
+  const nextStepAction =
+    puedeEditar && !ready && canRefine
+      ? {
+          label: "Regenerar modelo afinado",
+          onClick: () => void doRefine(),
+          hint: "Reinyecta tus respuestas y genera una versión afinada.",
+        }
+      : undefined;
 
   const sections: HubSection[] = [
     {
@@ -1049,6 +1061,10 @@ export function DatabaseResultView({ job }: { job: DbJobDetail }) {
               renderControls={(q, onAnswered) =>
                 questionControls(q.id, onAnswered)
               }
+              ready={ready}
+              readyLabel="Listo para el Agente API"
+              nextAction={nextStepAction}
+              onClose={hub.close}
             />
           );
         }
@@ -1060,7 +1076,8 @@ export function DatabaseResultView({ job }: { job: DbJobDetail }) {
         if (rows.length === 0) return <EmptyHint>Sin coincidencias.</EmptyHint>;
         return (
           <div className="space-y-3">
-            {rows.map((q) => (
+            {!forPrint && <ValidationHint />}
+                        {rows.map((q) => (
               <div key={q.id} className="rounded-lg border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <IdTag id={q.id} />

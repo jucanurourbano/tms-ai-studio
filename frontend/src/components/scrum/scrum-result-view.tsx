@@ -70,6 +70,7 @@ import {
   StatusPill,
 } from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
+import { ValidationHint } from "@/components/artifact/validation-controls";
 import {
   AssigneeBadge,
   AssigneeSelect,
@@ -622,6 +623,25 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
     ),
   });
 
+  // Qué ofrecer al terminar de responder. Si el semáforo sigue en rojo, lo que
+  // da valor a las respuestas es **regenerar** (es el refine quien las reinyecta);
+  // si ya está verde, lo útil es seguir la cadena.
+  const nextStepAction = !puedeEditar
+    ? undefined
+    : ready
+      ? {
+          label: "Generar diseño de arquitectura",
+          onClick: () => router.push("/agents/arquitectura/new"),
+          hint: "Este artefacto ya está listo: puedes continuar con el siguiente agente.",
+        }
+      : canRefine
+        ? {
+            label: "Regenerar plan afinado",
+            onClick: () => void doRefine(),
+            hint: "Reinyecta tus respuestas y genera una versión afinada.",
+          }
+        : undefined;
+
   const sections: HubSection[] = [
     {
       id: "backlog",
@@ -912,6 +932,10 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
               renderControls={(q, onAnswered) =>
                 questionControls(q.id, onAnswered)
               }
+              ready={ready}
+              readyLabel="Listo para el Agente Arquitectura"
+              nextAction={nextStepAction}
+              onClose={hub.close}
             />
           );
         }
@@ -939,7 +963,8 @@ export function ScrumResultView({ job }: { job: ScrumJobDetail }) {
         }
         return (
           <div className="space-y-2">
-            {items.map((q) => (
+            {!forPrint && <ValidationHint />}
+                        {items.map((q) => (
               <div
                 key={q.id}
                 id={`ref-${q.id}`}

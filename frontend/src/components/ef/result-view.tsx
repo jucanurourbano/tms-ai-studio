@@ -73,6 +73,7 @@ import {
 } from "@/components/artifact/primitives";
 import { ArtifactSkeleton } from "@/components/artifact/artifact-skeleton";
 import { ValidationControls } from "@/components/ef/validation-controls";
+import { ValidationHint } from "@/components/artifact/validation-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -415,6 +416,25 @@ export function ResultView({ job }: { job: JobDetail }) {
     />
   );
 
+  // Qué ofrecer al terminar de responder. Si el semáforo sigue en rojo, lo que
+  // da valor a las respuestas es **regenerar** (es el refine quien las reinyecta);
+  // si ya está verde, lo útil es seguir la cadena.
+  const nextStepAction = !puedeEditar
+    ? undefined
+    : ready
+      ? {
+          label: "Generar plan Scrum",
+          onClick: () => router.push("/agents/scrum/new"),
+          hint: "Este artefacto ya está listo: puedes continuar con el siguiente agente.",
+        }
+      : canRefine
+        ? {
+            label: "Regenerar EF afinada",
+            onClick: () => void doRefine(),
+            hint: "Reinyecta tus respuestas y genera una versión afinada.",
+          }
+        : undefined;
+
   const sections: HubSection[] = [
     {
       id: "interpretacion",
@@ -604,6 +624,10 @@ export function ResultView({ job }: { job: JobDetail }) {
               renderControls={(q, onAnswered) =>
                 questionControls(q.id, onAnswered)
               }
+              ready={ready}
+              readyLabel="Listo para el Agente Scrum"
+              nextAction={nextStepAction}
+              onClose={hub.close}
             />
           );
         }
@@ -631,7 +655,8 @@ export function ResultView({ job }: { job: JobDetail }) {
         }
         return (
           <div className="space-y-2">
-            {items.map((q) => (
+            {!forPrint && <ValidationHint />}
+                        {items.map((q) => (
               <div
                 key={q.id}
                 id={`ref-${q.id}`}
