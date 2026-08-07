@@ -26,6 +26,8 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/agents/arquitectura", module: "arquitectura", level: "read" },
   { prefix: "/agents/bd/new", module: "bd", level: "full" },
   { prefix: "/agents/bd", module: "bd", level: "read" },
+  { prefix: "/agents/api/new", module: "api", level: "full" },
+  { prefix: "/agents/api", module: "api", level: "read" },
   { prefix: "/configuracion", module: "config", level: "read" },
 ];
 

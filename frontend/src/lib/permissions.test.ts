@@ -61,8 +61,15 @@ describe("navForModules", () => {
       "backend",
       "frontend",
     ]);
-    // Visible pero deshabilitado: tiene permiso, el agente no existe todavía.
-    expect(construir.agents.every((a) => a.enabled === false)).toBe(true);
+    // API ya existe; Backend y Frontend siguen visibles pero deshabilitados:
+    // el permiso está, el agente no.
+    expect(
+      construir.agents.map((a) => [a.module, a.enabled]),
+    ).toEqual([
+      ["api", true],
+      ["backend", false],
+      ["frontend", false],
+    ]);
 
     // "Diseñar" incluye BD, y sin permiso sobre `bd` no debe aparecer.
     const disenar = nav.find((p) => p.phase === "Diseñar")!;

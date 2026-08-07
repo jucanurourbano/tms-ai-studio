@@ -1,7 +1,7 @@
 # Diseño — Agente API (quinto agente del ISDF)
 
-> Documento de arquitectura **aprobado**. Fuente de verdad del Agente API, **en
-> construcción** (ver §9 para el estado por bloques). Leer junto a `CLAUDE.md`,
+> Documento de arquitectura **aprobado e implementado** (bloques API0→API9).
+> Fuente de verdad del Agente API. Leer junto a `CLAUDE.md`,
 > `docs/diseno-agente-arquitectura.md` y `docs/diseno-agente-bd.md`, cuyo patrón se
 > reutiliza casi por completo.
 
@@ -579,6 +579,9 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | **API7** | `CRITIQUE` + `QUESTION_GEN` (agrupadas por clase de vacío) + cobertura. **Endurece el gate respecto a este diseño**: un alcance ambiguo bloquea siempre, no solo con PII (ver §2). |
 | **API8** | `ASSEMBLE/VALIDATE/PERSIST` + servicio + API `/apis/*` + refine + gate 409 + descarga del OpenAPI. **El ensamblado destapó un fallo**: los parámetros de los endpoints nunca recibían `id`, así que cinco de seis endpoints no validaban contra el contrato. El documento se renderizaba bien (no usa esos ids) y L1 no lo veía; solo apareció al construir el artefacto. |
 | **API9** | Frontend: nav CONSTRUIR, `ApiResultView`, matriz de autorización, visor/descarga del YAML, flujo new→spec→afinar, export PDF. |
+
+Todo el agente se construyó y probó **con mocks**: no se ha ejecutado ni una vez
+contra la API real de Anthropic.
 
 ---
 

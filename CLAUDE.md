@@ -23,8 +23,9 @@ toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** 
 (backend + frontend; bloques A0→A7 implementados, ver §5 y
 `docs/diseno-agente-arquitectura.md`). Agente **BD** **completo** (backend +
 frontend; bloques BD0→BD8 implementados, ver §5.2 y `docs/diseno-agente-bd.md`).
-Agente **API**: diseño **aprobado** (`docs/diseno-agente-api.md`, ver §5.3);
-**en construcción** — bloques **API0–API8** hechos (backend completo), siguiente **API9** (frontend).
+Agente **API** **completo** (backend + frontend; bloques API0→API9
+implementados, ver §5.3 y `docs/diseno-agente-api.md`). Siguiente eslabón:
+**Agente Backend**.
 
 ---
 
@@ -403,6 +404,14 @@ LOAD_SOURCES → RESOURCE_MAP → RESOURCES → ENDPOINTS → SCHEMAS
   propiedades JSON en **`snake_case`** (espejo 1:1 de las columnas), **envelope
   `ApiResponse`** de la casa, paginación **offset/limit**, **PATCH** como verbo de
   actualización. Fijadas en `ai/knowledge/api_conventions.yaml` y con test candado.
+- **Semáforo** (habilita a **Backend** y **Frontend**): sin bloqueantes **y** ≥1
+  endpoint **y** **todos con decisión de acceso** **y** cobertura ≥ umbral **y**
+  especificación válida. Un endpoint que nadie puede llamar es código muerto para
+  el Agente Backend, así que no habilita a construir aunque el documento sea válido.
+- **Frontend**: nav CONSTRUIR, `ApiResultView` sobre el centro de comando (§5.1).
+  Su visual insignia es la **matriz de autorización** (endpoints × actores, con el
+  hueco visible); el YAML se copia y se descarga en YAML o JSON, y lleva `printSkip`
+  en el PDF —mil líneas que nadie lee y que duplican el catálogo de endpoints—.
 - Sin migraciones de BD. Permisos sin tocar: `developer` FULL `api`; las preguntas
   se dirigen a **`questions_for_tech_lead`** (quien puede responderlas). El
   arquitecto participa por **grant**, no por excepción a la matriz.
