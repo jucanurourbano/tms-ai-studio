@@ -80,8 +80,12 @@ class EndpointKind(str, Enum):
     UPDATE = "update"
     DELETE = "delete"
     ACTION = "action"
+    #: Operaciones de una tabla puente, colgadas de su recurso padre. Existe
+    #: ``NESTED_DELETE`` porque sin ella una relación N:M se podría crear pero
+    #: nunca deshacer, y ese hueco solo se descubriría al construir la pantalla.
     NESTED_LIST = "nested_list"
     NESTED_CREATE = "nested_create"
+    NESTED_DELETE = "nested_delete"
 
 
 class SchemaKind(str, Enum):

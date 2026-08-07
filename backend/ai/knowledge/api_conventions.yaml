@@ -193,6 +193,9 @@ success_status:
   update: 200
   delete: 204 # sin cuerpo
   action: 200
+  nested_list: 200
+  nested_create: 201
+  nested_delete: 204
 
 # --- Seguridad ---------------------------------------------------------------
 security:
@@ -235,8 +238,9 @@ operation_id:
   update: "actualizar{ResourceSingular}"
   delete: "eliminar{ResourceSingular}"
   action: "{accion}{ResourceSingular}"
-  nested_list: "listar{Child}De{ResourceSingular}"
-  nested_create: "agregar{ChildSingular}A{ResourceSingular}"
+  nested_list: "listar{Child}"
+  nested_create: "agregar{ChildSingular}"
+  nested_delete: "quitar{ChildSingular}"
 
 # --- Nombres de esquema (components.schemas) ---------------------------------
 schema_name:

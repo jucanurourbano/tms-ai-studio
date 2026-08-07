@@ -85,6 +85,14 @@ class Settings(BaseSettings):
     # descartados quedan como Observation (nunca un cap silencioso).
     BD_MAX_INDEXES_PER_TABLE: int = 3
 
+    # --- Pipeline del Agente API ---
+    # Concurrencia del map de SCHEMAS (una pasada por recurso).
+    API_SCHEMAS_CONCURRENCY: int = 3
+    # Cobertura mínima de TABLAS EXPUESTAS y de APIs declaradas por el EF para el
+    # contenido mínimo del semáforo. Las celdas CRUD, las reglas y los actores NO
+    # entran al gate: generan preguntas (mismo criterio que los campos en BD).
+    API_COVERAGE_THRESHOLD: float = 1.0
+
     # --- Integración ClickUp (cuenta COMPARTIDA: guard fail-closed) ---
     # Sin allowlist configurada, el módulo NO escribe nada (ver CLAUDE.md).
     CLICKUP_API_TOKEN: str = ""

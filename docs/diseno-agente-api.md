@@ -559,7 +559,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 |---|---|
 | **API0** | `api_conventions.yaml` (borrador) + loader; `openapi-spec-validator` pinneado; `openapi-core` en dependencias de test. EF/Scrum/Arquitectura/BD siguen verdes. |
 | **API1** | Contrato `ApiArtifact v1.0.0` (Pydantic + enums + fixture del dominio de siniestros + round-trip). El contrato **impide** lo que sería invención u omisión muda (campo sin columna, exclusión sin motivo, alcance sin columna, descarte sin explicación, acción sin evidencia) y **permite** representar los defectos reportables (endpoint sin autorizar, spec inválida): negarse a construirlos impediría al agente reportarlos. |
-| **API2** | Grafo + `LOAD_SOURCES` (carga cuádruple + gate + resolución de estilo/seguridad) + `RESOURCE_MAP` + naming + nodos stub. |
+| **API2** | Grafo + `LOAD_SOURCES` (carga cuádruple + gate + resolución de estilo/seguridad) + `RESOURCE_MAP` + naming + nodos stub. Dos consecuencias del cortafuegos que se confirmaron al implementarlo: **sin celda en la matriz CRUD no se generan endpoints** para esa entidad (se enumera y acabará en pregunta), y una tabla puente necesita `nested_delete` además de `nested_list`/`nested_create`, o una relación N:M se podría crear y nunca deshacer. |
 | **API3** | `RESOURCES` + `ENDPOINTS` (CRUD determinista + acciones con evidencia). |
 | **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. |
 | **API5** | `AUTHORIZATION` (base CRUD + alcances) + `RULE_MAPPING` (cierre del círculo con el BD). |

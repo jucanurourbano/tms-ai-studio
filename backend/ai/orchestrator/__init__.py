@@ -1,5 +1,6 @@
 """Orquestador de los agentes del ISDF (grafos LangGraph)."""
 
+from .api_graph import build_api_graph
 from .arquitectura_graph import build_arquitectura_graph
 from .bd_graph import build_bd_graph
 from .graph import build_ef_graph
@@ -8,6 +9,7 @@ from .state import EFState
 
 __all__ = [
     "EFState",
+    "build_api_graph",
     "build_arquitectura_graph",
     "build_bd_graph",
     "build_ef_graph",
