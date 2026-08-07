@@ -40,6 +40,9 @@ class ApiState(TypedDict, total=False):
     authorization_matrix: list[dict]
     error_catalog: list[dict]
     rule_mappings: list[dict]  # destino en la API de cada BR-/VAL- del EF
+    #: Reglas que el Agente BD delegó en la aplicación y que la API tampoco hace
+    #: cumplir. Cada una desaparecería del producto: acaban en pregunta bloqueante.
+    unenforced_delegated_rules: list[str]
     #: Correcciones aplicadas sobre las propuestas del LLM (campos sin columna,
     #: endpoints fuera del mapa, alcances sin evidencia) y exclusiones del andamio.
     #: Acaban como Observation: ninguna corrección es silenciosa.

@@ -17,6 +17,7 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
+from ai.agents.api.authorization import run_authorization, unauthorized_endpoints
 from ai.agents.api.common import merge_metrics
 from ai.agents.api.endpoints import build_endpoints, merge_actions, run_actions
 from ai.agents.api.errors import apply_errors
@@ -32,6 +33,7 @@ from ai.agents.api.load_sources import (
 from ai.agents.api.payloads import run_schemas
 from ai.agents.api.resource_map import build_resource_map
 from ai.agents.api.resources import run_resources
+from ai.agents.api.rule_mapping import run_rule_mapping
 from ai.agents.api.state import ApiState
 from ai.agents.base.structured import ClaudeLLMClient
 from ai.knowledge import load_api_conventions
@@ -173,13 +175,46 @@ async def node_schemas(state: ApiState, config: RunnableConfig) -> dict:
 
 
 async def node_authorization(state: ApiState, config: RunnableConfig) -> dict:
-    """AUTHORIZATION (API5): matriz desde CRUD + alcances desde las reglas."""
-    return {"authorization_matrix": []}
+    """AUTHORIZATION: matriz desde la CRUD del EF + alcances por fila (fail-closed)."""
+    endpoints = list(state.get("endpoints") or [])
+    matriz, skipped, tokens, observaciones = await run_authorization(
+        _llm(config),
+        endpoints,
+        state.get("resource_map") or {},
+        state.get("sources") or {},
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.API_SCHEMAS_CONCURRENCY,
+    )
+    metrics = merge_metrics(state, tokens, skipped)
+    # Entra en el semáforo: un endpoint que nadie puede llamar deja el contrato
+    # incompleto por mucho que el documento sea válido.
+    metrics["endpoints_unauthorized"] = len(unauthorized_endpoints(endpoints, matriz))
+    return {
+        "authorization_matrix": matriz,
+        "endpoints": endpoints,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": metrics,
+    }
 
 
 async def node_rule_mapping(state: ApiState, config: RunnableConfig) -> dict:
-    """RULE_MAPPING (API5): destino de cada BR-/VAL-, cerrando el círculo del BD."""
-    return {"rule_mappings": []}
+    """RULE_MAPPING: destino de cada BR-/VAL-, cerrando el círculo que abrió el BD."""
+    mapeos, delegadas, skipped, tokens, observaciones = await run_rule_mapping(
+        _llm(config),
+        state.get("endpoints") or [],
+        state.get("schemas") or [],
+        state.get("authorization_matrix") or [],
+        state.get("sources") or {},
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "rule_mappings": mapeos,
+        # Reglas que el modelo de datos delegó y que nadie recoge: QUESTION_GEN
+        # las convierte en preguntas bloqueantes.
+        "unenforced_delegated_rules": delegadas,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_errors(state: ApiState) -> dict:

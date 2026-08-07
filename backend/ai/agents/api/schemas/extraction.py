@@ -12,9 +12,11 @@ BD impide que el modelo escriba SQL: no se le pide que no lo haga, se le quita e
 sitio donde ponerlo.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+from .enums import ApiRuleEnforcement
 
 
 class ResourceExtract(BaseModel):
@@ -80,3 +82,45 @@ class ResourceActionsExtract(BaseModel):
     """
 
     actions: list[ActionExtract] = Field(default_factory=list)
+
+
+class ScopeExtract(BaseModel):
+    """Alcance por fila de un actor sobre un recurso.
+
+    ``scope`` **no admite ``all`` ni ``none``**: el modelo solo puede *restringir*.
+    Es una decisión estructural, no una instrucción del prompt — quitarle el sitio
+    donde escribir "este actor lo ve todo" hace imposible que una alucinación
+    amplíe un permiso. Lo peor que puede pasar con una restricción inventada es que
+    alguien vea de menos, y eso se detecta al usarlo; lo contrario no.
+    """
+
+    actor_ref: str
+    scope: Literal["own", "own_team", "own_branch", "custom"]
+    expression: Optional[str] = None
+    #: Columnas reales que materializan el filtro. Vacío = no se puede aplicar
+    #: todavía, y eso es información valiosa, no un error a esconder.
+    column_names: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ResourceScopesExtract(BaseModel):
+    """Salida del map de AUTHORIZATION: los alcances por fila de **un** recurso."""
+
+    scopes: list[ScopeExtract] = Field(default_factory=list)
+
+
+class RuleClassificationExtract(BaseModel):
+    """Destino de una regla del EF que quedó sin asignar automáticamente."""
+
+    rule_ref: str
+    enforcement: ApiRuleEnforcement
+    endpoint_refs: list[str] = Field(default_factory=list)
+    note: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class RuleMappingsExtract(BaseModel):
+    """Salida de RULE_MAPPING: el destino de las reglas huérfanas."""
+
+    mappings: list[RuleClassificationExtract] = Field(default_factory=list)

@@ -783,6 +783,65 @@ class ApiMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Analista de control de acceso" in system:
+            payload = _payload(user, "RECURSO Y ACTORES:\n")
+            if payload["resource"]["name"] != "siniestros":
+                return json.dumps({"scopes": []})
+            return json.dumps(
+                {
+                    "scopes": [
+                        # Legitima pero SIN columna que la materialice: debe quedar
+                        # ambigua y generar pregunta bloqueante.
+                        {
+                            "actor_ref": "ACT-001",
+                            "scope": "own_team",
+                            "expression": "siniestro.equipo_id = usuario.equipo_id",
+                            "column_names": ["equipo_id"],
+                            "source_refs": ["BR-001"],
+                            "confidence": 0.6,
+                        },
+                        # Debe descartarse: no cita ninguna regla real.
+                        {
+                            "actor_ref": "ACT-001",
+                            "scope": "own",
+                            "column_names": ["guia_id"],
+                            "source_refs": ["BR-999"],
+                        },
+                        # Debe descartarse: ese actor no tiene acceso concedido.
+                        {
+                            "actor_ref": "ACT-777",
+                            "scope": "own_branch",
+                            "column_names": ["guia_id"],
+                            "source_refs": ["BR-001"],
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "Auditor de reglas de negocio" in system:
+            payload = _payload(user, "REGLAS SIN DESTINO:\n")
+            mappings = []
+            for regla in payload["unassigned_rules"]:
+                if regla.get("bd_enforcement") == "application":
+                    mappings.append(
+                        {
+                            "rule_ref": regla["id"],
+                            "enforcement": "endpoint",
+                            "endpoint_refs": [payload["endpoints"][0]["id"]],
+                            "note": "La aplica la operacion de registro.",
+                            "confidence": 0.7,
+                        }
+                    )
+                else:
+                    # Sin nota: debe generarse una y dejar observacion.
+                    mappings.append(
+                        {
+                            "rule_ref": regla["id"],
+                            "enforcement": "not_applicable",
+                            "confidence": 0.4,
+                        }
+                    )
+            return json.dumps({"mappings": mappings}, ensure_ascii=False)
         if "Diseñador de contratos de datos" in system:
             payload = _payload(user, "RECURSO Y COLUMNAS:\n")
             recurso = payload["resource"]
