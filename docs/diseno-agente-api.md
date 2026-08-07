@@ -558,7 +558,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | Bloque | Contenido |
 |---|---|
 | **API0** | `api_conventions.yaml` (borrador) + loader; `openapi-spec-validator` pinneado; `openapi-core` en dependencias de test. EF/Scrum/Arquitectura/BD siguen verdes. |
-| **API1** | Contrato `ApiArtifact v1.0.0` (Pydantic + enums + fixture del dominio de siniestros + round-trip). |
+| **API1** | Contrato `ApiArtifact v1.0.0` (Pydantic + enums + fixture del dominio de siniestros + round-trip). El contrato **impide** lo que sería invención u omisión muda (campo sin columna, exclusión sin motivo, alcance sin columna, descarte sin explicación, acción sin evidencia) y **permite** representar los defectos reportables (endpoint sin autorizar, spec inválida): negarse a construirlos impediría al agente reportarlos. |
 | **API2** | Grafo + `LOAD_SOURCES` (carga cuádruple + gate + resolución de estilo/seguridad) + `RESOURCE_MAP` + naming + nodos stub. |
 | **API3** | `RESOURCES` + `ENDPOINTS` (CRUD determinista + acciones con evidencia). |
 | **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. |
