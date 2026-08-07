@@ -18,7 +18,8 @@ import time
 from langchain_core.runnables import RunnableConfig
 
 from ai.agents.api.common import merge_metrics
-from ai.agents.api.endpoints import build_endpoints, run_actions
+from ai.agents.api.endpoints import build_endpoints, merge_actions, run_actions
+from ai.agents.api.errors import apply_errors
 from ai.agents.api.load_sources import (
     assert_bd_ready,
     base_path,
@@ -28,6 +29,7 @@ from ai.agents.api.load_sources import (
     resolve_conventions,
     resolve_hashes,
 )
+from ai.agents.api.payloads import run_schemas
 from ai.agents.api.resource_map import build_resource_map
 from ai.agents.api.resources import run_resources
 from ai.agents.api.state import ApiState
@@ -138,20 +140,36 @@ async def node_endpoints(state: ApiState, config: RunnableConfig) -> dict:
         authoritative_context=state.get("authoritative_context"),
         concurrency=settings.API_SCHEMAS_CONCURRENCY,
     )
+    # Las acciones aceptadas vuelven al andamio: SCHEMAS y ERRORS leen de ahí, y
+    # una operación que viviera en dos sitios acabaría tratándose de dos formas.
+    merge_actions(resource_map, acciones)
     conventions = (state.get("target") or {}).get("conventions") or {}
-    endpoints = build_endpoints(
-        resource_map, state.get("resources") or [], acciones, conventions
-    )
+    endpoints = build_endpoints(resource_map, state.get("resources") or [], conventions)
     return {
         "endpoints": endpoints,
+        "resource_map": resource_map,
         "map_observations": list(state.get("map_observations") or []) + observaciones,
         "metrics": merge_metrics(state, tokens, skipped),
     }
 
 
 async def node_schemas(state: ApiState, config: RunnableConfig) -> dict:
-    """SCHEMAS (API4): esqueleto desde las columnas + exposición por LLM."""
-    return {"schemas": []}
+    """SCHEMAS: esqueleto determinista desde las columnas + exposición por LLM."""
+    endpoints = list(state.get("endpoints") or [])
+    esquemas, skipped, tokens, observaciones = await run_schemas(
+        _llm(config),
+        state.get("resource_map") or {},
+        endpoints,
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.API_SCHEMAS_CONCURRENCY,
+    )
+    return {
+        "schemas": esquemas,
+        # `attach_schema_refs` enlaza los endpoints con sus esquemas in situ.
+        "endpoints": endpoints,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_authorization(state: ApiState, config: RunnableConfig) -> dict:
@@ -165,8 +183,15 @@ async def node_rule_mapping(state: ApiState, config: RunnableConfig) -> dict:
 
 
 async def node_errors(state: ApiState) -> dict:
-    """ERRORS (API4): catálogo estándar + códigos por endpoint (determinista)."""
-    return {"error_catalog": []}
+    """ERRORS: catálogo y códigos por endpoint, desde el modelo de datos y la matriz."""
+    endpoints = list(state.get("endpoints") or [])
+    catalogo = apply_errors(
+        endpoints,
+        state.get("resource_map") or {},
+        state.get("sources") or {},
+        state.get("authorization_matrix") or [],
+    )
+    return {"error_catalog": catalogo, "endpoints": endpoints}
 
 
 async def node_openapi_gen(state: ApiState) -> dict:

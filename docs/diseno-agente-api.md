@@ -115,8 +115,12 @@ Respecto al pipeline propuesto, **dos inserciones deliberadas**:
   licencia para inventar recursos.
 - **`ERRORS`** (después de `AUTHORIZATION`, antes de `OPENAPI_GEN`) — los códigos de
   estado no se inventan por endpoint: se derivan del catálogo y de las constraints
-  del BD. Va después de la autorización porque el `403` solo se estampa donde hay
-  una regla que puede denegar.
+  del BD. Va después de la autorización, pero **no** por el `403` (con seguridad
+  global, todo endpoint autenticado puede devolverlo): por el **`404`**. Cuando un
+  actor tiene alcance por filas, un registro fuera de su alcance debe responder
+  `404` y no `403` — decir "existe pero no puedes verlo" revela justo lo que el
+  alcance pretendía ocultar. Saber si un endpoint está en ese caso exige mirar la
+  matriz, y por eso se mira aquí.
 
 | Nodo | Tipo | Qué hace |
 |---|---|---|
@@ -561,7 +565,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | **API1** | Contrato `ApiArtifact v1.0.0` (Pydantic + enums + fixture del dominio de siniestros + round-trip). El contrato **impide** lo que sería invención u omisión muda (campo sin columna, exclusión sin motivo, alcance sin columna, descarte sin explicación, acción sin evidencia) y **permite** representar los defectos reportables (endpoint sin autorizar, spec inválida): negarse a construirlos impediría al agente reportarlos. |
 | **API2** | Grafo + `LOAD_SOURCES` (carga cuádruple + gate + resolución de estilo/seguridad) + `RESOURCE_MAP` + naming + nodos stub. Dos consecuencias del cortafuegos que se confirmaron al implementarlo: **sin celda en la matriz CRUD no se generan endpoints** para esa entidad (se enumera y acabará en pregunta), y una tabla puente necesita `nested_delete` además de `nested_list`/`nested_create`, o una relación N:M se podría crear y nunca deshacer. |
 | **API3** | `RESOURCES` + `ENDPOINTS` (CRUD determinista + acciones con evidencia). La **cita de la acción se verifica en Python** contra el texto del `PRO-`/`BR-`/`VAL-` citado: una paráfrasis convincente no pasa. El modelo entrega un **verbo**, nunca una ruta. |
-| **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. |
+| **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. Tres salvaguardas de exposición: no se puede ocultar la PK (sin ella no hay detalle), ni una columna obligatoria al crear (sin ella no hay alta), ni una que no exista. El `404` cambia de redacción cuando el endpoint tiene alcance por filas: responder `403` revelaría que el registro existe. |
 | **API5** | `AUTHORIZATION` (base CRUD + alcances) + `RULE_MAPPING` (cierre del círculo con el BD). |
 | **API6** | `OPENAPI_GEN` determinista + `VALIDATE` L1/L2/L2b (+ L3a `openapi-core` en tests). |
 | **API7** | `CRITIQUE` + `QUESTION_GEN` (agrupadas por clase de vacío) + cobertura. |

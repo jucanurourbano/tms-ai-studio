@@ -378,6 +378,7 @@ def reconcile_actions(
                 "method": "POST",
                 "path": ruta,
                 "operation_id": operation_id("action", resource["name"], accion=verbo),
+                "action_verb": verbo,
                 "resource_ref": resource["id"],
                 "actor_refs": [],  # los resuelve AUTHORIZATION: nace denegada
                 "basis": "business_rule",
@@ -455,13 +456,24 @@ async def run_actions(
 # --- Ensamblado ----------------------------------------------------------------
 
 
+def merge_actions(resource_map: dict, acciones: dict[str, list[dict]]) -> None:
+    """Incorpora las acciones aceptadas al andamio, **en el mismo sitio que el CRUD**.
+
+    Sin esto, las acciones vivirían solo en la lista de endpoints y los nodos que
+    leen el andamio —SCHEMAS para el cuerpo de entrada, ERRORS para los códigos—
+    no las verían. Una operación en dos sitios distintos es una operación que
+    tarde o temprano se trata de dos formas distintas.
+    """
+    for recurso in resource_map.get("resources", []) or []:
+        nuevas = acciones.get(recurso["id"])
+        if nuevas:
+            recurso.setdefault("operations", []).extend(nuevas)
+
+
 def build_endpoints(
-    resource_map: dict,
-    resources: list[dict],
-    acciones: dict[str, list[dict]],
-    conventions: dict,
+    resource_map: dict, resources: list[dict], conventions: dict
 ) -> list[dict]:
-    """Todos los endpoints: los del andamio más las acciones aceptadas."""
+    """Todos los endpoints del andamio, incluidas las acciones ya incorporadas."""
     descritos = {r["id"]: r for r in resources}
     por_id = {r["id"]: r for r in resource_map.get("resources", []) or []}
 
@@ -469,9 +481,7 @@ def build_endpoints(
     for candidato in resource_map.get("resources", []) or []:
         padre = por_id.get(candidato.get("parent_resource_ref") or "")
         descrito = descritos.get(candidato["id"], candidato)
-        operaciones = list(candidato.get("operations", []))
-        operaciones.extend(acciones.get(candidato["id"], []))
-        for operacion in operaciones:
+        for operacion in candidato.get("operations", []):
             endpoint = build_endpoint(
                 operacion, candidato, descrito, padre, conventions
             )

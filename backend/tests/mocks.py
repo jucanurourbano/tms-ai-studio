@@ -783,6 +783,37 @@ class ApiMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Diseñador de contratos de datos" in system:
+            payload = _payload(user, "RECURSO Y COLUMNAS:\n")
+            recurso = payload["resource"]
+            if recurso["name"] != "siniestros":
+                return json.dumps({"summary_columns": [], "confidence": 0.6})
+            return json.dumps(
+                {
+                    "hidden_columns": [
+                        # Legitima: opcional, con motivo escrito.
+                        {
+                            "name": "monto",
+                            "reason": "El importe solo se consulta desde liquidaciones.",
+                        },
+                        # Debe rechazarse: es la clave primaria.
+                        {"name": "siniestro_id", "reason": "Identificador interno."},
+                        # Debe rechazarse: es obligatoria al crear.
+                        {"name": "fecha_siniestro", "reason": "Ruido para el cliente."},
+                        # Debe rechazarse: no existe.
+                        {"name": "columna_fantasma", "reason": "No sirve."},
+                        # Debe rechazarse: sin motivo.
+                        {"name": "estado_id", "reason": "   "},
+                    ],
+                    "summary_columns": [
+                        "fecha_siniestro",
+                        "estado_id",
+                        "columna_inventada",  # se ignora: no existe
+                    ],
+                    "confidence": 0.8,
+                },
+                ensure_ascii=False,
+            )
         if "Diseñador de operaciones de negocio" in system:
             payload = _payload(user, "RECURSO Y CONTEXTO:\n")
             if payload["resource"]["name"] != "siniestros":

@@ -9,6 +9,7 @@ cita no aparece literalmente en el EF se descarta entera.
 from ai.agents.api.endpoints import (
     build_endpoints,
     build_evidence_index,
+    merge_actions,
     reconcile_actions,
     run_actions,
 )
@@ -201,7 +202,8 @@ async def _endpoints():
     mapa = build_resource_map(sources)
     recursos, _, _, _ = await run_resources(ApiMapLLM(), mapa, sources)
     acciones, _, _, _ = await run_actions(ApiMapLLM(), mapa, sources)
-    return build_endpoints(mapa, recursos, acciones, resolve_conventions())
+    merge_actions(mapa, acciones)
+    return build_endpoints(mapa, recursos, resolve_conventions())
 
 
 async def test_los_endpoints_salen_del_andamio_mas_la_accion_aceptada():
@@ -284,7 +286,11 @@ async def test_los_propositos_no_inventan_genero():
 
 
 async def test_lo_que_resuelven_los_bloques_siguientes_queda_vacio():
-    """El endpoint nace sin esquemas, sin códigos y **sin autorización**."""
+    """El endpoint nace sin esquemas, sin códigos y **sin autorización**.
+
+    Los esquemas los enlaza SCHEMAS y los códigos los estampa ERRORS; aquí se
+    comprueba que ENDPOINTS no se los inventa por su cuenta.
+    """
     endpoints = await _endpoints()
     for endpoint in endpoints:
         assert endpoint["request_schema_ref"] is None

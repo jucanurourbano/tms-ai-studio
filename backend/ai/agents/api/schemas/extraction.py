@@ -49,6 +49,29 @@ class ActionExtract(BaseModel):
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
+class HiddenColumnExtract(BaseModel):
+    """Columna que no debe salir por la API, con su motivo.
+
+    El motivo es obligatorio: ocultar un dato sin explicar por qué convierte una
+    decisión de diseño en una omisión que nadie puede revisar.
+    """
+
+    name: str
+    reason: str
+
+
+class ResourceSchemaExtract(BaseModel):
+    """Salida del map de SCHEMAS: las dos decisiones de exposición de un recurso.
+
+    No incluye la lista de campos: el conjunto lo fija el modelo de datos. Aquí
+    solo se decide **qué se esconde** y **qué compone la fila de un listado**.
+    """
+
+    hidden_columns: list[HiddenColumnExtract] = Field(default_factory=list)
+    summary_columns: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
 class ResourceActionsExtract(BaseModel):
     """Salida del map de ENDPOINTS: las acciones de **un** recurso.
 
