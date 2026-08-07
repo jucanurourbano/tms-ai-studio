@@ -541,9 +541,8 @@ async def test_el_grafo_corre_completo_con_los_stubs():
     assert len(final["resource_map"]["resources"]) == 3
     assert final["map_observations"]
     # Y los stubs que quedan siguen vacíos: cada bloque posterior sustituye el suyo.
-    assert final["openapi"] == {}
-    assert final["validation"] == {}
     assert final["questions"] == []
+    assert final["artifact"] == {}
 
 
 async def test_el_orden_del_pipeline_pone_errors_despues_de_authorization():

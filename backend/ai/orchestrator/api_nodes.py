@@ -30,6 +30,8 @@ from ai.agents.api.load_sources import (
     resolve_conventions,
     resolve_hashes,
 )
+from ai.agents.api.openapi.render import build_openapi
+from ai.agents.api.openapi.validate import validate_spec
 from ai.agents.api.payloads import run_schemas
 from ai.agents.api.resource_map import build_resource_map
 from ai.agents.api.resources import run_resources
@@ -230,13 +232,36 @@ async def node_errors(state: ApiState) -> dict:
 
 
 async def node_openapi_gen(state: ApiState) -> dict:
-    """OPENAPI_GEN (API6): render determinista del documento 3.1."""
-    return {"openapi": {}}
+    """OPENAPI_GEN: render determinista del documento 3.1 (el LLM no lo toca)."""
+    documento, bloque = build_openapi(
+        state.get("target") or {},
+        state.get("resources") or [],
+        state.get("schemas") or [],
+        state.get("endpoints") or [],
+        state.get("error_catalog") or [],
+        state.get("sources") or {},
+    )
+    return {"openapi": bloque, "openapi_document": documento}
 
 
 async def node_validate(state: ApiState) -> dict:
-    """VALIDATE (API6): L1 estructural + L2 de la especificación, sin LLM."""
-    return {"validation": {}}
+    """VALIDATE: L1 estructural + L2 del esquema + L2b round-trip, sin LLM."""
+    documento = state.get("openapi_document") or {}
+    bloque = state.get("openapi") or {}
+    validacion = validate_spec(
+        documento,
+        bloque.get("content", ""),
+        state.get("endpoints") or [],
+        state.get("schemas") or [],
+        (state.get("resource_map") or {}).get("resources") or [],
+        state.get("authorization_matrix") or [],
+        state.get("error_catalog") or [],
+        unenforced_delegated_rules=state.get("unenforced_delegated_rules") or [],
+        base_path=(state.get("target") or {}).get("base_path") or "/api/v1",
+    )
+    metrics = dict(state.get("metrics") or {})
+    metrics["spec_valid"] = bool(validacion["spec_valid"])
+    return {"validation": validacion, "metrics": metrics}
 
 
 async def node_critique(state: ApiState, config: RunnableConfig) -> dict:

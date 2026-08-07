@@ -47,7 +47,10 @@ class ApiState(TypedDict, total=False):
     #: endpoints fuera del mapa, alcances sin evidencia) y exclusiones del andamio.
     #: Acaban como Observation: ninguna corrección es silenciosa.
     map_observations: list[dict]
-    openapi: dict  # documento renderizado
+    openapi: dict  # bloque `openapi` del artefacto (YAML + metadatos)
+    #: El documento como `dict`, antes de serializar. Solo viaja entre OPENAPI_GEN
+    #: y VALIDATE: no entra al artefacto, que guarda el YAML canónico.
+    openapi_document: dict
     validation: dict  # resultado determinista de la validación de la spec
     critique: dict
     questions: list[dict]
