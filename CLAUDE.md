@@ -23,7 +23,8 @@ toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** 
 (backend + frontend; bloques A0→A7 implementados, ver §5 y
 `docs/diseno-agente-arquitectura.md`). Agente **BD** **completo** (backend +
 frontend; bloques BD0→BD8 implementados, ver §5.2 y `docs/diseno-agente-bd.md`).
-Siguiente eslabón: **Agente API**.
+Agente **API**: diseño **aprobado** (`docs/diseno-agente-api.md`, ver §5.3);
+**en construcción** — bloque **API0** hecho, siguiente **API1**.
 
 ---
 
@@ -356,6 +357,56 @@ LOAD_SOURCES → MODEL_MAP → TABLES → RELATIONS → CONSTRAINTS → INDEXES 
   pregunta con los refs enumerados, no 40 que entierran la que importa.
 - Sin migraciones de BD. Permisos: `arquitecto` FULL, `developer` READ (§6.1).
 
+---
+
+## 5.3 Agente API (diseño aprobado, en construcción)
+
+> Diseño completo en **`docs/diseno-agente-api.md`**. Quinto agente del ISDF (fase
+> **CONSTRUIR**). Consume el `DatabaseArtifact` (gate `ready_for_next_stage`) y,
+> transitivamente, Arquitectura, Scrum y EF. Produce el contrato de APIs que
+> habilita a los Agentes **Backend** y **Frontend**.
+
+Pipeline **LangGraph** (14 nodos, 6 tocan el LLM):
+
+```
+LOAD_SOURCES → RESOURCE_MAP → RESOURCES → ENDPOINTS → SCHEMAS
+             → AUTHORIZATION → RULE_MAPPING → ERRORS
+             → OPENAPI_GEN → VALIDATE → CRITIQUE → QUESTION_GEN
+             → ASSEMBLE → PERSIST
+```
+
+- **REGLA RECTORA (gemela de la del BD): el LLM NUNCA escribe OpenAPI.** Decide
+  semántica; Python renderiza el YAML 3.1 y lo valida sin LLM. Re-renderizar a JSON
+  o degradar a 3.0.3 cuesta cero llamadas al modelo.
+- **SEGUNDA REGLA: el peor error de este agente es una autorización más ancha que
+  la realidad.** Un endpoint sobrante se borra en revisión; una autorización
+  permisiva por silencio se despliega. Por eso la matriz es **fail-closed**: sin
+  regla → `deny`; alcance sin columna real → pregunta bloqueante; y si el endpoint
+  expone columnas que el BD marcó `pii`, la ambigüedad **siempre** bloquea.
+- **`RESOURCE_MAP` es el cortafuegos anti-invención** (equivalente de `MODEL_MAP`):
+  fija en Python qué recursos y operaciones existen. Única ampliación: endpoints de
+  **acción** desde procesos/reglas, **con cita verbatim**. Ningún campo de esquema
+  existe sin `column_ref` a una columna del BD (salvo `computed` con `BR-`).
+- **`rule_mappings[]` cierra el círculo que abrió el BD**: copia su veredicto en
+  `bd_enforcement`. Una regla que el BD clasificó `application` y que aquí no
+  encuentra endpoint es una regla que desaparecería del sistema → bloqueante.
+- **Contrato `ApiArtifact v1.0.0`**: `source` · `target` (estilo, base_path,
+  seguridad, convenciones efectivas) · `resources[]` · `schemas[]` · `endpoints[]` ·
+  `authorization_matrix[]` · `error_catalog[]` · `rule_mappings[]` · `openapi`
+  (YAML) · `validation` · `analysis` · `questions_for_tech_lead[]` · `metrics`.
+- **Validación en capas sin LLM**: L1 estructural (13 comprobaciones) + L2
+  `openapi-spec-validator` **0.8.5** + L2b round-trip; L3a `openapi-core` en tests.
+  Dos hallazgos fijados con test en API0: **3.1 hizo `responses` opcional** (así que
+  "todo endpoint declara sus códigos" es responsabilidad de L1, no de la librería) y
+  un **`$ref` colgante lanza excepción** en vez de reportarse (L2 debe capturar).
+- **Decisiones acordadas**: rutas con **dominio en español y protocolo en inglés**,
+  propiedades JSON en **`snake_case`** (espejo 1:1 de las columnas), **envelope
+  `ApiResponse`** de la casa, paginación **offset/limit**, **PATCH** como verbo de
+  actualización. Fijadas en `ai/knowledge/api_conventions.yaml` y con test candado.
+- Sin migraciones de BD. Permisos sin tocar: `developer` FULL `api`; las preguntas
+  se dirigen a **`questions_for_tech_lead`** (quien puede responderlas). El
+  arquitecto participa por **grant**, no por excepción a la matriz.
+
 ## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
@@ -584,10 +635,12 @@ tms-ai-studio/
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
-        ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, base/)
-        │                         # bd/ddl/: render + validación del DDL (sin LLM)
+        ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, base/)
+        │                         # bd/ddl/:      render + validación del DDL (sin LLM)
+        │                         # api/openapi/: render + validación del spec (sin LLM)
         ├── memory/
-        ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml
+        ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
+        │                         # api_conventions.yaml
         ├── tools/{parsers,chunker,validation}/
-        └── prompts/ef/           # (+ scrum/, arquitectura/, bd/)
+        └── prompts/ef/           # (+ scrum/, arquitectura/, bd/, api/)
 ```

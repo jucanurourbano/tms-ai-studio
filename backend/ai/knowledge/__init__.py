@@ -7,6 +7,11 @@
   **mapa de tipos por motor** que consume el Agente BD. Doble uso: los bloques
   de naming/claves se inyectan en los prompts, mientras que `types`/`identity`
   son contrato del renderizador de DDL en Python (el LLM nunca escribe SQL).
+- **Convenciones de API** (`api_conventions.yaml`): rutas, propiedades, envelope,
+  errores y paginación que consume el Agente API. Mismo doble uso y misma regla
+  rectora: `paths`/`properties`/`exposure` se inyectan en los prompts, mientras
+  que `types`/`errors`/`envelope`/`security` son contrato del renderizador de
+  OpenAPI (el LLM nunca escribe YAML ni JSON Schema).
 """
 
 from functools import lru_cache
@@ -18,6 +23,7 @@ _KNOWLEDGE_DIR = Path(__file__).resolve().parent
 _GLOSSARY_PATH = _KNOWLEDGE_DIR / "glossary.yaml"
 _TECH_STACK_PATH = _KNOWLEDGE_DIR / "tech_stack.yaml"
 _DB_CONVENTIONS_PATH = _KNOWLEDGE_DIR / "db_conventions.yaml"
+_API_CONVENTIONS_PATH = _KNOWLEDGE_DIR / "api_conventions.yaml"
 
 
 # --- Glosario logístico ------------------------------------------------------
@@ -165,5 +171,149 @@ def db_conventions_block(engine: str) -> str:
         f"{logical_types}.",
         "- Si no puedes deducir el tipo de un campo, márcalo como ambiguo y "
         "pregunta al DBA. PROHIBIDO adivinar.",
+    ]
+    return "\n".join(lines)
+
+
+# --- Convenciones de API (Agente API) ----------------------------------------
+
+
+@lru_cache
+def load_api_conventions() -> dict:
+    """Carga las convenciones de diseño de APIs REST desde YAML."""
+    return yaml.safe_load(_API_CONVENTIONS_PATH.read_text(encoding="utf-8")) or {}
+
+
+@lru_cache
+def openapi_type(logical_type: str) -> dict[str, str]:
+    """Tipo del esquema OpenAPI 3.1 para un ``logical_type`` del Agente BD.
+
+    Es el contrato del renderizador, análogo a ``engine_type_map`` en BD: el tipo
+    lo decidió el modelo de datos y aquí solo se traduce, sin volver a preguntarle
+    al LLM. Un ``logical_type`` ausente es un error de programación (el enum del BD
+    y este mapa deben ir a la par, y hay un test que lo verifica).
+
+    Los decimales respetan ``properties.decimal_as_string``: viajan como cadena
+    para no perder precisión con el número de coma flotante de JavaScript.
+    """
+    data = load_api_conventions()
+    types: dict = data.get("types", {}) or {}
+    if logical_type == "decimal" and not (data.get("properties", {}) or {}).get(
+        "decimal_as_string", True
+    ):
+        return dict(types.get("decimal_numeric", {}) or {})
+    return dict(types.get(logical_type, {}) or {})
+
+
+@lru_cache
+def api_error_catalog() -> tuple[dict, ...]:
+    """Catálogo estándar de errores (contrato del renderizador)."""
+    errors: dict = load_api_conventions().get("errors", {}) or {}
+    return tuple(errors.get("catalog", []) or [])
+
+
+@lru_cache
+def api_error(error_id: str) -> dict:
+    """Entrada del catálogo por id (``ERR-409``…); ``{}`` si no existe."""
+    return next((e for e in api_error_catalog() if e.get("id") == error_id), {})
+
+
+@lru_cache
+def constraint_error_id(constraint_kind: str) -> str:
+    """Error que corresponde a la violación de una constraint del modelo.
+
+    Traduce ``unique``/``check``/``not_null``/``foreign_key`` al error del
+    catálogo. Los códigos de estado **no los decide el LLM**: salen de aquí.
+    """
+    mapa: dict = (load_api_conventions().get("errors", {}) or {}).get(
+        "constraint_status", {}
+    ) or {}
+    return mapa.get(constraint_kind, "ERR-422")
+
+
+@lru_cache
+def success_status(endpoint_kind: str) -> int:
+    """Código de éxito del tipo de operación (semántica HTTP, no opinión)."""
+    mapa: dict = load_api_conventions().get("success_status", {}) or {}
+    return int(mapa.get(endpoint_kind, 200))
+
+
+@lru_cache
+def security_scheme_for(provider: str) -> str:
+    """Esquema de seguridad que corresponde al proveedor de ``tech_stack.auth``.
+
+    Un proveedor desconocido cae al esquema por defecto; quien llama decide si eso
+    merece una pregunta (aquí no se inventa nada, solo se traduce lo conocido).
+    """
+    security: dict = load_api_conventions().get("security", {}) or {}
+    mapa: dict = security.get("provider_scheme", {}) or {}
+    return mapa.get(provider or "", security.get("default_scheme", "bearer_jwt"))
+
+
+@lru_cache
+def exposure_for(table_kind: str) -> tuple[str, str]:
+    """Exposición por defecto de una tabla según su naturaleza, **con motivo**.
+
+    Devuelve ``(exposure, reason)``. El motivo es obligatorio en todo lo que no sea
+    ``crud``: una tabla que no se publica debe decir por qué, o la exclusión sería
+    una omisión muda (API12).
+    """
+    exposure: dict = load_api_conventions().get("exposure", {}) or {}
+    valor = exposure.get(table_kind, "crud")
+    razon = (exposure.get("reasons", {}) or {}).get(table_kind, "")
+    return valor, razon
+
+
+def api_conventions_block() -> str:
+    """Renderiza las convenciones de API para inyectar en los prompts del Agente API.
+
+    Incluye SOLO lo que el LLM debe respetar al nombrar y decidir. **No** se
+    inyectan el mapa de tipos, el envelope, el catálogo de errores ni los esquemas
+    de seguridad: eso lo aplica el renderizador en Python. Es la misma salvaguarda
+    que en BD, donde el bloque nunca muestra sintaxis SQL: si enseñara la forma del
+    documento, el modelo podría intentar escribirlo.
+    """
+    data = load_api_conventions()
+    paths = data.get("paths", {}) or {}
+    props = data.get("properties", {}) or {}
+    page = data.get("pagination", {}) or {}
+    filtering = data.get("filtering", {}) or {}
+    sorting = data.get("sorting", {}) or {}
+    exposure = data.get("exposure", {}) or {}
+    lines = [
+        "CONVENCIONES DE API DE URBANO (son obligatorias; no improvises otro "
+        f"estilo). Estado: {data.get('status', 'desconocido')}.",
+        f"- Rutas: dominio en {'español' if paths.get('language') == 'es' else 'inglés'}, "
+        f"{paths.get('case', 'kebab-case')}, recursos en "
+        f"{paths.get('number', 'plural')}, bajo el prefijo "
+        f"«{paths.get('prefix', '/api/v1')}». Los parámetros de protocolo "
+        "(limit, offset, sort) van SIEMPRE en inglés.",
+        "- Los nombres de recurso espejan las tablas del modelo de datos: no los "
+        "traduzcas ni los renombres.",
+        f"- Actualización parcial con {paths.get('update_verb', 'PATCH')}; "
+        f"anidamiento máximo {paths.get('max_nesting', 1)} nivel "
+        "(más profundo → recurso de primer nivel con filtro).",
+        "- Acciones de negocio: verbo en infinitivo y en español al final de la "
+        "ruta del recurso (por ejemplo «cerrar», «anular»). SOLO si un proceso o "
+        "una regla del EF la respalda, citando la evidencia.",
+        f"- Propiedades del cuerpo en {props.get('case', 'snake_case')}, con el "
+        "MISMO nombre que la columna del modelo de datos.",
+        f"- Listados paginados con «{page.get('limit_param', 'limit')}» "
+        f"(por defecto {page.get('default_limit', 20)}, máximo "
+        f"{page.get('max_limit', 100)}) y «{page.get('offset_param', 'offset')}».",
+        f"- Orden con «{sorting.get('param', 'sort')}» y prefijo "
+        f"«{sorting.get('descending_prefix', '-')}» para descendente.",
+        "- FILTROS Y ORDEN: solo sobre columnas indexadas, PK, FK o de enumeración. "
+        "Un filtro sin índice es una consulta lenta en producción; si hace falta "
+        "otro, pídelo como índice al modelo de datos, no lo expongas.",
+        "- Exposición por naturaleza de la tabla: "
+        + "; ".join(
+            f"{kind} → {value}" for kind, value in exposure.items() if kind != "reasons"
+        )
+        + ". Toda exclusión debe llevar su motivo escrito.",
+        "- PROHIBIDO escribir YAML, JSON Schema u OpenAPI: eso lo genera Python. "
+        "Tú decides la semántica.",
+        "- PROHIBIDO inventar recursos, endpoints o campos: el conjunto te llega "
+        "cerrado desde el modelo de datos y el EF. Si falta algo, PREGUNTA.",
     ]
     return "\n".join(lines)

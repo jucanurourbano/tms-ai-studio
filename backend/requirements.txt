@@ -37,6 +37,18 @@ anthropic
 # alterar el parseo de un dialecto y romper la validación en silencio.
 sqlglot==30.15.0
 
+# === OpenAPI (Agente API: validación de la especificación sin red ni tooling) ===
+# openapi-spec-validator valida el documento generado contra el JSON Schema de
+# OpenAPI 3.1 en Python puro. Es a este agente lo que sqlglot es al Agente BD: la
+# capa que demuestra que la salida ejecutable es válida, sin depender de una
+# herramienta externa. Pinneado por el mismo motivo: un cambio de versión puede
+# alterar la validación en silencio.
+#
+# 0.8.5 y NO 0.9.0: openapi-core (capa L3a, en tests) exige `<0.9.0`, así que
+# subir esta versión deja la validación en tiempo de ejecución y la de runtime en
+# ramas incompatibles. 0.8.5 es la última pareja que soporta OpenAPI 3.1 en ambas.
+openapi-spec-validator==0.8.5
+
 # === Parsers de documentos ===
 # v1 SIN OCR: se usa pypdf (ligero, sin dependencias pesadas). Se descartó docling
 # porque arrastra torch y modelos de layout/OCR innecesarios para el alcance v1.
@@ -52,6 +64,10 @@ pytest-asyncio
 httpx
 aiosqlite   # BD async en tests (sin depender de contenedor Postgres)
 fakeredis   # Redis en memoria para tests del checkpointer
+# Capa L3a del Agente API: construye el objeto Spec y valida peticiones/respuestas
+# sintéticas contra la especificación generada. Prueba que un runtime real puede
+# USAR el documento, no solo que parsea. Solo en tests: no es dependencia de la app.
+openapi-core==0.23.1
 
 # === Formato / linting ===
 black

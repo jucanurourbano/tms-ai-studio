@@ -1,0 +1,256 @@
+# =============================================================================
+# api_conventions.yaml — Convenciones de diseño de APIs REST
+#
+#   ⚠️  PENDIENTE DE VALIDACIÓN POR EL EQUIPO DE ARQUITECTURA / TI DE URBANO
+#
+# IMPORTANTE (léelo antes de usar):
+#   - Describe cómo Urbano expone las APIs de sus **SISTEMAS DE NEGOCIO** (los que
+#     diseñan los agentes ISDF), NO la API de TMS AI Studio.
+#   - Lo consume el Agente API:
+#       * `paths`/`properties`/`pagination`/`filtering`/`exposure` se inyectan en
+#         los prompts (el LLM nombra y decide dentro de estas reglas, no improvisa).
+#       * `types`, `errors`, `envelope`, `security` y `operation_id` son **contrato
+#         del renderizador de OpenAPI en Python**. El LLM **nunca** escribe YAML ni
+#         JSON Schema: elige semántica y Python renderiza el documento.
+#   - Tres decisiones ya están **ACORDADAS con el equipo** (API6/API7/API8 del
+#     diseño) y NO son "REVISAR": idioma de rutas, caso de las propiedades y
+#     envelope. El resto es un BORRADOR razonable puesto por el asistente; cada
+#     bloque lleva "# REVISAR:" indicando qué confirmar. Al validar, sube `status`
+#     a `validado` y `version` a 1.
+#
+# Ver docs/diseno-agente-api.md §4 y §8.
+# =============================================================================
+
+status: pendiente_de_validacion # REVISAR: cambiar a "validado" cuando el equipo confirme
+version: 0 # REVISAR: subir a 1 al validar
+
+# --- Rutas -------------------------------------------------------------------
+paths:
+  # ACORDADA (API6): dominio en ESPAÑOL, protocolo en inglés.
+  #   GET /api/v1/siniestros/{siniestro_id}?limit=20&sort=-fecha_registro
+  # Los segmentos de recurso espejan las tablas del modelo de datos (que ya son
+  # español). Traducirlos obligaría a un diccionario tabla->ruta en cada chip de
+  # trazabilidad. Lo que NO es dominio (prefijo, limit, offset, sort) va en inglés
+  # porque es protocolo. Misma regla que los artefactos: claves inglés, valores
+  # español.
+  language: es # es | en   (ACORDADA: es)
+  # REVISAR: kebab-case es el estándar de facto en URLs ("ordenes-servicio").
+  # snake_case también se ve; PascalCase/camelCase en rutas es mala práctica.
+  case: kebab-case # kebab-case | snake_case
+  # ACORDADA implícitamente por el modelo de datos: las tablas son plurales.
+  number: plural # plural | singular
+  prefix: /api/v1
+  version_segment: v1
+  # REVISAR: ¿versionado por ruta (/api/v1) o por cabecera (Accept-Version)?
+  # Por ruta es lo más simple de operar y lo que ya usa la casa.
+  versioning: path # path | header | query
+  # Profundidad máxima de anidamiento (API13). Más allá de un nivel, el recurso
+  # sube a primer nivel con filtro: /documentos?siniestro_id=... en vez de
+  # /siniestros/{id}/tipos/{tid}/documentos.
+  max_nesting: 1
+  # ACORDADA (API11): PATCH parcial. No se genera PUT: el reemplazo total invita a
+  # borrar campos por accidente desde un formulario incompleto.
+  update_verb: PATCH # PATCH | PUT
+  # Patrón de los endpoints de acción (verbo de negocio sobre un recurso).
+  # El verbo va en infinitivo y en español: POST /siniestros/{id}/cerrar
+  action_pattern: "{resource_path}/{id_param}/{accion}"
+  # Segmentos reservados: nunca pueden ser el nombre de un recurso (colisionarían
+  # con la infraestructura del propio servicio).
+  reserved_segments: ["health", "metrics", "docs", "openapi", "redoc", "static"]
+
+# --- Propiedades del cuerpo JSON --------------------------------------------
+properties:
+  # ACORDADA (API7): snake_case, espejo 1:1 de las columnas del modelo de datos.
+  # La trazabilidad campo->columna se verifica a simple vista y el Agente Backend
+  # se ahorra una capa de mapeo (y su clase de bugs).
+  case: snake_case # snake_case | camelCase   (ACORDADA: snake_case)
+  # REVISAR: RFC 3339 en UTC es lo estándar ("2026-08-07T10:15:00Z").
+  date_format: rfc3339
+  # REVISAR (importante): los importes viajan como STRING para no perder
+  # precisión con el float de JavaScript. Si el equipo prefiere number, cámbialo y
+  # el renderizador usará `types.decimal_numeric`.
+  decimal_as_string: true
+  # Sufijo con el que se nombra el campo de una FK en el cuerpo (espeja la columna).
+  foreign_key_suffix: _id
+
+# --- Mapa de tipos: logical_type -> tipo del esquema OpenAPI 3.1 ------------
+# ESTE BLOQUE ES CONTRATO CON EL RENDERIZADOR, no texto para el prompt.
+# Las claves son EXACTAMENTE los `logical_type` del Agente BD (enum cerrado): el
+# tipo que el modelo de datos eligió es el que viaja por la API, sin re-decidir.
+# OpenAPI 3.1 usa JSON Schema 2020-12: por eso `binary` usa `contentEncoding` y no
+# el `format: binary` de 3.0.
+types:
+  string: { type: string }
+  text: { type: string }
+  integer: { type: integer, format: int32 }
+  bigint: { type: integer, format: int64 }
+  # Ver `properties.decimal_as_string`. El renderizador elige uno de los dos.
+  decimal: { type: string, format: decimal }
+  decimal_numeric: { type: number, format: double }
+  boolean: { type: boolean }
+  date: { type: string, format: date }
+  time: { type: string, format: time }
+  timestamp: { type: string, format: date-time }
+  timestamptz: { type: string, format: date-time }
+  uuid: { type: string, format: uuid }
+  json: { type: object }
+  binary: { type: string, contentEncoding: base64 }
+
+# --- Envelope de respuesta ---------------------------------------------------
+# ACORDADA (API8): el ApiResponse de la casa. Lo aplica el renderizador; el LLM ni
+# lo ve, así que no puede olvidarlo en un endpoint ni inventarse otra forma.
+envelope:
+  style: api_response # api_response | none
+  success_field: success
+  message_field: message
+  data_field: data
+  # Nombre del esquema envolvente en components.schemas (se sufija con el del
+  # recurso: ApiResponseSiniestro, ApiResponsePageSiniestro).
+  schema_name: ApiResponse
+  page_schema_name: Page
+
+# --- Paginación --------------------------------------------------------------
+# ACORDADA (API10): offset/limit, que es lo que ya usa la plataforma.
+# Cursor queda fuera de v1 (se anota para tablas de alto volumen).
+pagination:
+  style: offset # offset | cursor
+  limit_param: limit
+  offset_param: offset
+  default_limit: 20
+  max_limit: 100
+  # Campos del bloque de página dentro de `data`.
+  items_field: items
+  total_field: total
+
+# --- Filtrado y ordenamiento -------------------------------------------------
+filtering:
+  # REGLA DURA (no es preferencia): solo se ofrecen filtros sobre columnas con
+  # índice, PK, FK o enum. Un filtro sin índice es un table-scan en producción, y
+  # el modelo de datos ya dice qué está indexado. Si hace falta filtrar por otra
+  # columna, la respuesta correcta es pedir un índice al Agente BD, no exponerlo.
+  only_indexed_columns: true
+  # Filtro exacto por igualdad: ?estado=registrado&cliente_id=4021
+  style: exact_match
+  # REVISAR: ¿se necesitan rangos de fecha (desde/hasta) de forma estándar?
+  range_suffixes: { from: _desde, to: _hasta }
+  # Búsqueda de texto libre: SOLO si el EF la pide explícitamente (no por defecto).
+  search_param: q
+  search_requires_evidence: true
+
+sorting:
+  param: sort
+  # Descendente con guion: ?sort=-fecha_registro,numero_guia
+  descending_prefix: "-"
+  separator: ","
+  only_indexed_columns: true
+
+# --- Catálogo de errores -----------------------------------------------------
+# Contrato del renderizador. Los `code` son estables y en español (los consume el
+# frontend para decidir el mensaje al usuario); los nombres de campo, en inglés.
+errors:
+  catalog:
+    - { id: ERR-400, status: 400, code: peticion_invalida,
+        message: "La petición no se pudo interpretar.",
+        when: "Cuerpo mal formado o parámetro con tipo incorrecto." }
+    - { id: ERR-401, status: 401, code: no_autenticado,
+        message: "Debes iniciar sesión para realizar esta operación.",
+        when: "Falta el token o no es válido." }
+    - { id: ERR-403, status: 403, code: sin_permiso,
+        message: "No tienes permiso para realizar esta operación.",
+        when: "El actor no está autorizado, o el recurso queda fuera de su alcance." }
+    - { id: ERR-404, status: 404, code: no_encontrado,
+        message: "El recurso solicitado no existe.",
+        when: "Identificador inexistente, o fuera del alcance del actor." }
+    - { id: ERR-409, status: 409, code: recurso_duplicado,
+        message: "Ya existe un registro con esos datos.",
+        when: "Violación de una restricción de unicidad del modelo." }
+    - { id: ERR-409-ESTADO, status: 409, code: estado_invalido,
+        message: "La operación no es válida en el estado actual del recurso.",
+        when: "Regla de negocio que depende del estado (máquina de estados)." }
+    - { id: ERR-422, status: 422, code: validacion_fallida,
+        message: "Los datos enviados no cumplen las validaciones.",
+        when: "Falla una validación de campo o una regla declarativa (CHECK)." }
+    - { id: ERR-500, status: 500, code: error_interno,
+        message: "Ocurrió un error inesperado.",
+        when: "Fallo no controlado. Nunca expone detalles internos." }
+  # Mapa constraint del modelo de datos -> error. Lo aplica ERRORS de forma
+  # determinista: los códigos de estado NO los decide el LLM.
+  constraint_status:
+    unique: ERR-409
+    check: ERR-422
+    not_null: ERR-422
+    foreign_key: ERR-404
+  # Errores que TODO endpoint autenticado declara siempre.
+  always: [ERR-401, ERR-500]
+  # 403 se añade solo donde hay una regla que puede denegar (alcance o actor).
+
+# --- Códigos de éxito por tipo de operación ----------------------------------
+# Contrato del renderizador (semántica HTTP, no opinión del modelo).
+success_status:
+  list: 200
+  read_item: 200
+  create: 201 # + cabecera Location
+  update: 200
+  delete: 204 # sin cuerpo
+  action: 200
+
+# --- Seguridad ---------------------------------------------------------------
+security:
+  # El esquema real sale de la capa `auth` de tech_stack.yaml (Keycloak, Azure AD…).
+  # Este bloque solo traduce ese producto al esquema de seguridad del documento.
+  default_scheme: bearer_jwt
+  schemes:
+    bearer_jwt: { type: http, scheme: bearer, bearer_format: JWT }
+    oauth2_oidc: { type: openIdConnect }
+    api_key: { type: apiKey, in: header, name: X-API-Key }
+  provider_scheme:
+    "Keycloak": oauth2_oidc
+    "Azure AD / Entra ID": oauth2_oidc
+    "Active Directory (LDAP)": bearer_jwt
+    "OAuth2/OIDC propio": oauth2_oidc
+  # Seguridad global: TODA operación exige autenticación salvo excepción escrita.
+  # Fail-closed, igual que la matriz de autorización.
+  global_required: true
+
+# --- Exposición por naturaleza de tabla (API12) ------------------------------
+# Qué se publica según el `kind` de la tabla del modelo de datos. Toda exclusión
+# acaba en el artefacto con su motivo: nunca es una omisión muda.
+exposure:
+  entity: crud # CRUD según la matriz CRUD del EF
+  catalog: read_only # los catálogos se consultan; se mantienen por BD, no por API
+  junction: nested_only # se gestionan bajo su recurso padre, no como recurso propio
+  audit: none # la auditoría no se expone: se consulta por herramientas internas
+  reasons:
+    catalog: "Catálogo de configuración: se consulta desde la aplicación y se mantiene por script de datos, no por API pública."
+    junction: "Tabla puente de una relación N:M: se gestiona desde el recurso padre para no exponer un identificador sin significado de negocio."
+    audit: "Tabla de auditoría: su lectura es una función de soporte, no del sistema de negocio."
+
+# --- Nombres de operación (operationId) --------------------------------------
+# Deben ser únicos y estables: los generadores de cliente los convierten en
+# nombres de método. En español y camelCase, coherente con el idioma del dominio.
+operation_id:
+  list: "listar{Resource}"
+  read_item: "obtener{ResourceSingular}"
+  create: "crear{ResourceSingular}"
+  update: "actualizar{ResourceSingular}"
+  delete: "eliminar{ResourceSingular}"
+  action: "{accion}{ResourceSingular}"
+  nested_list: "listar{Child}De{ResourceSingular}"
+  nested_create: "agregar{ChildSingular}A{ResourceSingular}"
+
+# --- Nombres de esquema (components.schemas) ---------------------------------
+schema_name:
+  create: "{ResourceSingular}Create"
+  update: "{ResourceSingular}Update"
+  read: "{ResourceSingular}"
+  list_item: "{ResourceSingular}Resumen"
+  action_input: "{ResourceSingular}{Accion}Input"
+
+# --- Límites de superficie ---------------------------------------------------
+# No recortan nada: si se superan, CRITIQUE emite una observación con el número
+# real. Un recorte mudo haría creer que la API está completa cuando no lo está.
+limits:
+  # REVISAR: ¿a partir de cuántas operaciones conviene partir la API por módulo?
+  warn_endpoints_total: 80
+  warn_endpoints_per_resource: 12
+  warn_fields_per_schema: 40
