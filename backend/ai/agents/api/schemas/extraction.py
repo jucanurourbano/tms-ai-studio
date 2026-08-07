@@ -124,3 +124,19 @@ class RuleMappingsExtract(BaseModel):
     """Salida de RULE_MAPPING: el destino de las reglas huérfanas."""
 
     mappings: list[RuleClassificationExtract] = Field(default_factory=list)
+
+
+class RiskExtract(BaseModel):
+    """Riesgo de diseño del contrato, señalado por CRITIQUE."""
+
+    description: str
+    severity: Optional[str] = None
+    mitigation: Optional[str] = None
+    source_ref: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ApiRisksExtract(BaseModel):
+    """Salida de CRITIQUE: lo que un chequeo automático no ve."""
+
+    risks: list[RiskExtract] = Field(default_factory=list)

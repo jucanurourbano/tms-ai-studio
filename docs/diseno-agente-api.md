@@ -141,10 +141,18 @@ Respecto al pipeline propuesto, **dos inserciones deliberadas**:
 ### Qué bloquea y qué no
 
 **Bloquea** (haría inservible o **peligrosa** la API): endpoint sin autorización
-resuelta; alcance ambiguo en un endpoint que expone columnas `pii`; regla
-`application` del BD sin endpoint que la aplique; tabla de entidad sin exposición ni
-motivo; `API-` del EF declarado y no cubierto; OpenAPI inválido; esquema de
-seguridad no decidido.
+resuelta; **alcance ambiguo** (ver abajo); regla `application` del BD sin endpoint
+que la aplique; recurso que debería publicarse y se queda sin ninguna operación;
+`API-` del EF declarado y no cubierto; OpenAPI inválido; esquema de seguridad no
+decidido; estilo de API que este agente no sabe especificar.
+
+> **Corrección al implementar API7.** Este diseño hacía bloqueante el alcance
+> ambiguo *solo* cuando el endpoint expone columnas `pii`. La distinción no se
+> sostiene: un alcance que no se puede aplicar significa que quien construya el
+> endpoint lo construirá **sin restricción alguna**, y eso es un acceso más ancho
+> del que nadie autorizó, haya datos personales o no. Ahora bloquea siempre. El
+> agravante de la PII no desaparece: se enuncia dentro de la propia pregunta para
+> que se atienda antes.
 
 **No bloquea** (solo lo hace mejorable): campo sin descripción, ejemplo ausente,
 filtro sobre columna no indexada, paginación por cursor no disponible, endpoint de
@@ -568,7 +576,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. Tres salvaguardas de exposición: no se puede ocultar la PK (sin ella no hay detalle), ni una columna obligatoria al crear (sin ella no hay alta), ni una que no exista. El `404` cambia de redacción cuando el endpoint tiene alcance por filas: responder `403` revelaría que el registro existe. |
 | **API5** | `AUTHORIZATION` (base CRUD + alcances) + `RULE_MAPPING` (cierre del círculo con el BD). El esquema de salida del modelo **no admite `all`**: no hay sitio donde escribir "este actor lo ve todo", así que una alucinación solo puede restringir. Un endpoint sin autorizar lleva una fila `deny` explícita: el hueco se ve en la matriz, no en una ausencia. |
 | **API6** | `OPENAPI_GEN` determinista + `VALIDATE` L1/L2/L2b (+ L3a `openapi-core` en tests). **L3a encontró un fallo que L1 y L2 no podían ver**: declarar `servers: /api/v1` con rutas que ya llevan el prefijo duplica la base (`/api/v1/api/v1/…`). Es un error semántico, no de esquema. El servidor pasa a ser la raíz y las rutas conservan el prefijo completo, que es como viajan en el artefacto y como se ven en el hub. |
-| **API7** | `CRITIQUE` + `QUESTION_GEN` (agrupadas por clase de vacío) + cobertura. |
+| **API7** | `CRITIQUE` + `QUESTION_GEN` (agrupadas por clase de vacío) + cobertura. **Endurece el gate respecto a este diseño**: un alcance ambiguo bloquea siempre, no solo con PII (ver §2). |
 | **API8** | `ASSEMBLE/VALIDATE/PERSIST` + servicio + API `/apis/*` + refine + gate 409 + descarga del OpenAPI. |
 | **API9** | Frontend: nav CONSTRUIR, `ApiResultView`, matriz de autorización, visor/descarga del YAML, flujo new→spec→afinar, export PDF. |
 

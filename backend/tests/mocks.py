@@ -783,6 +783,32 @@ class ApiMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Crítico del contrato de API" in system:
+            payload = _payload(user, "CONTRATO CONSOLIDADO:\n")
+            primero = payload["endpoints"][0]["id"] if payload["endpoints"] else None
+            return json.dumps(
+                {
+                    "risks": [
+                        {
+                            "description": (
+                                "El listado expone el importe del siniestro, que "
+                                "permite deducir la siniestralidad de un cliente."
+                            ),
+                            "severity": "media",
+                            "mitigation": "Restringir el campo a quien liquida.",
+                            "source_ref": primero,
+                            "confidence": 0.6,
+                        },
+                        {
+                            # Referencia inventada: debe limpiarse sin perder el riesgo.
+                            "description": "Riesgo con referencia inexistente.",
+                            "severity": "loquesea",
+                            "source_ref": "EP-999",
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
         if "Analista de control de acceso" in system:
             payload = _payload(user, "RECURSO Y ACTORES:\n")
             if payload["resource"]["name"] != "siniestros":

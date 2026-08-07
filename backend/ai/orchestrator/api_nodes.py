@@ -19,6 +19,7 @@ from langchain_core.runnables import RunnableConfig
 
 from ai.agents.api.authorization import run_authorization, unauthorized_endpoints
 from ai.agents.api.common import merge_metrics
+from ai.agents.api.critique import run_critique
 from ai.agents.api.endpoints import build_endpoints, merge_actions, run_actions
 from ai.agents.api.errors import apply_errors
 from ai.agents.api.load_sources import (
@@ -33,6 +34,7 @@ from ai.agents.api.load_sources import (
 from ai.agents.api.openapi.render import build_openapi
 from ai.agents.api.openapi.validate import validate_spec
 from ai.agents.api.payloads import run_schemas
+from ai.agents.api.question_gen import generate_questions
 from ai.agents.api.resource_map import build_resource_map
 from ai.agents.api.resources import run_resources
 from ai.agents.api.rule_mapping import run_rule_mapping
@@ -265,13 +267,41 @@ async def node_validate(state: ApiState) -> dict:
 
 
 async def node_critique(state: ApiState, config: RunnableConfig) -> dict:
-    """CRITIQUE (API7): cobertura determinista + riesgos por LLM."""
-    return {"critique": {}}
+    """CRITIQUE: cobertura que enumera lo que falta + riesgos por LLM."""
+    critique, skipped, tokens, observaciones = await run_critique(
+        _llm(config),
+        state.get("resource_map") or {},
+        state.get("endpoints") or [],
+        state.get("schemas") or [],
+        state.get("authorization_matrix") or [],
+        state.get("rule_mappings") or [],
+        state.get("target") or {},
+        state.get("sources") or {},
+        unenforced_delegated_rules=state.get("unenforced_delegated_rules") or [],
+        validation=state.get("validation") or {},
+        authoritative_context=state.get("authoritative_context"),
+    )
+    metrics = merge_metrics(state, tokens, skipped)
+    metrics["coverage"] = critique["coverage_ratio"]
+    return {
+        "critique": critique,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": metrics,
+    }
 
 
 async def node_question_gen(state: ApiState) -> dict:
-    """QUESTION_GEN (API7): preguntas agrupadas por clase de vacío."""
-    return {"questions": []}
+    """QUESTION_GEN: preguntas al líder técnico, agrupadas por clase de vacío."""
+    critique = state.get("critique") or {}
+    return {
+        "questions": generate_questions(
+            critique.get("findings") or {},
+            state.get("endpoints") or [],
+            state.get("schemas") or [],
+            state.get("resource_map") or {},
+            state.get("target") or {},
+        )
+    }
 
 
 async def node_assemble(state: ApiState) -> dict:

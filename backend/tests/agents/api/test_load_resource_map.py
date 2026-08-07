@@ -540,8 +540,7 @@ async def test_el_grafo_corre_completo_con_los_stubs():
     # El andamio está construido y sus exclusiones viajan hacia el artefacto.
     assert len(final["resource_map"]["resources"]) == 3
     assert final["map_observations"]
-    # Y los stubs que quedan siguen vacíos: cada bloque posterior sustituye el suyo.
-    assert final["questions"] == []
+    # Y el único stub que queda sigue vacío: API8 lo sustituye.
     assert final["artifact"] == {}
 
 
