@@ -68,7 +68,18 @@ def _sources(**overrides):
 def _base_config():
     # Desde API3, `resources` y `endpoints` llaman al modelo: sin mock, el
     # cortafuegos autouse de conftest corta el test (REGLA DE PRESUPUESTO).
-    return {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+    return {
+        "configurable": {
+            "thread_id": "API-1",
+            "llm": ApiMapLLM(),
+            "persist": _noop_persist,
+        }
+    }
+
+
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
 
 
 def _base_state(bd_ready: bool = True, **extra):
@@ -532,7 +543,8 @@ async def test_el_grafo_corre_completo_con_los_stubs():
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(_base_state(), _base_config())
 
-    assert final["status"] == "COMPLETED"
+    # Con avisos: el mock deja un recurso en cuarentena a propósito.
+    assert final["status"] == "COMPLETED_WITH_WARNINGS"
     assert final["target"]["api_style"] == "rest"
     assert final["target"]["base_path"] == "/api/v1"
     assert final["target"]["conventions"]["property_case"] == "snake_case"
@@ -540,8 +552,8 @@ async def test_el_grafo_corre_completo_con_los_stubs():
     # El andamio está construido y sus exclusiones viajan hacia el artefacto.
     assert len(final["resource_map"]["resources"]) == 3
     assert final["map_observations"]
-    # Y el único stub que queda sigue vacío: API8 lo sustituye.
-    assert final["artifact"] == {}
+    # Y el artefacto ya está ensamblado y validado contra el contrato.
+    assert final["artifact"]["schema_version"] == "1.0.0"
 
 
 async def test_el_orden_del_pipeline_pone_errors_despues_de_authorization():

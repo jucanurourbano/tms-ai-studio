@@ -77,6 +77,11 @@ async def _pipeline():
     }
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
+
+
 def _base_state():
     return {
         "job_id": "API-1",
@@ -392,7 +397,14 @@ async def test_toda_regla_del_ef_acaba_con_un_mapeo():
 async def test_el_grafo_produce_matriz_y_mapeo_de_reglas():
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(
-        _base_state(), {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+        _base_state(),
+        {
+            "configurable": {
+                "thread_id": "API-1",
+                "llm": ApiMapLLM(),
+                "persist": _noop_persist,
+            }
+        },
     )
 
     assert final["authorization_matrix"]

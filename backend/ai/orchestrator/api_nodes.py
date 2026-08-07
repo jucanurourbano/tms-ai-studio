@@ -17,6 +17,7 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
+from ai.agents.api.assemble import assemble_artifact, validate_artifact
 from ai.agents.api.authorization import run_authorization, unauthorized_endpoints
 from ai.agents.api.common import merge_metrics
 from ai.agents.api.critique import run_critique
@@ -305,10 +306,40 @@ async def node_question_gen(state: ApiState) -> dict:
 
 
 async def node_assemble(state: ApiState) -> dict:
-    """ASSEMBLE (API8): ensambla el ApiArtifact y valida el contrato."""
-    return {"artifact": {}}
+    """ASSEMBLE + VALIDATE: construye el ApiArtifact y lo valida (v1.0.0)."""
+    artifact, _ = assemble_artifact(state)
+    dumped = artifact.model_dump(mode="json")
+    validate_artifact(dumped)
+    return {"artifact": dumped}
 
 
 async def node_persist(state: ApiState, config: RunnableConfig) -> dict:
-    """PERSIST (API8): guarda artefacto y métricas reales."""
-    return {"status": "COMPLETED"}
+    """PERSIST: guarda el artefacto y marca COMPLETED[_WITH_WARNINGS].
+
+    La persistencia es inyectable por config (tests sin Postgres); si no se
+    inyecta, usa la BD real vía ``session_scope``.
+    """
+    artifact = state["artifact"]
+    metrics = artifact.get("metrics") or {}
+    validation = artifact.get("validation") or {}
+    # Una especificación con errores no puede pasar por COMPLETED limpio.
+    has_warnings = bool(metrics.get("skipped")) or bool(validation.get("errors"))
+    status = "COMPLETED_WITH_WARNINGS" if has_warnings else "COMPLETED"
+
+    persist = (config or {}).get("configurable", {}).get("persist")
+    if persist is not None:
+        await persist(state["job_id"], artifact, status, metrics)
+    else:  # pragma: no cover - ruta runtime con Postgres real
+        from app.dependencies.database import session_scope
+        from app.models.agent import JobStatus
+        from app.repositories.agent_job_repository import AgentJobRepository
+
+        async with session_scope() as session:
+            repo = AgentJobRepository(session)
+            await repo.save_artifact(
+                state["job_id"], artifact, artifact["schema_version"]
+            )
+            await repo.update_job_metrics(state["job_id"], metrics)
+            await repo.update_job_status(state["job_id"], JobStatus[status])
+
+    return {"status": status, "metrics": metrics}

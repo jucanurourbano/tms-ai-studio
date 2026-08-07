@@ -96,6 +96,11 @@ async def _findings(**overrides):
     return datos, coverage, findings
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
+
+
 def _base_state():
     return {
         "job_id": "API-1",
@@ -346,7 +351,14 @@ async def test_un_contrato_sin_huecos_no_genera_preguntas():
 async def test_el_grafo_produce_critica_y_preguntas():
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(
-        _base_state(), {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+        _base_state(),
+        {
+            "configurable": {
+                "thread_id": "API-1",
+                "llm": ApiMapLLM(),
+                "persist": _noop_persist,
+            }
+        },
     )
 
     critique = final["critique"]

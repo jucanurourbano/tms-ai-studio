@@ -24,7 +24,7 @@ toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** 
 `docs/diseno-agente-arquitectura.md`). Agente **BD** **completo** (backend +
 frontend; bloques BD0→BD8 implementados, ver §5.2 y `docs/diseno-agente-bd.md`).
 Agente **API**: diseño **aprobado** (`docs/diseno-agente-api.md`, ver §5.3);
-**en construcción** — bloques **API0–API7** hechos, siguiente **API8**.
+**en construcción** — bloques **API0–API8** hechos (backend completo), siguiente **API9** (frontend).
 
 ---
 

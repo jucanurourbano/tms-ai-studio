@@ -577,7 +577,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | **API5** | `AUTHORIZATION` (base CRUD + alcances) + `RULE_MAPPING` (cierre del círculo con el BD). El esquema de salida del modelo **no admite `all`**: no hay sitio donde escribir "este actor lo ve todo", así que una alucinación solo puede restringir. Un endpoint sin autorizar lleva una fila `deny` explícita: el hueco se ve en la matriz, no en una ausencia. |
 | **API6** | `OPENAPI_GEN` determinista + `VALIDATE` L1/L2/L2b (+ L3a `openapi-core` en tests). **L3a encontró un fallo que L1 y L2 no podían ver**: declarar `servers: /api/v1` con rutas que ya llevan el prefijo duplica la base (`/api/v1/api/v1/…`). Es un error semántico, no de esquema. El servidor pasa a ser la raíz y las rutas conservan el prefijo completo, que es como viajan en el artefacto y como se ven en el hub. |
 | **API7** | `CRITIQUE` + `QUESTION_GEN` (agrupadas por clase de vacío) + cobertura. **Endurece el gate respecto a este diseño**: un alcance ambiguo bloquea siempre, no solo con PII (ver §2). |
-| **API8** | `ASSEMBLE/VALIDATE/PERSIST` + servicio + API `/apis/*` + refine + gate 409 + descarga del OpenAPI. |
+| **API8** | `ASSEMBLE/VALIDATE/PERSIST` + servicio + API `/apis/*` + refine + gate 409 + descarga del OpenAPI. **El ensamblado destapó un fallo**: los parámetros de los endpoints nunca recibían `id`, así que cinco de seis endpoints no validaban contra el contrato. El documento se renderizaba bien (no usa esos ids) y L1 no lo veía; solo apareció al construir el artefacto. |
 | **API9** | Frontend: nav CONSTRUIR, `ApiResultView`, matriz de autorización, visor/descarga del YAML, flujo new→spec→afinar, export PDF. |
 
 ---

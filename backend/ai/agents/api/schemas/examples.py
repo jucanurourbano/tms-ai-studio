@@ -77,7 +77,10 @@ info:
   version: 1.0.0
   description: Contrato generado por el Agente API del ISDF a partir del modelo de datos.
 servers:
-  - url: /api/v1
+  # La raíz: las rutas de `paths` ya llevan el prefijo completo. Declarar aquí
+  # `/api/v1` duplicaría la base (`/api/v1/api/v1/…`), un error que el validador
+  # de esquema no ve y que encontró la capa L3a al resolver una operación real.
+  - url: /
     description: Servidor de la aplicación.
 tags:
   - name: Siniestros

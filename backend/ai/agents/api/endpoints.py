@@ -245,9 +245,18 @@ def build_endpoint(
 
 
 def number_endpoints(endpoints: list[dict]) -> None:
-    """Asigna ids ``EP-001…`` en el orden en que se construyeron (reproducible)."""
+    """Asigna ids ``EP-001…`` y ``PRM-0001…`` en orden reproducible.
+
+    Los parámetros se numeran aquí y no al construirlos porque su id es **global**:
+    dos endpoints distintos pueden declarar un parámetro con el mismo nombre, y el
+    id tiene que distinguirlos para que una referencia apunte a uno solo.
+    """
+    parametro = 0
     for posicion, endpoint in enumerate(endpoints, start=1):
         endpoint["id"] = f"EP-{posicion:03d}"
+        for param in endpoint.get("parameters", []):
+            parametro += 1
+            param["id"] = f"PRM-{parametro:04d}"
 
 
 # --- Acciones de negocio (LLM) ------------------------------------------------

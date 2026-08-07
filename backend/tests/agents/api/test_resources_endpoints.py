@@ -36,6 +36,11 @@ def _sources():
     )
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
+
+
 def _base_state(**extra):
     state = {
         "job_id": "API-1",
@@ -58,7 +63,13 @@ def _base_state(**extra):
 
 
 def _config():
-    return {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+    return {
+        "configurable": {
+            "thread_id": "API-1",
+            "llm": ApiMapLLM(),
+            "persist": _noop_persist,
+        }
+    }
 
 
 # --- RESOURCES ---------------------------------------------------------------

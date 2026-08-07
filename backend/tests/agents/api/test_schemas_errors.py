@@ -52,6 +52,11 @@ async def _pipeline():
     return sources, mapa, endpoints, esquemas, catalogo, notas
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
+
+
 def _base_state():
     return {
         "job_id": "API-1",
@@ -362,7 +367,14 @@ def test_el_catalogo_enlaza_el_error_con_la_restriccion_que_lo_causa():
 async def test_el_grafo_produce_esquemas_y_codigos():
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(
-        _base_state(), {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+        _base_state(),
+        {
+            "configurable": {
+                "thread_id": "API-1",
+                "llm": ApiMapLLM(),
+                "persist": _noop_persist,
+            }
+        },
     )
 
     assert final["schemas"]

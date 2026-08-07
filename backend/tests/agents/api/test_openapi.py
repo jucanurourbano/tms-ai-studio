@@ -103,6 +103,11 @@ async def _contrato():
     }
 
 
+async def _noop_persist(job_id, artifact, status, metrics):
+    """PERSIST sin base de datos: los tests del grafo no escriben en Postgres."""
+    return None
+
+
 def _base_state():
     return {
         "job_id": "API-1",
@@ -501,7 +506,14 @@ async def test_el_runtime_rechaza_una_respuesta_que_no_cumple_el_contrato():
 async def test_el_grafo_produce_un_documento_valido():
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(
-        _base_state(), {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
+        _base_state(),
+        {
+            "configurable": {
+                "thread_id": "API-1",
+                "llm": ApiMapLLM(),
+                "persist": _noop_persist,
+            }
+        },
     )
 
     assert final["openapi"]["content"].startswith("openapi: 3.1.0")
