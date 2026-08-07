@@ -17,6 +17,8 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
+from ai.agents.api.common import merge_metrics
+from ai.agents.api.endpoints import build_endpoints, run_actions
 from ai.agents.api.load_sources import (
     assert_bd_ready,
     base_path,
@@ -27,9 +29,11 @@ from ai.agents.api.load_sources import (
     resolve_hashes,
 )
 from ai.agents.api.resource_map import build_resource_map
+from ai.agents.api.resources import run_resources
 from ai.agents.api.state import ApiState
 from ai.agents.base.structured import ClaudeLLMClient
 from ai.knowledge import load_api_conventions
+from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
@@ -109,13 +113,40 @@ async def node_resource_map(state: ApiState) -> dict:
 
 
 async def node_resources(state: ApiState, config: RunnableConfig) -> dict:
-    """RESOURCES (API3): describe y agrupa lo que el andamio ya fijó."""
-    return {"resources": []}
+    """RESOURCES: redacta cada recurso del andamio (LLM *map*)."""
+    recursos, skipped, tokens, observaciones = await run_resources(
+        _llm(config),
+        state.get("resource_map") or {},
+        state.get("sources") or {},
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.API_SCHEMAS_CONCURRENCY,
+    )
+    return {
+        "resources": recursos,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_endpoints(state: ApiState, config: RunnableConfig) -> dict:
-    """ENDPOINTS (API3): CRUD determinista + acciones de negocio con evidencia."""
-    return {"endpoints": []}
+    """ENDPOINTS: CRUD determinista del andamio + acciones con evidencia verificada."""
+    resource_map = state.get("resource_map") or {}
+    acciones, skipped, tokens, observaciones = await run_actions(
+        _llm(config),
+        resource_map,
+        state.get("sources") or {},
+        authoritative_context=state.get("authoritative_context"),
+        concurrency=settings.API_SCHEMAS_CONCURRENCY,
+    )
+    conventions = (state.get("target") or {}).get("conventions") or {}
+    endpoints = build_endpoints(
+        resource_map, state.get("resources") or [], acciones, conventions
+    )
+    return {
+        "endpoints": endpoints,
+        "map_observations": list(state.get("map_observations") or []) + observaciones,
+        "metrics": merge_metrics(state, tokens, skipped),
+    }
 
 
 async def node_schemas(state: ApiState, config: RunnableConfig) -> dict:

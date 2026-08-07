@@ -39,6 +39,7 @@ from ai.agents.scrum.schemas.examples import example_artifact as scrum_example
 from ai.errors import GateError
 from ai.orchestrator import build_api_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
+from tests.mocks import ApiMapLLM
 
 
 def _bd_dict():
@@ -65,7 +66,9 @@ def _sources(**overrides):
 
 
 def _base_config():
-    return {"configurable": {"thread_id": "API-1"}}
+    # Desde API3, `resources` y `endpoints` llaman al modelo: sin mock, el
+    # cortafuegos autouse de conftest corta el test (REGLA DE PRESUPUESTO).
+    return {"configurable": {"thread_id": "API-1", "llm": ApiMapLLM()}}
 
 
 def _base_state(bd_ready: bool = True, **extra):
@@ -525,7 +528,7 @@ def test_sin_permiso_de_edicion_en_el_padre_no_se_puede_enlazar():
 
 
 async def test_el_grafo_corre_completo_con_los_stubs():
-    """API2 deja el pipeline entero recorrible: los stubs devuelven vacío."""
+    """El pipeline entero es recorrible; lo que aún no existe devuelve vacío."""
     graph = build_api_graph(build_memory_checkpointer())
     final = await graph.ainvoke(_base_state(), _base_config())
 
@@ -537,10 +540,10 @@ async def test_el_grafo_corre_completo_con_los_stubs():
     # El andamio está construido y sus exclusiones viajan hacia el artefacto.
     assert len(final["resource_map"]["resources"]) == 3
     assert final["map_observations"]
-    # Y los stubs siguen vacíos: cada bloque posterior sustituye el suyo.
-    assert final["endpoints"] == []
+    # Y los stubs que quedan siguen vacíos: cada bloque posterior sustituye el suyo.
     assert final["schemas"] == []
     assert final["authorization_matrix"] == []
+    assert final["error_catalog"] == []
 
 
 async def test_el_orden_del_pipeline_pone_errors_despues_de_authorization():

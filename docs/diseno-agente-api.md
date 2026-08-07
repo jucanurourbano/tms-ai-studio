@@ -1,7 +1,7 @@
 # Diseño — Agente API (quinto agente del ISDF)
 
-> **BORRADOR — PENDIENTE DE APROBACIÓN.** Propuesta de arquitectura del Agente API.
-> No se ha escrito código. Leer junto a `CLAUDE.md`,
+> Documento de arquitectura **aprobado**. Fuente de verdad del Agente API, **en
+> construcción** (ver §9 para el estado por bloques). Leer junto a `CLAUDE.md`,
 > `docs/diseno-agente-arquitectura.md` y `docs/diseno-agente-bd.md`, cuyo patrón se
 > reutiliza casi por completo.
 
@@ -61,7 +61,7 @@ buscador local, preguntas enfocadas, export PDF, `RefChip`/`artifact-refs`).
 |---|---|
 | `ai/knowledge/api_conventions.yaml` + loader (`api_conventions_block()`) | rutas, plurales, caso de las propiedades, envelope, catálogo de errores, paginación, filtrado y orden. Mismo rol que `db_conventions.yaml`: el LLM decide **dentro** de estas reglas, no improvisa. |
 | `ai/agents/api/openapi/` | `render.py` (documento 3.1 determinista), `validate.py` (L1 estructural + L2 spec), `smoke.py` (L3a runtime, tests) |
-| `openapi-spec-validator==0.9.0` | valida el documento contra el JSON Schema de OpenAPI 3.1 en Python puro, **sin red ni tooling externo**. Es el `sqlglot` de este agente. |
+| `openapi-spec-validator==0.8.5` | valida el documento contra el JSON Schema de OpenAPI 3.1 en Python puro, **sin red ni tooling externo**. Es el `sqlglot` de este agente. (0.8.5 y no 0.9.0: ver §5.) |
 | Frontend: `<AuthorizationMatrix>` + visor/descarga del YAML | la matriz es la visual insignia de este artefacto, como el diagrama ER lo fue del BD |
 
 `openapi-core` se añade **solo como dependencia de test** para la capa L3a (§5).
@@ -560,7 +560,7 @@ autouse de `tests/conftest.py` activo), **commit + push**.
 | **API0** | `api_conventions.yaml` (borrador) + loader; `openapi-spec-validator` pinneado; `openapi-core` en dependencias de test. EF/Scrum/Arquitectura/BD siguen verdes. |
 | **API1** | Contrato `ApiArtifact v1.0.0` (Pydantic + enums + fixture del dominio de siniestros + round-trip). El contrato **impide** lo que sería invención u omisión muda (campo sin columna, exclusión sin motivo, alcance sin columna, descarte sin explicación, acción sin evidencia) y **permite** representar los defectos reportables (endpoint sin autorizar, spec inválida): negarse a construirlos impediría al agente reportarlos. |
 | **API2** | Grafo + `LOAD_SOURCES` (carga cuádruple + gate + resolución de estilo/seguridad) + `RESOURCE_MAP` + naming + nodos stub. Dos consecuencias del cortafuegos que se confirmaron al implementarlo: **sin celda en la matriz CRUD no se generan endpoints** para esa entidad (se enumera y acabará en pregunta), y una tabla puente necesita `nested_delete` además de `nested_list`/`nested_create`, o una relación N:M se podría crear y nunca deshacer. |
-| **API3** | `RESOURCES` + `ENDPOINTS` (CRUD determinista + acciones con evidencia). |
+| **API3** | `RESOURCES` + `ENDPOINTS` (CRUD determinista + acciones con evidencia). La **cita de la acción se verifica en Python** contra el texto del `PRO-`/`BR-`/`VAL-` citado: una paráfrasis convincente no pasa. El modelo entrega un **verbo**, nunca una ruta. |
 | **API4** | `SCHEMAS` (esqueleto determinista + exposición por LLM) + `ERRORS`. |
 | **API5** | `AUTHORIZATION` (base CRUD + alcances) + `RULE_MAPPING` (cierre del círculo con el BD). |
 | **API6** | `OPENAPI_GEN` determinista + `VALIDATE` L1/L2/L2b (+ L3a `openapi-core` en tests). |

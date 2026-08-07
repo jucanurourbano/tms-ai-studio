@@ -742,3 +742,87 @@ class BdMapLLM:
                 ensure_ascii=False,
             )
         return "{}"
+
+
+def _payload(user: str, marker: str) -> dict:
+    """Extrae el JSON del mensaje de usuario, ignorando la pista de reparación.
+
+    ``complete_structured`` reintenta anexando el error al mismo mensaje, así que a
+    partir del segundo intento el texto ya no termina en el JSON. Cortar por la
+    pista mantiene los mocks capaces de responder también en la reparación, que es
+    justo el camino que ejercitan los tests de cuarentena.
+    """
+    cuerpo = user.split(marker, 1)[1]
+    return json.loads(cuerpo.split("\n\nEl intento anterior", 1)[0])
+
+
+class ApiMapLLM:
+    """LLM mock del Agente API: responde por nodo según el rol del system prompt.
+
+    Devuelve **a propósito** salidas imperfectas, para que los tests comprueben las
+    salvaguardas y no solo el camino feliz:
+
+    - RESOURCES: para el catálogo responde algo inválido, así que cae en cuarentena
+      y el recurso debe conservarse con su descripción determinista.
+    - ENDPOINTS: propone cuatro acciones sobre ``siniestros``, de las que **solo una
+      debe sobrevivir**: una cita evidencia que no existe en el EF, otra cita un
+      ``PRO-`` inventado y la cuarta repite la ruta de la primera.
+    """
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Redactor del contrato de recursos" in system:
+            payload = _payload(user, "RECURSO A DESCRIBIR:\n")
+            recurso = payload["resource"]
+            if recurso["name"] == "siniestro_estados":
+                return "no soy JSON"  # cuarentena -> fallback determinista
+            return json.dumps(
+                {
+                    "display_name": recurso["name"].replace("_", " ").title(),
+                    "description": f"Recurso de {recurso['name']} del dominio.",
+                    "confidence": 0.85,
+                },
+                ensure_ascii=False,
+            )
+        if "Diseñador de operaciones de negocio" in system:
+            payload = _payload(user, "RECURSO Y CONTEXTO:\n")
+            if payload["resource"]["name"] != "siniestros":
+                return json.dumps({"actions": []})
+            return json.dumps(
+                {
+                    "actions": [
+                        {
+                            "action": "cerrar",
+                            "purpose": "Cierra el siniestro tras la recuperación.",
+                            # Cita literal de la descripción de PRO-001.
+                            "evidence": "hasta el cierre del siniestro",
+                            "source_refs": ["PRO-001"],
+                            "request_needed": True,
+                            "confidence": 0.75,
+                        },
+                        {
+                            "action": "anular",
+                            "purpose": "Anula el siniestro.",
+                            # Suena plausible y NO está en el EF: debe caer.
+                            "evidence": "el siniestro puede anularse en cualquier momento",
+                            "source_refs": ["PRO-001"],
+                            "confidence": 0.6,
+                        },
+                        {
+                            "action": "aprobar",
+                            "purpose": "Aprueba el siniestro.",
+                            "evidence": "hasta el cierre del siniestro",
+                            "source_refs": ["PRO-999"],  # ref inventado
+                            "confidence": 0.5,
+                        },
+                        {
+                            "action": "cerrar",  # duplicado: la ruta ya está ocupada
+                            "purpose": "Cierra el siniestro (otra vez).",
+                            "evidence": "hasta el cierre del siniestro",
+                            "source_refs": ["PRO-001"],
+                            "confidence": 0.4,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return "{}"
