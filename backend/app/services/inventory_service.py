@@ -270,3 +270,43 @@ class InventoryService:
         asset = await self.get_asset_or_404(asset_id)
         await self.repo.delete_asset(asset)
         await self.session.commit()
+
+    async def add_assets_bulk(
+        self,
+        system_id: str,
+        activos: list[dict[str, Any]],
+        *,
+        origin: InventoryAssetOrigin,
+        origin_ref: Optional[str] = None,
+        actor_id: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """Registra varios activos en UNA transacción (carga de documento, INV3).
+
+        O entran todos o no entra ninguno: un documento que dejara a medias sus
+        módulos produciría un inventario que dice tener menos de lo que el
+        documento describe, y eso es indistinguible de un sistema que realmente
+        tiene menos.
+        """
+        await self.get_system_or_404(system_id)
+        creados: list[dict[str, Any]] = []
+        for activo in activos:
+            asset_type = InventoryAssetType(activo["asset_type"])
+            try:
+                contenido = validate_asset_content(asset_type, activo["content"])
+            except ValueError as exc:
+                raise ConflictError(
+                    f"El activo «{activo['name']}» no tiene la forma esperada: {exc}"
+                ) from exc
+            asset = await self.repo.add_asset_version(
+                system_id=system_id,
+                asset_type=asset_type,
+                name=activo["name"],
+                content=contenido,
+                origin=origin,
+                origin_ref=origin_ref,
+                description=activo.get("description"),
+                created_by=actor_id,
+            )
+            creados.append(asset_to_dict(asset, include_content=False))
+        await self.session.commit()
+        return creados

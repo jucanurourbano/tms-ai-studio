@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     # Tamaño máximo del dump DDL que se acepta subir (.sql). Un dump completo de
     # producción puede ser enorme y no aporta más esquema por ser más largo.
     INVENTORY_MAX_DDL_MB: int = 5
+    # Concurrencia del map de extracción de conocimiento desde documentos (INV3).
+    # Mismo criterio que EXTRACT_CONCURRENCY del EF.
+    INVENTORY_EXTRACT_CONCURRENCY: int = 3
     # Introspección read-only de bases de datos EXTERNAS. Fail-closed en tres
     # niveles y por el mismo motivo que el guard de ClickUp: esto se conecta a
     # producción.

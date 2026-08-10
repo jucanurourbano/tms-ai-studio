@@ -11,6 +11,13 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai.inventory.ddl_import import DdlImportError, parse_ddl
+from ai.inventory.doc_import import (
+    build_assets,
+    build_fragments,
+    document_to_cir,
+    extract_knowledge,
+)
+from ai.tools.ingest import LocalStorage, ingest
 from app.config.settings import settings
 from app.core.permissions import AccessLevel, Module
 from app.dependencies.current_user import get_current_user
@@ -230,6 +237,81 @@ async def upload_ddl(
     if resultado.errors:
         mensaje += f" ({len(resultado.errors)} sentencias no interpretadas)"
     return ApiResponse.ok(data=data, message=mensaje)
+
+
+@router.post(
+    "/systems/{system_id}/assets/document",
+    summary="Extraer conocimiento de un documento (.docx/.pdf/.txt/.md)",
+)
+async def upload_document(
+    system_id: str,
+    actor: User = _WRITE,
+    session: AsyncSession = Depends(get_session),
+    file: UploadFile = File(..., description="Documento que describe el sistema"),
+) -> ApiResponse:
+    """Lee el documento con el pipeline del EF y extrae su conocimiento con el LLM.
+
+    Produce un activo ``document`` con la lectura completa y un activo ``module``
+    por cada módulo identificado. Todo elemento arrastra su ``source_ref`` al
+    párrafo del documento y su evidencia verbatim; lo que llega sin cita
+    verificable se descarta y **se informa** en ``discarded``.
+    """
+    crudo = await file.read()
+    resultado_ingesta = ingest(
+        file.filename or "documento",
+        crudo,
+        LocalStorage(settings.STORAGE_DIR),
+        max_upload_mb=settings.MAX_UPLOAD_MB,
+    )
+
+    cir = document_to_cir(
+        resultado_ingesta.storage_uri,
+        resultado_ingesta.extension,
+        title=resultado_ingesta.filename,
+    )
+    fragmentos = build_fragments(
+        cir, token_threshold=settings.SINGLE_SHOT_TOKEN_THRESHOLD
+    )
+    if not fragmentos:
+        raise ConflictError(
+            "El documento no tiene texto legible. Si es un PDF escaneado, esta "
+            "versión no hace OCR."
+        )
+
+    from app.dependencies.claude import get_claude_client
+
+    conocimiento = await extract_knowledge(
+        get_claude_client(),
+        fragmentos,
+        concurrency=settings.INVENTORY_EXTRACT_CONCURRENCY,
+    )
+    activos = build_assets(conocimiento, document_name=resultado_ingesta.filename)
+
+    creados = await InventoryService(session).add_assets_bulk(
+        system_id,
+        activos,
+        origin=InventoryAssetOrigin.DOCUMENT,
+        origin_ref=resultado_ingesta.filename,
+        actor_id=actor.id,
+    )
+    return ApiResponse.ok(
+        data={
+            "assets": creados,
+            "extraction_report": {
+                "fragments": len(fragmentos),
+                "modules": len(conocimiento["modules"]),
+                "entities": len(conocimiento["entities"]),
+                "functionalities": len(conocimiento["functionalities"]),
+                "decisions": len(conocimiento["decisions"]),
+                "discarded": conocimiento["discarded"],
+                "skipped": conocimiento["skipped"],
+            },
+        },
+        message=(
+            f"Documento leído: {len(conocimiento['modules'])} módulos, "
+            f"{len(conocimiento['entities'])} entidades"
+        ),
+    )
 
 
 @router.get(

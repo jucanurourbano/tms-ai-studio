@@ -394,6 +394,100 @@ async def test_subir_ddl_exige_escritura_en_el_inventario(client, admin_token):
     assert r.status_code == 403
 
 
+# --- ingesta de documentos (INV3) --------------------------------------------
+
+
+async def test_subir_un_documento_extrae_conocimiento(
+    client, admin_token, monkeypatch, tmp_path
+):
+    """Flujo completo con el LLM MOCKEADO (REGLA DE PRESUPUESTO).
+
+    El cortafuegos autouse de conftest hace que un descuido aquí falle con un
+    mensaje claro en vez de salir a la red.
+    """
+    import json
+    import re
+
+    import app.api.v1.inventario as inventario_api
+    from app.config.settings import settings as app_settings
+    from tests.inventory.fixtures import (
+        APLICACIONES,
+        DOCUMENTO_SINTETICO,
+        MICROSERVICIOS,
+        TABLAS_MAESTRAS,
+        knowledge_del_documento,
+    )
+
+    monkeypatch.setattr(app_settings, "STORAGE_DIR", str(tmp_path))
+
+    class MockLLM:
+        async def complete_json(self, *, system: str, user: str) -> str:
+            ids = re.findall(r"\[(el-\d+)\]", user)
+            return json.dumps(knowledge_del_documento(ids[0] if ids else "el-0000"))
+
+    monkeypatch.setattr(
+        inventario_api, "get_claude_client", lambda: MockLLM(), raising=False
+    )
+    monkeypatch.setattr("app.dependencies.claude.get_claude_client", lambda: MockLLM())
+
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/document",
+        headers=_auth(admin_token),
+        files={
+            "file": (
+                "modernizacion.md",
+                DOCUMENTO_SINTETICO.encode("utf-8"),
+                "text/markdown",
+            )
+        },
+    )
+    assert r.status_code == 200, r.text
+    reporte = r.json()["data"]["extraction_report"]
+    assert reporte["modules"] == len(APLICACIONES) + len(MICROSERVICIOS)
+    assert reporte["entities"] == len(TABLAS_MAESTRAS)
+    assert reporte["decisions"] == 2
+    assert reporte["discarded"] == []
+
+    # Un activo `document` + uno `module` por módulo, todos con origen documento.
+    r = await client.get(
+        f"/api/v1/inventario/systems/{system_id}/assets", headers=_auth(admin_token)
+    )
+    items = r.json()["data"]["items"]
+    assert len([i for i in items if i["asset_type"] == "document"]) == 1
+    assert len([i for i in items if i["asset_type"] == "module"]) == 21
+    assert all(i["origin"] == "document" for i in items)
+    assert all(i["origin_ref"] == "modernizacion.md" for i in items)
+    # Nace importado: cargar no es revisar.
+    assert all(i["validation_status"] == "importado" for i in items)
+
+
+async def test_un_documento_de_extension_no_soportada_se_rechaza(
+    client, admin_token, monkeypatch, tmp_path
+):
+    from app.config.settings import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "STORAGE_DIR", str(tmp_path))
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/document",
+        headers=_auth(admin_token),
+        files={"file": ("hoja.xlsx", b"contenido", "application/vnd.ms-excel")},
+    )
+    assert r.status_code == 400, r.text
+
+
+async def test_subir_documento_exige_escritura(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    token = await _usuario(client, admin_token, UserRole.QA)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/document",
+        headers=_auth(token),
+        files={"file": ("doc.md", b"# algo", "text/markdown")},
+    )
+    assert r.status_code == 403
+
+
 # --- introspección: guard en la API ------------------------------------------
 
 
