@@ -52,6 +52,12 @@ class ApiState(TypedDict, total=False):
     #: y VALIDATE: no entra al artefacto, que guarda el YAML canónico.
     openapi_document: dict
     validation: dict  # resultado determinista de la validación de la spec
+    #: Sistema del inventario contra el que reconciliar (INV4). Sin él se
+    #: resuelve el único sistema `destino`; con varios o ninguno, la fase se
+    #: salta declarándolo (nunca se adivina el objetivo).
+    target_system_id: Optional[str]
+    #: Resumen de RECONCILE: conteos por estado y conflictos bloqueantes.
+    reconciliation: dict
     critique: dict
     questions: list[dict]
     artifact: dict  # ApiArtifact

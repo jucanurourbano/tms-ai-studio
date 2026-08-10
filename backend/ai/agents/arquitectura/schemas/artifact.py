@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ai.agents.ef.schemas.artifact import Observation, SkippedItem, TokenMetrics
 from ai.agents.ef.schemas.enums import Audience, Origin, QuestionStatus
+from ai.inventory.contract import ReconciliationRef, ReconciliationSummary
 
 from .enums import (
     AdrStatus,
@@ -141,6 +142,8 @@ class Component(TracedItem):
     responsibility: str
     source_refs: ComponentSourceRefs = Field(default_factory=ComponentSourceRefs)
     depends_on: list[str] = Field(default_factory=list)  # ids de otros componentes
+    #: Veredicto de la fase RECONCILE (INV4). ``None`` = no se reconcilió.
+    reconciliation: Optional[ReconciliationRef] = None
 
 
 # --- Stack tecnológico ------------------------------------------------------
@@ -317,3 +320,5 @@ class ArchitectureArtifact(_Strict):
     analysis: ArchitectureAnalysis = Field(default_factory=ArchitectureAnalysis)
     questions_for_architect: list[ArchitectQuestion] = Field(default_factory=list)
     metrics: ArchitectureMetrics = Field(default_factory=ArchitectureMetrics)
+    #: Resumen de la reconciliación contra el inventario (INV4). Opcional.
+    reconciliation: Optional[ReconciliationSummary] = None

@@ -32,6 +32,7 @@ _NODES = [
     ("errors", nodes.node_errors),
     ("openapi_gen", nodes.node_openapi_gen),
     ("validate", nodes.node_validate),
+    ("reconcile", nodes.node_reconcile),
     ("critique", nodes.node_critique),
     ("question_gen", nodes.node_question_gen),
     ("assemble", nodes.node_assemble),

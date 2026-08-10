@@ -44,6 +44,35 @@ def sin_api_real(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.dependencies.claude.get_claude_client", _boom)
 
 
+@pytest.fixture(autouse=True)
+def sin_inventario_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Impide que un test abra una conexión real al consultar el inventario.
+
+    La fase RECONCILE (INV4) carga el inventario del sistema destino desde
+    Postgres. En la suite eso significaría abrir conexiones de verdad: lento,
+    dependiente de que haya contenedor levantado y con resultados que cambian
+    según lo que haya en la base local — justo lo que un test no debe tener.
+
+    Por defecto la fase se declara **no ejecutada**, que es exactamente lo que
+    ocurre en un despliegue sin inventario, así que el pipeline se ejerce por su
+    camino normal. Los tests que SÍ quieren reconciliar inyectan su propia carga
+    (``config['configurable']['reconcile_tables']``) o parchean este punto.
+
+    Autouse por el mismo motivo que el cortafuegos de la API de Anthropic: la
+    protección no puede depender de que cada test se acuerde de pedirla.
+    """
+
+    async def _sin_inventario(system_id=None, **_kwargs):
+        return {
+            "performed": False,
+            "reason": "Inventario no consultado (entorno de pruebas).",
+            "assets": [],
+        }
+
+    monkeypatch.setattr("ai.inventory.loader.load_target_inventory", _sin_inventario)
+    monkeypatch.setattr("ai.inventory.nodes.load_target_inventory", _sin_inventario)
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
     """Engine SQLite async in-memory con el esquema creado."""

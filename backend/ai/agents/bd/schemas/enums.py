@@ -120,6 +120,10 @@ class DdlScriptKind(str, Enum):
 
     SCHEMA = "schema"
     TABLES = "tables"
+    #: Cambios sobre tablas que YA EXISTEN en el sistema destino (INV4): se
+    #: renderizan como ``ALTER TABLE``, no como ``CREATE``. Van antes que las
+    #: constraints porque éstas pueden referirse a las columnas recién añadidas.
+    ALTERS = "alters"
     CONSTRAINTS = "constraints"
     INDEXES = "indexes"
     SEED = "seed"

@@ -41,6 +41,7 @@ from ai.agents.api.resources import run_resources
 from ai.agents.api.rule_mapping import run_rule_mapping
 from ai.agents.api.state import ApiState
 from ai.agents.base.structured import ClaudeLLMClient
+from ai.inventory.nodes import conflict_questions, reconcile_endpoints
 from ai.knowledge import load_api_conventions
 from app.config.settings import settings
 
@@ -291,18 +292,51 @@ async def node_critique(state: ApiState, config: RunnableConfig) -> dict:
     }
 
 
+async def node_reconcile(state: ApiState, config: RunnableConfig) -> dict:
+    """RECONCILE: contrasta los endpoints propuestos con la API ya existente (INV4).
+
+    Un endpoint ``reuse`` es una operación que el sistema destino YA expone: el
+    Agente Backend no tiene que construirla, y el Frontend puede consumirla hoy.
+    Proponerla como nueva duplicaría la operación con otra ruta.
+
+    Nunca tumba el pipeline: sin inventario, la fase se declara no ejecutada.
+    """
+    endpoints = state.get("endpoints") or []
+    reconcile = (config or {}).get("configurable", {}).get("reconcile_endpoints")
+    reconcile = reconcile or reconcile_endpoints
+
+    veredictos, resumen = await reconcile(
+        endpoints, system_id=state.get("target_system_id")
+    )
+    for endpoint in endpoints:
+        veredicto = veredictos.get(endpoint["id"])
+        if veredicto is not None:
+            endpoint["reconciliation"] = veredicto
+    return {"endpoints": endpoints, "reconciliation": resumen}
+
+
 async def node_question_gen(state: ApiState) -> dict:
     """QUESTION_GEN: preguntas al líder técnico, agrupadas por clase de vacío."""
     critique = state.get("critique") or {}
-    return {
-        "questions": generate_questions(
-            critique.get("findings") or {},
-            state.get("endpoints") or [],
-            state.get("schemas") or [],
-            state.get("resource_map") or {},
-            state.get("target") or {},
-        )
+    endpoints = state.get("endpoints") or []
+    questions = generate_questions(
+        critique.get("findings") or {},
+        endpoints,
+        state.get("schemas") or [],
+        state.get("resource_map") or {},
+        state.get("target") or {},
+    )
+    # RECONCILE (INV4): un endpoint que se parece a uno existente sin serlo
+    # claramente lo decide el líder técnico, no el agente.
+    veredictos = {
+        e["id"]: e["reconciliation"] for e in endpoints if e.get("reconciliation")
     }
+    questions.extend(
+        conflict_questions(
+            veredictos, endpoints, audience="tecnico", prefijo="QAPI-REC"
+        )
+    )
+    return {"questions": questions}
 
 
 async def node_assemble(state: ApiState) -> dict:

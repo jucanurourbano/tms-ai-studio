@@ -16,6 +16,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from ai.agents.ef.schemas.artifact import Observation
+from ai.inventory.contract import ReconciliationSummary
 from app.dependencies.claude import estimate_cost
 
 from .schemas.artifact import (
@@ -199,6 +200,14 @@ def assemble_artifact(state: dict[str, Any]) -> tuple[DatabaseArtifact, bool]:
         analysis=analysis,
         questions_for_dba=questions,
         metrics=metrics,
+        # Resumen de RECONCILE (INV4). ``None`` cuando la fase no corrió: un
+        # artefacto anterior al módulo, o un diseño sin inventario contra el que
+        # comparar. El contrato lo admite, así que nada se rompe hacia atrás.
+        reconciliation=(
+            ReconciliationSummary.model_validate(state["reconciliation"])
+            if state.get("reconciliation")
+            else None
+        ),
     )
 
     has_warnings = bool(skipped) or bool(discards) or bool(validation.errors)

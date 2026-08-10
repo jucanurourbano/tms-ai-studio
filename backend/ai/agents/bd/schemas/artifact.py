@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ai.agents.arquitectura.schemas.enums import RiskSeverity
 from ai.agents.ef.schemas.artifact import Observation, SkippedItem, TokenMetrics
 from ai.agents.ef.schemas.enums import Audience, Origin, QuestionStatus
+from ai.inventory.contract import ReconciliationRef, ReconciliationSummary
 
 from .enums import (
     DbEngine,
@@ -246,6 +247,9 @@ class Table(TracedItem):
     estimated_volume: VolumeEstimate = VolumeEstimate.DESCONOCIDA
     normalization: Normalization = Field(default_factory=Normalization)
     source_refs: list[str] = Field(default_factory=list)
+    #: Veredicto de la fase RECONCILE (INV4). ``None`` = no se reconcilió (no hay
+    #: inventario, o el artefacto es anterior al módulo): retrocompatible.
+    reconciliation: Optional[ReconciliationRef] = None
 
 
 # --- DDL ---------------------------------------------------------------------
@@ -483,3 +487,5 @@ class DatabaseArtifact(_Strict):
     analysis: DatabaseAnalysis = Field(default_factory=DatabaseAnalysis)
     questions_for_dba: list[DbaQuestion] = Field(default_factory=list)
     metrics: DatabaseMetrics = Field(default_factory=DatabaseMetrics)
+    #: Resumen de la reconciliación contra el inventario (INV4). Opcional.
+    reconciliation: Optional[ReconciliationSummary] = None

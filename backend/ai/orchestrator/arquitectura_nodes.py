@@ -27,6 +27,7 @@ from ai.agents.arquitectura.question_gen import generate_questions
 from ai.agents.arquitectura.stack import run_stack
 from ai.agents.arquitectura.state import ArchitectureState
 from ai.agents.base.structured import ClaudeLLMClient
+from ai.inventory.nodes import conflict_questions, reconcile_components
 from app.config.settings import settings
 
 
@@ -188,9 +189,46 @@ async def node_critique(state: ArchitectureState, config: RunnableConfig) -> dic
     return {"critique": critique_dict, "metrics": merge_metrics(state, tokens, [])}
 
 
+async def node_reconcile(state: ArchitectureState, config: RunnableConfig) -> dict:
+    """RECONCILE: contrasta los componentes propuestos con el inventario (INV4).
+
+    Va después de ``components`` y antes de ``critique``, para que la crítica y las
+    preguntas ya cuenten con el veredicto. Un componente ``reuse`` es un módulo que
+    la organización ya tiene funcionando: proponerlo como nuevo haría que el Scrum
+    lo planifique y el equipo lo construya por segunda vez.
+
+    Nunca tumba el pipeline: sin inventario, la fase se declara no ejecutada.
+    """
+    components = state.get("components") or []
+    reconcile = (config or {}).get("configurable", {}).get("reconcile_components")
+    reconcile = reconcile or reconcile_components
+
+    veredictos, resumen = await reconcile(
+        components, system_id=state.get("target_system_id")
+    )
+    for component in components:
+        veredicto = veredictos.get(component["id"])
+        if veredicto is not None:
+            component["reconciliation"] = veredicto
+    return {"components": components, "reconciliation": resumen}
+
+
 async def node_question_gen(state: ArchitectureState) -> dict:
-    """QUESTION_GEN: preguntas al Arquitecto (RNF/integraciones/cobertura → bloqueantes)."""
+    """QUESTION_GEN: preguntas al Arquitecto (RNF/integraciones/cobertura → bloqueantes).
+
+    Suma las de RECONCILE (INV4): un componente que se parece a uno ya existente
+    sin ser claramente el mismo es una decisión del arquitecto, no del agente.
+    """
     questions = generate_questions(state.get("critique") or {})
+    components = state.get("components") or []
+    veredictos = {
+        c["id"]: c["reconciliation"] for c in components if c.get("reconciliation")
+    }
+    questions.extend(
+        conflict_questions(
+            veredictos, components, audience="tecnico", prefijo="QARQ-REC"
+        )
+    )
     return {"questions": questions}
 
 

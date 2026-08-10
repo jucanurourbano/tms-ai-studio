@@ -35,6 +35,12 @@ class ArchitectureState(TypedDict, total=False):
     contracts: list[dict]
     cross_cutting: list[dict]
     diagrams: dict
+    #: Sistema del inventario contra el que reconciliar (INV4). Sin él se
+    #: resuelve el único sistema `destino`; con varios o ninguno, la fase se
+    #: salta declarándolo (nunca se adivina el objetivo).
+    target_system_id: Optional[str]
+    #: Resumen de RECONCILE: conteos por estado y conflictos bloqueantes.
+    reconciliation: dict
     critique: dict
     questions: list[dict]
     artifact: dict  # ArchitectureArtifact

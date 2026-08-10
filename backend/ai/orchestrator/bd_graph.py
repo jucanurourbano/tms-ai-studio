@@ -3,7 +3,8 @@
 Pipeline lineal (mismo patrón EF/Scrum/Arquitectura, vía la base compartida):
 
     LOAD_SOURCES -> MODEL_MAP -> TABLES -> RELATIONS -> CONSTRAINTS -> INDEXES
-                 -> CATALOGS -> DDL_GEN -> VALIDATE -> DICTIONARY -> ER_DIAGRAM
+                 -> CATALOGS -> RECONCILE -> DDL_GEN -> VALIDATE -> DICTIONARY
+                 -> ER_DIAGRAM
                  -> CRITIQUE -> QUESTION_GEN -> ASSEMBLE -> PERSIST
 
 Solo seis nodos llaman al LLM (TABLES, RELATIONS, CONSTRAINTS, INDEXES, CATALOGS
@@ -25,6 +26,7 @@ _NODES = [
     ("constraints", nodes.node_constraints),
     ("indexes", nodes.node_indexes),
     ("catalogs", nodes.node_catalogs),
+    ("reconcile", nodes.node_reconcile),
     ("ddl_gen", nodes.node_ddl_gen),
     ("validate", nodes.node_validate),
     ("dictionary", nodes.node_dictionary),

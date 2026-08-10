@@ -42,6 +42,18 @@ class DatabaseState(TypedDict, total=False):
     #: Ciclos de FK detectados al ordenar las tablas: no impiden crear el esquema
     #: (las FK van en un script aparte) pero VALIDATE los reporta como aviso.
     ddl_cycles: list[str]
+    #: Sistema del inventario contra el que reconciliar (INV4). Si no se indica,
+    #: se resuelve el único sistema marcado como `destino`; si hay varios o
+    #: ninguno, la fase se salta declarándolo.
+    target_system_id: Optional[str]
+    #: Resumen de la fase RECONCILE (conteos + si quedan conflictos bloqueantes).
+    reconciliation: dict
+    #: Sistema del inventario contra el que reconciliar (INV4). Si no se indica,
+    #: se resuelve el único sistema marcado como ``destino``; si hay varios o
+    #: ninguno, la fase se salta declarándolo (nunca se adivina el objetivo).
+    target_system_id: Optional[str]
+    #: Resumen de RECONCILE: conteos por estado y si quedan conflictos bloqueantes.
+    reconciliation: dict
     validation: dict  # resultado determinista de la validación del DDL
     data_dictionary: list[dict]
     er_diagram: dict

@@ -33,6 +33,7 @@ from ai.agents.arquitectura.schemas.enums import RiskSeverity
 from ai.agents.bd.schemas.enums import LogicalType
 from ai.agents.ef.schemas.artifact import Observation, SkippedItem, TokenMetrics
 from ai.agents.ef.schemas.enums import Audience, HttpMethod, Origin, QuestionStatus
+from ai.inventory.contract import ReconciliationRef, ReconciliationSummary
 
 from .enums import (
     ApiRuleEnforcement,
@@ -355,6 +356,10 @@ class Endpoint(TracedItem):
     #: Endpoint que el EF ya declaraba (``API-...``); si existe, ``origin=stated``.
     ef_api_ref: Optional[str] = None
     source_refs: list[str] = Field(default_factory=list)
+    #: Veredicto de la fase RECONCILE (INV4). Un ``reuse`` aquí significa que la
+    #: operación YA la expone el sistema destino y no hay que construirla.
+    #: ``None`` = no se reconcilió (retrocompatible).
+    reconciliation: Optional[ReconciliationRef] = None
 
     @model_validator(mode="after")
     def _las_acciones_citan_su_evidencia(self) -> "Endpoint":
@@ -628,3 +633,5 @@ class ApiArtifact(_Strict):
     analysis: ApiAnalysis = Field(default_factory=ApiAnalysis)
     questions_for_tech_lead: list[TechLeadQuestion] = Field(default_factory=list)
     metrics: ApiMetrics = Field(default_factory=ApiMetrics)
+    #: Resumen de la reconciliación contra el inventario (INV4). Opcional.
+    reconciliation: Optional[ReconciliationSummary] = None

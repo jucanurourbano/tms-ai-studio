@@ -37,6 +37,7 @@ from ai.agents.bd.question_gen import generate_questions
 from ai.agents.bd.relations import run_relations
 from ai.agents.bd.state import DatabaseState
 from ai.agents.bd.tables import run_tables
+from ai.inventory.nodes import conflict_questions, reconcile_tables
 from ai.knowledge import default_schema, load_db_conventions
 from app.config.settings import settings
 
@@ -219,6 +220,36 @@ async def node_catalogs(state: DatabaseState, config: RunnableConfig) -> dict:
     }
 
 
+async def node_reconcile(state: DatabaseState, config: RunnableConfig) -> dict:
+    """RECONCILE: contrasta las tablas propuestas con el inventario (INV4).
+
+    Va DESPUÉS de ``catalogs`` (para reconciliar también las tablas de catálogo) y
+    ANTES de ``ddl_gen``, que es quien traduce el veredicto en SQL: lo reutilizado
+    no genera ``CREATE`` y lo extendido sale como ``ALTER``.
+
+    El veredicto se escribe en cada tabla y no en un bloque aparte para que viaje
+    con ella a todas partes: al artefacto, al DDL y a la vista.
+
+    **Nunca tumba el pipeline.** Sin inventario contra el que comparar, la fase se
+    declara no ejecutada y el diseño sigue como greenfield: un inventario vacío es
+    una circunstancia normal, no un error. La carga es inyectable por ``config``
+    para poder probar el nodo sin base de datos.
+    """
+    tables = state.get("tables") or []
+    reconcile = (config or {}).get("configurable", {}).get("reconcile_tables")
+    reconcile = reconcile or reconcile_tables
+
+    veredictos, resumen = await reconcile(
+        tables, system_id=state.get("target_system_id")
+    )
+    for table in tables:
+        veredicto = veredictos.get(table["id"])
+        if veredicto is not None:
+            table["reconciliation"] = veredicto
+
+    return {"tables": tables, "reconciliation": resumen}
+
+
 async def node_ddl_gen(state: DatabaseState) -> dict:
     """DDL_GEN: renderiza el DDL en el dialecto del motor. Sin LLM.
 
@@ -293,8 +324,26 @@ async def node_critique(state: DatabaseState, config: RunnableConfig) -> dict:
 
 
 async def node_question_gen(state: DatabaseState) -> dict:
-    """QUESTION_GEN: preguntas al DBA, agrupadas por clase de vacío."""
-    return {"questions": generate_questions(state.get("critique") or {})}
+    """QUESTION_GEN: preguntas al DBA, agrupadas por clase de vacío.
+
+    Suma las preguntas de RECONCILE (INV4): cada tabla en `conflict` es una
+    decisión que el agente NO puede tomar solo —hay algo parecido en producción y
+    no se sabe si es lo mismo— y por eso son **bloqueantes**.
+    """
+    preguntas = generate_questions(state.get("critique") or {})
+    tables = state.get("tables") or []
+    veredictos = {
+        t["id"]: t["reconciliation"] for t in tables if t.get("reconciliation")
+    }
+    preguntas.extend(
+        conflict_questions(
+            veredictos,
+            tables,
+            audience="tecnico",
+            prefijo="QDBA-REC",
+        )
+    )
+    return {"questions": preguntas}
 
 
 # --- ASSEMBLE / PERSIST -----------------------------------------------------

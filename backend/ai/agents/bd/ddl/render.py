@@ -285,6 +285,60 @@ def _script(
     }
 
 
+def render_alter_add_columns(
+    table: dict, columnas: list[dict], engine: str
+) -> list[str]:
+    """``ALTER TABLE … ADD COLUMN`` para una tabla que YA EXISTE (INV4).
+
+    Las columnas añadidas a una tabla con datos **no pueden ser NOT NULL sin
+    DEFAULT**: el motor no sabría qué poner en las filas existentes y la sentencia
+    falla. Se relaja a nullable y se deja dicho en el script, en vez de generar un
+    ALTER que reventaría contra la base real.
+    """
+    sentencias: list[str] = []
+    for columna in columnas:
+        copia = dict(columna)
+        if not copia.get("nullable", True) and copia.get("default") is None:
+            copia["nullable"] = True
+            comentario = (
+                f" -- se declara NULL: la tabla ya tiene datos y la columna no "
+                "trae DEFAULT"
+            )
+        else:
+            comentario = ""
+        sentencias.append(
+            f"ALTER TABLE {qualified(table, engine)} "
+            f"ADD COLUMN {render_column(copia, engine)}{comentario}"
+        )
+    return sentencias
+
+
+def split_by_reconciliation(
+    tables: list[dict],
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Separa las tablas según su veredicto de RECONCILE (INV4).
+
+    Devuelve ``(a_crear, a_extender, reutilizadas)``. Sin reconciliación —o con la
+    fase no ejecutada— **todo va a crear**: el comportamiento previo al módulo se
+    conserva intacto, que es lo que hace el cambio retrocompatible.
+
+    Un ``conflict`` va a **crear**: el conflicto ya generó una pregunta bloqueante
+    y el semáforo está en rojo, así que el DDL propuesto debe seguir siendo el del
+    diseño nuevo. Asumir reutilización sobre algo no confirmado sería justo el
+    error que el conflicto señala.
+    """
+    a_crear, a_extender, reutilizadas = [], [], []
+    for table in tables:
+        estado = (table.get("reconciliation") or {}).get("status")
+        if estado == "reuse":
+            reutilizadas.append(table)
+        elif estado == "extend":
+            a_extender.append(table)
+        else:
+            a_crear.append(table)
+    return a_crear, a_extender, reutilizadas
+
+
 def build_ddl_scripts(
     tables: list[dict],
     seed_data: list[dict],
@@ -294,14 +348,22 @@ def build_ddl_scripts(
 ) -> tuple[list[dict], list[str]]:
     """Genera los scripts DDL completos. Devuelve ``(scripts, ciclos_detectados)``.
 
-    Los scripts se numeran por orden de ejecución: esquema → tablas → claves
-    foráneas → índices → semilla, y un ``rollback`` final en orden inverso.
+    Los scripts se numeran por orden de ejecución: esquema → tablas → ALTERs →
+    claves foráneas → índices → semilla, y un ``rollback`` final en orden inverso.
+
+    Si la fase RECONCILE (INV4) marcó tablas como ``reuse`` o ``extend``, el DDL lo
+    respeta: lo reutilizado NO se crea (ni se dropea en el rollback: destruir una
+    tabla de producción que solo se estaba reutilizando sería catastrófico) y lo
+    extendido sale como ``ALTER TABLE ADD COLUMN`` en un script propio.
 
     ``inline_foreign_keys`` mete las FK dentro del ``CREATE TABLE`` y suprime el
     script de claves foráneas. Es lo que necesita la prueba de humo contra SQLite
     (§ ``smoke.py``); el DDL que se entrega al equipo usa siempre la forma normal.
     """
-    ordenadas, ciclos = topological_order(tables)
+    a_crear, a_extender, reutilizadas = split_by_reconciliation(tables)
+    # El orden topológico solo aplica a lo que se crea: lo que ya existe en el
+    # destino no participa en las dependencias de creación.
+    ordenadas, ciclos = topological_order(a_crear)
     por_nombre = {t["name"]: t for t in tables}
     scripts: list[dict] = []
     orden = 0
@@ -340,6 +402,35 @@ def build_ddl_scripts(
             )
         )
 
+    # ALTERs de lo que ya existe y hay que extender (INV4). Van antes que las
+    # constraints porque éstas pueden referirse a las columnas recién añadidas.
+    sentencias_alter: list[str] = []
+    refs_alter: list[str] = []
+    for table in a_extender:
+        faltantes = set((table.get("reconciliation") or {}).get("missing") or [])
+        columnas = [c for c in table.get("columns", []) if c["name"] in faltantes]
+        if not columnas:
+            continue
+        sentencias_alter.extend(render_alter_add_columns(table, columnas, engine))
+        refs_alter.append(table["id"])
+    if sentencias_alter:
+        orden += 1
+        scripts.append(
+            _script(
+                f"DDL-{orden:03d}",
+                orden,
+                f"{orden:02d}_alteraciones.sql",
+                DdlScriptKind.ALTERS,
+                engine,
+                sentencias_alter,
+                (
+                    "Cambios sobre tablas que YA EXISTEN en el sistema destino "
+                    "(reconciliación): se añaden columnas, no se recrean tablas"
+                ),
+                refs_alter,
+            )
+        )
+
     fks = (
         []
         if inline_foreign_keys
@@ -360,7 +451,10 @@ def build_ddl_scripts(
             )
         )
 
-    indices = [(t, idx) for t in ordenadas for idx in t.get("indexes", [])]
+    # Los índices sí aplican a las tablas extendidas: una columna nueva sobre una
+    # tabla existente puede necesitar el suyo. Las reutilizadas se quedan fuera:
+    # no se toca una tabla que solo se está consumiendo.
+    indices = [(t, idx) for t in ordenadas + a_extender for idx in t.get("indexes", [])]
     if indices:
         orden += 1
         scripts.append(
@@ -378,9 +472,14 @@ def build_ddl_scripts(
 
     sentencias_semilla: list[str] = []
     refs_semilla: list[str] = []
+    reutilizadas_por_nombre = {t["name"] for t in reutilizadas}
     for seed in seed_data:
         table = por_nombre.get(seed.get("table"))
         if table is None:
+            continue
+        # Sembrar un catálogo que se está REUTILIZANDO duplicaría datos que ya
+        # están en producción. Se omite; el veredicto ya dice que existe.
+        if table["name"] in reutilizadas_por_nombre:
             continue
         filas = render_seed_rows(seed, table, engine)
         if filas:

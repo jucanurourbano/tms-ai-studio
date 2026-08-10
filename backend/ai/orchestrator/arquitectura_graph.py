@@ -18,6 +18,7 @@ _NODES = [
     ("adrs", nodes.node_adrs),
     ("contracts", nodes.node_contracts),
     ("diagrams", nodes.node_diagrams),
+    ("reconcile", nodes.node_reconcile),
     ("critique", nodes.node_critique),
     ("question_gen", nodes.node_question_gen),
     ("assemble", nodes.node_assemble),
