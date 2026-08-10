@@ -177,3 +177,21 @@ class UpdateAssetStatusRequest(BaseModel):
     """Marca un activo como revisado (o lo devuelve a ``importado``)."""
 
     validation_status: InventoryValidationStatus
+
+
+class IntrospectRequest(BaseModel):
+    """Petición de introspección read-only de una base de datos externa.
+
+    **Solo un alias.** Deliberadamente NO hay campo para la cadena de conexión: si
+    lo hubiera, quien pudiera escribir en el inventario podría apuntar el servidor
+    a un host arbitrario. Los destinos posibles los fija el despliegue en
+    ``INVENTORY_INTROSPECTION_DSNS``.
+    """
+
+    alias: str = Field(min_length=1, description="Alias del origen configurado")
+    #: ``schema`` colisiona con `BaseModel.schema` de Pydantic; se expone con su
+    #: nombre real por alias para no filtrar el detalle a la API.
+    schema_name: str = Field(default="public", alias="schema")
+    name: str = Field(default="core", max_length=200)
+
+    model_config = {"populate_by_name": True}

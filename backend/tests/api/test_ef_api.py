@@ -107,6 +107,31 @@ async def test_analyze_texto_corto_400(client):
     assert body["data"]["code"] == "IngestError"
 
 
+async def test_analyze_acepta_multipart_con_archivo(client):
+    """La subida de archivo del EF funciona de verdad (regresión, INV2).
+
+    Este camino NO tenía test y `python-multipart` no estaba instalado: subir un
+    .docx habría fallado en producción al llegar a `request.form()`, que lo exige
+    en tiempo de ejecución. Lo destapó el endpoint de carga de DDL del inventario,
+    donde FastAPI comprueba la dependencia al DEFINIR la ruta y falló al arrancar.
+    """
+    r = await client.post(
+        "/api/v1/ef/analyze",
+        files={"file": ("proceso.txt", TEXTO_LARGO.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["success"] is True
+    assert r.json()["data"]["job_id"]
+
+
+async def test_analyze_multipart_sin_campo_file_400(client):
+    r = await client.post(
+        "/api/v1/ef/analyze", files={"otro": ("x.txt", b"contenido", "text/plain")}
+    )
+    assert r.status_code == 400
+    assert "file" in r.json()["message"]
+
+
 async def test_content_type_no_soportado_400(client):
     r = await client.post(
         "/api/v1/ef/analyze", content=b"texto", headers={"content-type": "text/plain"}

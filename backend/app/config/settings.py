@@ -93,6 +93,24 @@ class Settings(BaseSettings):
     # entran al gate: generan preguntas (mismo criterio que los campos en BD).
     API_COVERAGE_THRESHOLD: float = 1.0
 
+    # --- Inventario de Sistemas ---
+    # Tamaño máximo del dump DDL que se acepta subir (.sql). Un dump completo de
+    # producción puede ser enorme y no aporta más esquema por ser más largo.
+    INVENTORY_MAX_DDL_MB: int = 5
+    # Introspección read-only de bases de datos EXTERNAS. Fail-closed en tres
+    # niveles y por el mismo motivo que el guard de ClickUp: esto se conecta a
+    # producción.
+    #   1. Desactivada por defecto.
+    #   2. El cliente manda un ALIAS, nunca una cadena de conexión: si mandara el
+    #      DSN, quien pudiera escribir en el inventario podría apuntar el servidor
+    #      a cualquier host (SSRF). Los destinos posibles los fija el despliegue.
+    #   3. Allowlist de hosts EXPLÍCITA: lista vacía significa "nada autorizado".
+    # Las cadenas viven aquí (entorno del despliegue), NUNCA en la base de datos
+    # de la plataforma ni en un artefacto, y jamás se devuelven por la API.
+    INVENTORY_INTROSPECTION_ENABLED: bool = False
+    INVENTORY_INTROSPECTION_DSNS: dict[str, str] = {}
+    INVENTORY_INTROSPECTION_ALLOWED_HOSTS: list[str] = []
+
     # --- Integración ClickUp (cuenta COMPARTIDA: guard fail-closed) ---
     # Sin allowlist configurada, el módulo NO escribe nada (ver CLAUDE.md).
     CLICKUP_API_TOKEN: str = ""

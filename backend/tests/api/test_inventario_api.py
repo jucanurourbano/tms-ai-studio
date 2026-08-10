@@ -285,6 +285,163 @@ async def test_borrar_sistema_arrastra_sus_activos(client, admin_token):
     assert r.status_code == 404
 
 
+# --- ingesta de DDL (INV2) ---------------------------------------------------
+
+DDL = """
+CREATE TABLE usuarios (
+  usuario_id BIGSERIAL PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  email VARCHAR(200) NOT NULL UNIQUE
+);
+CREATE TABLE envios (
+  envio_id BIGSERIAL PRIMARY KEY,
+  usuario_id BIGINT NOT NULL
+);
+ALTER TABLE envios ADD CONSTRAINT fk_envios_usuario
+  FOREIGN KEY (usuario_id) REFERENCES usuarios (usuario_id) ON DELETE CASCADE;
+"""
+
+
+def _sql(contenido: str, nombre: str = "dump.sql") -> dict:
+    return {"file": (nombre, contenido.encode("utf-8"), "application/sql")}
+
+
+async def test_subir_un_dump_ddl_crea_el_activo(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/ddl?name=core",
+        headers=_auth(admin_token),
+        files=_sql(DDL),
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["origin"] == "ddl_dump"
+    assert data["origin_ref"] == "dump.sql"
+    assert data["validation_status"] == "importado"
+    assert data["import_report"]["tables"] == 2
+    assert data["import_report"]["errors"] == []
+
+    # El contenido quedó estructurado, con la FK y su acción.
+    r = await client.get(
+        f"/api/v1/inventario/assets/{data['id']}", headers=_auth(admin_token)
+    )
+    envios = next(
+        t for t in r.json()["data"]["content"]["tables"] if t["name"] == "envios"
+    )
+    assert envios["foreign_keys"][0]["on_delete"] == "cascade"
+
+
+async def test_recargar_el_dump_versiona(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    for _ in range(2):
+        r = await client.post(
+            f"/api/v1/inventario/systems/{system_id}/assets/ddl?name=core",
+            headers=_auth(admin_token),
+            files=_sql(DDL),
+        )
+        assert r.status_code == 200, r.text
+    assert r.json()["data"]["version"] == 2
+
+
+async def test_un_dump_con_una_sentencia_ilegible_avisa_pero_carga_el_resto(
+    client, admin_token
+):
+    """No se pierde el dump entero por una sentencia, pero se DICE qué faltó."""
+    system_id = await _crear_sistema(client, admin_token)
+    roto = "CREATE TABLE buena (id BIGSERIAL PRIMARY KEY);\nCREATE TABLE MAL (((;\n"
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/ddl?name=core",
+        headers=_auth(admin_token),
+        files=_sql(roto),
+    )
+    assert r.status_code == 200, r.text
+    reporte = r.json()["data"]["import_report"]
+    assert reporte["tables"] == 1
+    assert reporte["errors"][0]["line"] == 2
+    assert "no interpretadas" in r.json()["message"]
+
+
+async def test_un_archivo_sin_tablas_se_rechaza(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/ddl",
+        headers=_auth(admin_token),
+        files=_sql("GRANT SELECT ON algo TO alguien;"),
+    )
+    assert r.status_code == 409, r.text
+    assert "tabla" in r.json()["message"].lower()
+
+
+async def test_un_archivo_que_no_es_sql_se_rechaza(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/ddl",
+        headers=_auth(admin_token),
+        files=_sql(DDL, nombre="datos.csv"),
+    )
+    assert r.status_code == 409, r.text
+    assert ".sql" in r.json()["message"]
+
+
+async def test_subir_ddl_exige_escritura_en_el_inventario(client, admin_token):
+    system_id = await _crear_sistema(client, admin_token)
+    token = await _usuario(client, admin_token, UserRole.DEVELOPER)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/ddl",
+        headers=_auth(token),
+        files=_sql(DDL),
+    )
+    assert r.status_code == 403
+
+
+# --- introspección: guard en la API ------------------------------------------
+
+
+async def test_la_introspeccion_exige_rol_admin_no_basta_inventario_full(
+    client, admin_token
+):
+    """Se conecta a producción: el arquitecto cura el inventario, pero no esto.
+
+    Si bastara `inventario` FULL, un grant de inventario daría acceso a bases de
+    datos de producción. Fail-closed, mismo criterio que los endpoints que mutan
+    roles.
+    """
+    system_id = await _crear_sistema(client, admin_token)
+    token = await _usuario(client, admin_token, UserRole.ARQUITECTO)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/introspect",
+        headers=_auth(token),
+        json={"alias": "legado"},
+    )
+    assert r.status_code == 403, r.text
+    assert "Administrador" in r.json()["message"]
+
+    r = await client.get(
+        "/api/v1/inventario/introspection/sources", headers=_auth(token)
+    )
+    assert r.status_code == 403
+
+
+async def test_sin_configuracion_la_introspeccion_no_conecta_a_nada(
+    client, admin_token
+):
+    """Por defecto está desactivada: no hay orígenes y no se puede invocar."""
+    r = await client.get(
+        "/api/v1/inventario/introspection/sources", headers=_auth(admin_token)
+    )
+    assert r.status_code == 200
+    assert r.json()["data"]["items"] == []
+
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/assets/introspect",
+        headers=_auth(admin_token),
+        json={"alias": "lo_que_sea"},
+    )
+    assert r.status_code == 403, r.text
+    assert "desactivada" in r.json()["message"]
+
+
 # --- autorización ------------------------------------------------------------
 
 

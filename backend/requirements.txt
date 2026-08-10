@@ -49,6 +49,13 @@ sqlglot==30.15.0
 # ramas incompatibles. 0.8.5 es la última pareja que soporta OpenAPI 3.1 en ambas.
 openapi-spec-validator==0.8.5
 
+# === Subida de archivos (multipart/form-data) ===
+# Necesario para CUALQUIER endpoint que reciba un archivo: el DDL del inventario
+# (INV2) y el documento del Agente EF. Faltaba, y como la subida del EF no tenía
+# test, el fallo solo habría aparecido al subir un .docx en producción
+# (`request.form()` de Starlette lo exige en tiempo de ejecución).
+python-multipart
+
 # === Parsers de documentos ===
 # v1 SIN OCR: se usa pypdf (ligero, sin dependencias pesadas). Se descartó docling
 # porque arrastra torch y modelos de layout/OCR innecesarios para el alcance v1.
