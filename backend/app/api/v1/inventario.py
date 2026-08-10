@@ -34,6 +34,7 @@ from app.schemas.inventario import (
     CreateAssetRequest,
     CreateSystemRequest,
     IntrospectRequest,
+    PromoteJobRequest,
     UpdateAssetStatusRequest,
     UpdateSystemRequest,
 )
@@ -362,6 +363,46 @@ async def introspect(
     return ApiResponse.ok(
         data=data,
         message=f"Esquema introspeccionado: {len(contenido['tables'])} tablas",
+    )
+
+
+# --- promoción al inventario (INV6) ------------------------------------------
+
+
+@router.post(
+    "/systems/{system_id}/promote",
+    summary="Promover un artefacto terminado de BD o API al inventario",
+)
+async def promote_job(
+    system_id: str,
+    body: PromoteJobRequest,
+    actor: User = _WRITE,
+    session: AsyncSession = Depends(get_session),
+) -> ApiResponse:
+    """Registra las tablas o endpoints del artefacto como activos del sistema.
+
+    Cierra el ciclo del módulo: los agentes leen el inventario para reconciliar y
+    ahora también lo alimentan, así que cada proyecto entregado engorda la memoria
+    de la organización.
+
+    Se **mezcla** con la versión vigente, no la reemplaza: un diseño toca unas
+    pocas tablas y el esquema tiene decenas. La respuesta detalla en ``changes``
+    qué se añadió, qué se actualizó y qué se conservó.
+    """
+    data = await InventoryService(session).promote_job(
+        system_id,
+        body.job_id,
+        asset_name=body.asset_name,
+        actor_id=actor.id,
+    )
+    cambios = data["changes"]
+    return ApiResponse.ok(
+        data=data,
+        message=(
+            f"Promovido al inventario (versión {data['version']}): "
+            f"{len(cambios['added'])} nuevos, {len(cambios['updated'])} "
+            f"actualizados, {len(cambios['kept'])} conservados"
+        ),
     )
 
 

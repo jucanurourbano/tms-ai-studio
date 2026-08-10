@@ -179,6 +179,14 @@ class UpdateAssetStatusRequest(BaseModel):
     validation_status: InventoryValidationStatus
 
 
+class PromoteJobRequest(BaseModel):
+    """Promoción de un artefacto terminado del ISDF al inventario (INV6)."""
+
+    job_id: str = Field(min_length=1)
+    #: Activo destino. Por defecto ``core`` (esquema) o ``api`` (superficie).
+    asset_name: Optional[str] = Field(default=None, max_length=200)
+
+
 class IntrospectRequest(BaseModel):
     """Petición de introspección read-only de una base de datos externa.
 

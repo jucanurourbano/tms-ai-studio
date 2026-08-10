@@ -14,6 +14,13 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai.inventory.promote import (
+    PROMOTABLE_STATUSES,
+    api_surface_from_artifact,
+    db_schema_from_artifact,
+    merge_api_surface,
+    merge_db_schema,
+)
 from app.errors import ConflictError, NotFoundError
 from app.models.inventory import (
     InventoryAsset,
@@ -270,6 +277,88 @@ class InventoryService:
         asset = await self.get_asset_or_404(asset_id)
         await self.repo.delete_asset(asset)
         await self.session.commit()
+
+    async def promote_job(
+        self,
+        system_id: str,
+        job_id: str,
+        *,
+        asset_name: Optional[str] = None,
+        actor_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Promueve el artefacto de un job de BD o API al inventario (INV6).
+
+        Cierra el ciclo: los agentes leen el inventario para reconciliar y ahora
+        también lo alimentan, así que cada proyecto entregado engorda la memoria de
+        la organización sin que nadie la mantenga a mano.
+
+        **Se mezcla, no se reemplaza.** Un diseño toca unas pocas tablas; el
+        esquema del sistema tiene decenas. Reemplazar borraría del inventario todo
+        lo que este diseño no menciona, y el siguiente reconciliaría contra una
+        foto incompleta concluyendo "no existe, créala" sobre tablas que sí están.
+        """
+        from app.models.agent import AgentType
+        from app.repositories.agent_job_repository import AgentJobRepository
+
+        system = await self.get_system_or_404(system_id)
+        jobs = AgentJobRepository(self.session)
+
+        job = await jobs.get_job(job_id)
+        if job is None:
+            raise NotFoundError(f"No existe el job «{job_id}».")
+        if job.status.value not in PROMOTABLE_STATUSES:
+            raise ConflictError(
+                f"El job está en estado «{job.status.value}»: solo se promueve un "
+                "trabajo terminado, porque un artefacto a medias metería en el "
+                "inventario un diseño que nadie completó."
+            )
+        if job.agent_type not in (AgentType.BD, AgentType.API):
+            raise ConflictError(
+                f"Un job de «{job.agent_type.value}» no produce activos "
+                "inventariables. Solo se promueven modelos de datos (BD) y "
+                "contratos de API."
+            )
+
+        fila = await jobs.get_artifact(job_id)
+        if fila is None:
+            raise ConflictError(f"El job «{job_id}» no tiene artefacto guardado.")
+        artifact = fila.data or {}
+
+        if job.agent_type is AgentType.BD:
+            asset_type = InventoryAssetType.DB_SCHEMA
+            nombre = asset_name or "core"
+            entrante = db_schema_from_artifact(artifact)
+            fusionar = merge_db_schema
+        else:
+            asset_type = InventoryAssetType.API
+            nombre = asset_name or "api"
+            entrante = api_surface_from_artifact(artifact)
+            fusionar = merge_api_surface
+
+        vigente = await self.repo.get_current_asset(system_id, asset_type, nombre)
+        contenido, cambios = fusionar(
+            (vigente.content if vigente is not None else {}) or {}, entrante
+        )
+
+        asset = await self.repo.add_asset_version(
+            system_id=system_id,
+            asset_type=asset_type,
+            name=nombre,
+            content=validate_asset_content(asset_type, contenido),
+            origin=InventoryAssetOrigin.ISDF,
+            origin_ref=f"generado por ISDF · agente {job.agent_type.value} · job {job_id}",
+            description=(
+                f"Promovido desde el job {job_id} del agente "
+                f"{job.agent_type.value}."
+            ),
+            created_by=actor_id,
+        )
+        await self.session.commit()
+
+        data = asset_to_dict(asset, include_content=False)
+        data["changes"] = cambios
+        data["system_name"] = system.name
+        return data
 
     async def add_assets_bulk(
         self,

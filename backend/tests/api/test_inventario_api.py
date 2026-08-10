@@ -488,6 +488,175 @@ async def test_subir_documento_exige_escritura(client, admin_token):
     assert r.status_code == 403
 
 
+# --- promoción al inventario (INV6) ------------------------------------------
+
+
+async def _job_bd_completado(engine, artifact: dict) -> str:
+    """Crea un job de BD terminado con su artefacto (sin correr el pipeline)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.agent import AgentType, JobStatus
+    from app.repositories.agent_job_repository import AgentJobRepository
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        repo = AgentJobRepository(session)
+        job = await repo.create_job(agent_type=AgentType.BD)
+        await repo.update_job_status(job.id, JobStatus.COMPLETED)
+        await repo.save_artifact(job.id, artifact, "1.0.0")
+        await session.commit()
+        return job.id
+
+
+def _artefacto_bd(*tablas: str) -> dict:
+    return {
+        "target": {"engine": "postgresql"},
+        "tables": [
+            {
+                "name": t,
+                "columns": [
+                    {
+                        "name": f"{t}_id",
+                        "logical_type": "bigint",
+                        "type": "BIGINT",
+                        "nullable": False,
+                        "is_primary_key": True,
+                    }
+                ],
+                "primary_key": {"name": f"pk_{t}", "columns": [f"{t}_id"]},
+            }
+            for t in tablas
+        ],
+    }
+
+
+async def test_promover_un_job_de_bd_crea_el_activo(client, admin_token, engine):
+    system_id = await _crear_sistema(client, admin_token)
+    job_id = await _job_bd_completado(engine, _artefacto_bd("envios", "eventos"))
+
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(admin_token),
+        json={"job_id": job_id},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["origin"] == "isdf"
+    assert job_id in data["origin_ref"]
+    assert "generado por ISDF" in data["origin_ref"]
+    assert set(data["changes"]["added"]) == {"envios", "eventos"}
+
+
+async def test_promover_dos_veces_MEZCLA_y_no_pierde_lo_anterior(
+    client, admin_token, engine
+):
+    """El riesgo real del bloque, verificado de extremo a extremo."""
+    system_id = await _crear_sistema(client, admin_token)
+
+    primero = await _job_bd_completado(engine, _artefacto_bd("envios", "eventos"))
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(admin_token),
+        json={"job_id": primero},
+    )
+    assert r.status_code == 200, r.text
+
+    segundo = await _job_bd_completado(engine, _artefacto_bd("clientes"))
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(admin_token),
+        json={"job_id": segundo},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["version"] == 2
+    assert data["changes"]["added"] == ["clientes"]
+    assert set(data["changes"]["kept"]) == {"envios", "eventos"}
+
+    # Y el activo vigente tiene LAS TRES tablas.
+    r = await client.get(
+        f"/api/v1/inventario/assets/{data['id']}", headers=_auth(admin_token)
+    )
+    nombres = {t["name"] for t in r.json()["data"]["content"]["tables"]}
+    assert nombres == {"envios", "eventos", "clientes"}
+
+
+async def test_no_se_promueve_un_job_sin_terminar(client, admin_token, engine):
+    """Un artefacto a medias metería en el inventario un diseño incompleto."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.agent import AgentType, JobStatus
+    from app.repositories.agent_job_repository import AgentJobRepository
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        repo = AgentJobRepository(session)
+        job = await repo.create_job(agent_type=AgentType.BD)
+        await repo.update_job_status(job.id, JobStatus.FAILED)
+        await session.commit()
+        job_id = job.id
+
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(admin_token),
+        json={"job_id": job_id},
+    )
+    assert r.status_code == 409, r.text
+    assert "terminado" in r.json()["message"]
+
+
+async def test_no_se_promueve_un_agente_que_no_produce_activos(
+    client, admin_token, engine
+):
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.agent import AgentType, JobStatus
+    from app.repositories.agent_job_repository import AgentJobRepository
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        repo = AgentJobRepository(session)
+        job = await repo.create_job(agent_type=AgentType.SCRUM)
+        await repo.update_job_status(job.id, JobStatus.COMPLETED)
+        await repo.save_artifact(job.id, {"epics": []}, "1.0.0")
+        await session.commit()
+        job_id = job.id
+
+    system_id = await _crear_sistema(client, admin_token)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(admin_token),
+        json={"job_id": job_id},
+    )
+    assert r.status_code == 409, r.text
+    assert "no produce activos" in r.json()["message"]
+
+
+async def test_promover_exige_escritura_en_el_inventario(client, admin_token, engine):
+    system_id = await _crear_sistema(client, admin_token)
+    job_id = await _job_bd_completado(engine, _artefacto_bd("envios"))
+    token = await _usuario(client, admin_token, UserRole.DEVELOPER)
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(token),
+        json={"job_id": job_id},
+    )
+    assert r.status_code == 403
+
+
+async def test_el_arquitecto_si_puede_promover(client, admin_token, engine):
+    token = await _usuario(client, admin_token, UserRole.ARQUITECTO)
+    system_id = await _crear_sistema(client, token, name="TMS Legado")
+    job_id = await _job_bd_completado(engine, _artefacto_bd("envios"))
+    r = await client.post(
+        f"/api/v1/inventario/systems/{system_id}/promote",
+        headers=_auth(token),
+        json={"job_id": job_id},
+    )
+    assert r.status_code == 200, r.text
+
+
 # --- introspección: guard en la API ------------------------------------------
 
 
