@@ -249,6 +249,9 @@ async def test_me_devuelve_rol_y_modulos_efectivos(client):
         "arquitectura": "full",
         # El arquitecto también diseña el modelo de datos físico (BD0).
         "bd": "full",
+        # ...y CURA el inventario de sistemas (INV1): un activo mal cargado
+        # envenena la fase RECONCILE de los tres agentes de diseño.
+        "inventario": "full",
         "ef": "read",
         "scrum": "read",
     }
@@ -494,7 +497,8 @@ async def test_catalogo_de_roles_para_el_panel(client):
     assert {x["value"] for x in data["modules"]} == {m.value for m in Module}
     assert data["levels"] == ["read", "full"]
     procesos = next(x for x in data["roles"] if x["value"] == "procesos")
-    assert procesos["modules"] == {"ef": "full"}
+    # `inventario` es transversal (INV1): todos los roles lo leen.
+    assert procesos["modules"] == {"ef": "full", "inventario": "read"}
     assert procesos["label"] == "Procesos"
 
     # Un rol sin Configuración no lo ve.

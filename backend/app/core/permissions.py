@@ -31,6 +31,20 @@ un ``developer`` con grant de ``bd`` obtiene ``FULL``), sin tocar la matriz.
 Módulo deliberadamente sin rol asignado (solo ``admin``): ``devops``. No se le
 inventó dueño porque el modelo de permisos acordado no lo menciona; cuando el
 equipo decida a qué rol pertenece, basta añadirlo a la matriz.
+
+Módulo ``inventario`` — **la excepción consciente a la regla de forma**. No es una
+fase del ISDF: es la memoria de los sistemas que ya existen, y el insumo de la
+fase RECONCILE de Arquitectura, BD y API. Por eso NO sigue el patrón "FULL en lo
+que produce, READ hacia atrás" sino uno propio:
+
+- ``FULL`` para ``admin`` y ``arquitecto``: curar el inventario (qué sistemas hay,
+  qué esquema tiene cada uno, qué está validado) es una responsabilidad de
+  arquitectura, y una entrada equivocada envenena a TODOS los agentes que
+  reconcilian contra ella.
+- ``READ`` para todos los demás roles, incluido ``procesos``, que en el resto de la
+  matriz no lee nada fuera de ``ef``. Aquí sí: quien levanta requisitos necesita
+  poder consultar qué existe antes de pedir que se construya de nuevo. Negarle la
+  lectura es exactamente el error que este módulo viene a corregir.
 """
 
 from enum import Enum
@@ -49,6 +63,9 @@ class Module(str, Enum):
     FRONTEND = "frontend"
     QA = "qa"
     DEVOPS = "devops"
+    #: Inventario de sistemas: memoria de lo que YA existe (INV1). No es una fase
+    #: del ISDF sino conocimiento transversal que todas consultan.
+    INVENTARIO = "inventario"
     #: Gestión de usuarios y ajustes de la plataforma.
     CONFIG = "config"
 
@@ -82,19 +99,28 @@ _RANK: dict[AccessLevel, int] = {AccessLevel.READ: 1, AccessLevel.FULL: 2}
 _CONSTRUCCION = (Module.API, Module.BACKEND, Module.FRONTEND)
 
 #: Matriz rol → {módulo: nivel}. `admin` se construye aparte (FULL en todo).
+#:
+#: ``inventario`` aparece en TODAS las filas (READ salvo para el arquitecto, que
+#: lo cura con FULL): es conocimiento transversal, no una fase. Ver el docstring
+#: del módulo para el porqué de la excepción.
 ROLE_MATRIX: dict[UserRole, dict[Module, AccessLevel]] = {
     UserRole.ADMIN: {module: AccessLevel.FULL for module in Module},
     UserRole.PROCESOS: {
         Module.EF: AccessLevel.FULL,
+        Module.INVENTARIO: AccessLevel.READ,
     },
     UserRole.ANALISTA: {
         Module.EF: AccessLevel.FULL,
         Module.SCRUM: AccessLevel.FULL,
+        Module.INVENTARIO: AccessLevel.READ,
     },
     UserRole.ARQUITECTO: {
         Module.ARQUITECTURA: AccessLevel.FULL,
         # El modelo de datos físico es diseño: misma fase (DISEÑAR) y mismo dueño.
         Module.BD: AccessLevel.FULL,
+        # Curar el inventario es responsabilidad de arquitectura: un activo mal
+        # cargado envenena la fase RECONCILE de los tres agentes de diseño.
+        Module.INVENTARIO: AccessLevel.FULL,
         Module.EF: AccessLevel.READ,
         Module.SCRUM: AccessLevel.READ,
     },
@@ -104,10 +130,12 @@ ROLE_MATRIX: dict[UserRole, dict[Module, AccessLevel]] = {
         # `bd` queda por detrás de api/backend/frontend: se consulta, no se edita.
         Module.BD: AccessLevel.READ,
         Module.SCRUM: AccessLevel.READ,
+        Module.INVENTARIO: AccessLevel.READ,
     },
     UserRole.QA: {
         Module.QA: AccessLevel.FULL,
         Module.SCRUM: AccessLevel.READ,
+        Module.INVENTARIO: AccessLevel.READ,
     },
 }
 
@@ -123,6 +151,7 @@ MODULE_LABELS: dict[Module, str] = {
     Module.FRONTEND: "Agente Frontend",
     Module.QA: "Agente QA",
     Module.DEVOPS: "Agente DevOps",
+    Module.INVENTARIO: "Inventario de Sistemas",
     Module.CONFIG: "Configuración",
 }
 

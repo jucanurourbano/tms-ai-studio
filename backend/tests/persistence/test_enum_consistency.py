@@ -21,6 +21,15 @@ from app.models.agent import (
     ValidationTargetType,
 )
 from app.models.ef import JobStatus as EFJobStatusAlias
+from app.models.inventory import (
+    InventoryAsset,
+    InventoryAssetOrigin,
+    InventoryAssetType,
+    InventorySystem,
+    InventorySystemKind,
+    InventorySystemStatus,
+    InventoryValidationStatus,
+)
 from app.repositories.ef_repository import EFRepository
 
 _MIGRATIONS = Path(__file__).resolve().parents[2] / "alembic" / "versions"
@@ -49,6 +58,23 @@ CANONICAL = {
     },
     ValidationTargetType: {"question", "assumption", "estimate"},
     ValidationStatus: {"pendiente", "confirmado", "corregido"},
+    # Inventario de Sistemas (migración 0010).
+    InventorySystemKind: {"destino", "legado", "externo"},
+    InventorySystemStatus: {
+        "en_construccion",
+        "activo",
+        "en_migracion",
+        "retirado",
+    },
+    InventoryAssetType: {"db_schema", "module", "api", "document"},
+    InventoryAssetOrigin: {
+        "ddl_dump",
+        "introspection",
+        "document",
+        "manual",
+        "isdf",
+    },
+    InventoryValidationStatus: {"importado", "validado"},
 }
 
 _ENUM_COLUMNS = [
@@ -57,6 +83,11 @@ _ENUM_COLUMNS = [
     (AgentJob.__table__.c.status, JobStatus),
     (AgentValidation.__table__.c.target_type, ValidationTargetType),
     (AgentValidation.__table__.c.status, ValidationStatus),
+    (InventorySystem.__table__.c.kind, InventorySystemKind),
+    (InventorySystem.__table__.c.status, InventorySystemStatus),
+    (InventoryAsset.__table__.c.asset_type, InventoryAssetType),
+    (InventoryAsset.__table__.c.origin, InventoryAssetOrigin),
+    (InventoryAsset.__table__.c.validation_status, InventoryValidationStatus),
 ]
 
 
@@ -98,6 +129,26 @@ def test_migraciones_declaran_los_valores():
     # 0002: agent_type (variable _AGENT_TYPES) y el valor extendido 'estimate'.
     assert set(mod2._AGENT_TYPES) == CANONICAL[AgentType]
     assert "'estimate'" in text2 or '"estimate"' in text2
+
+
+def test_migracion_0010_declara_los_enums_del_inventario():
+    """La migración del inventario declara EXACTAMENTE los valores del modelo.
+
+    Mismo riesgo que arrastraba B0: SQLite no lo detecta porque `create_all` usa
+    el propio modelo, así que la divergencia solo aparecería en Postgres.
+    """
+    mod, _text = _load_migration("0010_inventario_de_sistemas.py")
+    assert set(mod.SYSTEM_KINDS) == CANONICAL[InventorySystemKind]
+    assert set(mod.SYSTEM_STATUSES) == CANONICAL[InventorySystemStatus]
+    assert set(mod.ASSET_TYPES) == CANONICAL[InventoryAssetType]
+    assert set(mod.ASSET_ORIGINS) == CANONICAL[InventoryAssetOrigin]
+    assert set(mod.VALIDATION_STATUSES) == CANONICAL[InventoryValidationStatus]
+
+
+def test_la_migracion_0010_encadena_con_la_ultima():
+    """Una cabeza suelta dejaría el inventario fuera de cualquier `upgrade head`."""
+    mod, _text = _load_migration("0010_inventario_de_sistemas.py")
+    assert mod.down_revision == "0009_especialidad_y_sprints"
 
 
 def test_alias_ef_jobstatus_apunta_al_mismo_enum():

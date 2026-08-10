@@ -18,6 +18,15 @@ from .base import Base
 
 # Alias históricos del Agente EF (compatibilidad).
 from .ef import EFArtifactRow, EFJob, EFValidation
+from .inventory import (
+    InventoryAsset,
+    InventoryAssetOrigin,
+    InventoryAssetType,
+    InventorySystem,
+    InventorySystemKind,
+    InventorySystemStatus,
+    InventoryValidationStatus,
+)
 from .user import Specialty, User, UserModuleGrant, UserRole
 
 __all__ = [
@@ -32,6 +41,13 @@ __all__ = [
     "EFSourceDoc",
     "EFSourceDocType",
     "EFValidation",
+    "InventoryAsset",
+    "InventoryAssetOrigin",
+    "InventoryAssetType",
+    "InventorySystem",
+    "InventorySystemKind",
+    "InventorySystemStatus",
+    "InventoryValidationStatus",
     "JobStatus",
     "SprintAssignment",
     "Specialty",

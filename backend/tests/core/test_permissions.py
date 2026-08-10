@@ -28,11 +28,16 @@ READ = AccessLevel.READ
 # la matriz, este test lo detecta en vez de acompañarlo.
 ESPERADO: dict[UserRole, dict[Module, AccessLevel]] = {
     UserRole.ADMIN: {module: FULL for module in Module},
-    UserRole.PROCESOS: {Module.EF: FULL},
-    UserRole.ANALISTA: {Module.EF: FULL, Module.SCRUM: FULL},
+    UserRole.PROCESOS: {Module.EF: FULL, Module.INVENTARIO: READ},
+    UserRole.ANALISTA: {
+        Module.EF: FULL,
+        Module.SCRUM: FULL,
+        Module.INVENTARIO: READ,
+    },
     UserRole.ARQUITECTO: {
         Module.ARQUITECTURA: FULL,
         Module.BD: FULL,
+        Module.INVENTARIO: FULL,
         Module.EF: READ,
         Module.SCRUM: READ,
     },
@@ -43,8 +48,9 @@ ESPERADO: dict[UserRole, dict[Module, AccessLevel]] = {
         Module.ARQUITECTURA: READ,
         Module.BD: READ,
         Module.SCRUM: READ,
+        Module.INVENTARIO: READ,
     },
-    UserRole.QA: {Module.QA: FULL, Module.SCRUM: READ},
+    UserRole.QA: {Module.QA: FULL, Module.SCRUM: READ, Module.INVENTARIO: READ},
 }
 
 
@@ -76,13 +82,39 @@ def test_full_implica_read():
     assert satisfies(READ, FULL) is False
 
 
-def test_procesos_solo_toca_ef():
-    """`procesos` tiene FULL en EF y NADA en el resto (ni lectura)."""
+def test_procesos_solo_toca_ef_y_consulta_el_inventario():
+    """`procesos` tiene FULL en EF, lectura del inventario y NADA más.
+
+    El inventario es la excepción consciente (INV1): quien levanta requisitos
+    necesita poder consultar qué existe ya antes de pedir que se construya de
+    nuevo. Negarle esa lectura sería justo el error que el módulo viene a
+    corregir. En todo lo demás sigue sin acceso ni de lectura.
+    """
     assert can(UserRole.PROCESOS, (), Module.EF, FULL)
+    assert can(UserRole.PROCESOS, (), Module.INVENTARIO, READ)
+    assert not can(UserRole.PROCESOS, (), Module.INVENTARIO, FULL)
     for module in Module:
-        if module is Module.EF:
+        if module in (Module.EF, Module.INVENTARIO):
             continue
         assert not can(UserRole.PROCESOS, (), module, READ)
+
+
+def test_el_inventario_lo_lee_todo_el_mundo_y_lo_cura_el_arquitecto():
+    """INV1: transversal en lectura, curado por quien responde de su calidad.
+
+    Un activo mal cargado envenena la fase RECONCILE de Arquitectura, BD y API a
+    la vez, así que escribir en el inventario no es una operación cualquiera.
+    """
+    for role in UserRole:
+        assert can(
+            role, (), Module.INVENTARIO, READ
+        ), f"{role.value} no puede consultar el inventario"
+    for role in (UserRole.ADMIN, UserRole.ARQUITECTO):
+        assert can(role, (), Module.INVENTARIO, FULL)
+    for role in (UserRole.PROCESOS, UserRole.ANALISTA, UserRole.DEVELOPER, UserRole.QA):
+        assert not can(
+            role, (), Module.INVENTARIO, FULL
+        ), f"{role.value} no debería poder escribir en el inventario"
 
 
 def test_arquitecto_lee_ef_y_scrum_pero_no_escribe():
@@ -162,10 +194,14 @@ def test_grant_inferior_no_degrada_el_rol():
 
 
 def test_grants_no_afectan_a_otros_modulos():
-    """Conceder un módulo no abre ninguno más."""
+    """Conceder un módulo no abre ninguno más.
+
+    `procesos` parte de `ef` (FULL) + `inventario` (READ, transversal): el grant
+    añade `arquitectura` y NADA más.
+    """
     grants = [(Module.ARQUITECTURA, FULL)]
     efectivos = effective_modules(UserRole.PROCESOS, grants)
-    assert set(efectivos) == {Module.EF, Module.ARQUITECTURA}
+    assert set(efectivos) == {Module.EF, Module.INVENTARIO, Module.ARQUITECTURA}
 
 
 def test_grant_de_config_concede_configuracion():
