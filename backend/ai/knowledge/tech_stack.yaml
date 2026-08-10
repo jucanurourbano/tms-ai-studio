@@ -1,7 +1,7 @@
 # =============================================================================
 # tech_stack.yaml — Stack tecnológico estándar de Urbano TI
 #
-#   ⚠️  PENDIENTE DE VALIDACIÓN POR EL EQUIPO DE ARQUITECTURA / SISTEMAS DE URBANO
+#   ⚠️  VALIDACIÓN PARCIAL — ver `status` y el campo `validated` de cada capa.
 #
 # IMPORTANTE (léelo antes de usar):
 #   - Este archivo describe el stack con el que Urbano construye sus **SISTEMAS
@@ -11,30 +11,67 @@
 #     agente SOLO puede recomendar tecnologías presentes aquí; si detecta una
 #     necesidad fuera de esta lista, NO inventa un exótico → emite una pregunta
 #     al Arquitecto.
-#   - Los valores de abajo son un **BORRADOR razonable** puesto por el asistente
-#     para no dejar el archivo vacío. NO reflejan (aún) el stack real de Urbano.
-#     Cada capa lleva un comentario "# REVISAR:" indicando qué debes confirmar,
-#     podar o reemplazar.  Al validar, sube `status` a `validado` y `version` a 1.
-#   - Las capas ya confirmadas por el equipo llevan `validated: true` y pierden su
-#     comentario "# REVISAR". Hoy solo lo está `database_relational`
-#     (PostgreSQL 16), así que el `status` global sigue pendiente.
+#   - Las capas con `validated: true` están CONFIRMADAS y llevan `source:` con el
+#     documento que las respalda. No se tocan sin pasar por el equipo.
+#   - Las capas que siguen siendo borrador conservan su comentario "# REVISAR:".
+#     El `status` GLOBAL solo pasa a `validado` cuando TODAS lo estén.
 #
 # Formato por capa:
 #   default:         tecnología recomendada por defecto (la más frecuente en la casa)
 #   default_version: versión de referencia, si el equipo la fijó
 #   allowed:         lista blanca de tecnologías permitidas para esa capa
 #   validated:       true si el equipo de Urbano ya confirmó esta capa
+#   source:          documento que respalda la capa validada (clave de `sources`)
 #   notes:           contexto para el agente (cuándo preferir una alternativa)
 # =============================================================================
 
 status: pendiente_de_validacion   # REVISAR: pasar a "validado" cuando TODAS las capas lo estén
 version: 0                        # REVISAR: subir a 1 al validar
 
+# Documentos que respaldan las capas marcadas `validated: true`. Una capa validada
+# SIN `source` es una afirmación sin respaldo: el test `test_toda_capa_validada_cita_su_fuente`
+# lo impide.
+sources:
+  modernizacion_v4:
+    ref: "PROYECTO_MODERNIZACION_v4"
+    title: "Proyecto de Modernización de Urbano — v4"
+    notes: >-
+      Documento de modernización del TMS de Urbano. Define el destino tecnológico
+      (nube, motor de datos, estilo arquitectónico y aplicaciones cliente) del
+      programa brownfield que el módulo INVENTARIO reconcilia contra lo existente.
+  equipo_arquitectura:
+    ref: "acuerdo-equipo-arquitectura"
+    title: "Confirmación verbal del equipo de Arquitectura / Sistemas de Urbano"
+
+# Estilo arquitectónico de la casa. VIVE FUERA de `layers` a propósito.
+#
+# `layers` es el allow-list que el nodo STACK del Agente Arquitectura rellena
+# entrada por entrada en `stack[]`. El estilo arquitectónico NO es una entrada de
+# esa lista: el agente ya lo decide como ciudadano de primera clase
+# (`architecture_style` del artefacto, respaldado por ADR-001 y por el perfil de
+# alcance determinista). Ponerlo bajo `layers` crearía DOS fuentes de verdad para
+# la misma decisión y permitiría al LLM afirmar un estilo por fuera del flujo del
+# ADR. Aquí es conocimiento de la casa que SESGA el default, no que lo sustituye.
+architecture:
+  validated: true
+  source: modernizacion_v4
+  style_default: "microservices"
+  style_allowed: ["microservices", "modular_monolith"]
+  notes: >-
+    El destino del programa de modernización son MICROSERVICIOS sobre un esquema
+    de datos compartido. `modular_monolith` sigue permitido para subsistemas
+    pequeños y aislados donde el perfil de alcance (size_class S) no justifique el
+    costo operativo de un servicio propio: en ese caso el Agente Arquitectura debe
+    JUSTIFICAR la excepción en su ADR, no elegirla por defecto.
+
 layers:
   language_backend:
-    # REVISAR (CRÍTICO): ¿cuál es el lenguaje de backend de los sistemas de negocio
-    # de Urbano? Muchas casas de logística usan .NET/C# o Java. Ajusta default y poda
-    # los que no apliquen.
+    # REVISAR (CRÍTICO): el documento de modernización NO fija el lenguaje de los
+    # microservicios de negocio. Solo confirma Python para la reportería asíncrona
+    # (ver la capa `reporting_async`), que es un caso de uso concreto y NO debe
+    # leerse como "el backend es Python". Sigue siendo borrador a propósito: dar
+    # por validada esta capa sin respaldo sería exactamente el tipo de invención
+    # que el ISDF prohíbe.
     default: "Java"
     allowed: ["Java", "C# (.NET)", "Python", "Node.js (TypeScript)"]
     notes: "Preferir el lenguaje con mayor base instalada y equipo disponible."
@@ -47,23 +84,90 @@ layers:
     notes: "Framework corporativo estándar para APIs y servicios de negocio."
 
   framework_frontend:
-    # REVISAR: ¿SPA (React/Angular) o server-rendered? ¿Hay estándar corporativo?
-    default: "Angular"
-    allowed: ["Angular", "React", "Vue", "Blazor"]
-    notes: "Angular es común en TI corporativa; React si el equipo ya lo domina."
+    # ✅ VALIDADO: aplicaciones web en React 19 con TypeScript y Tailwind.
+    validated: true
+    source: modernizacion_v4
+    default: "React"
+    default_version: "19"
+    allowed: ["React"]
+    notes: >-
+      Estándar único para las aplicaciones web del TMS moderno. Una necesidad
+      fuera de React (p. ej. un portal heredado en otra tecnología) NO se
+      recomienda: se pregunta al Arquitecto.
+
+  language_frontend:
+    # ✅ VALIDADO: TypeScript, no JavaScript plano.
+    validated: true
+    source: modernizacion_v4
+    default: "TypeScript"
+    allowed: ["TypeScript"]
+    notes: "Tipado obligatorio en las aplicaciones web."
+
+  styling_frontend:
+    # ✅ VALIDADO: Tailwind CSS como sistema de estilos de las apps web.
+    validated: true
+    source: modernizacion_v4
+    default: "Tailwind CSS"
+    allowed: ["Tailwind CSS"]
+    notes: "Sistema de utilidades de estilo estándar de las aplicaciones web."
+
+  mobile_android:
+    # ✅ VALIDADO: app Android nativa para la operación (couriers, handhelds).
+    validated: true
+    source: modernizacion_v4
+    default: "Kotlin + Jetpack Compose"
+    allowed: ["Kotlin + Jetpack Compose"]
+    notes: >-
+      Aplicación nativa Android para la operación de campo (reparto, admisión,
+      lectura con handheld). Nativa y no multiplataforma porque depende de
+      periféricos y de captura offline.
+
+  mobile_multiplatform:
+    # ✅ VALIDADO: app multiplataforma para los DESTINATARIOS (público externo).
+    validated: true
+    source: modernizacion_v4
+    default: "Flutter"
+    allowed: ["Flutter"]
+    notes: >-
+      Aplicación para destinatarios (seguimiento de envíos, coordinación de
+      entrega). Multiplataforma porque el público es externo y hay que cubrir
+      Android e iOS con un solo equipo.
+
+  reporting_async:
+    # ✅ VALIDADO: la reportería pesada se resuelve en Python, fuera del request.
+    validated: true
+    source: modernizacion_v4
+    default: "Python"
+    allowed: ["Python"]
+    notes: >-
+      Generación de reportes ASÍNCRONA (fuera del ciclo petición/respuesta). Es un
+      caso de uso acotado: no autoriza a asumir Python como lenguaje general de
+      backend (ver `language_backend`).
 
   database_relational:
-    # ✅ VALIDADO por el equipo de Urbano: PostgreSQL 16 es el motor de la casa.
-    # Es la única capa confirmada hasta ahora; el resto del archivo sigue siendo
-    # borrador (por eso `status` global continúa en pendiente_de_validacion).
+    # ✅ VALIDADO: PostgreSQL 16 como dialecto; AWS Aurora Serverless v2 como
+    # servicio gestionado de destino.
+    #
+    # OJO con `allowed`: esta lista es el **contrato de dialectos** del Agente BD
+    # (`ai.knowledge.engine_type_map` traduce cada `logical_type` motor a motor, y
+    # `DB_ENGINES` debe coincidir con ella). Aurora Serverless v2 NO es un dialecto
+    # distinto: es un despliegue gestionado de PostgreSQL, compatible a nivel de
+    # protocolo y SQL. Por eso vive en `managed_service`/`deployment` y NO en
+    # `allowed`: meterlo ahí rompería el mapa de tipos y el DDL generado.
     validated: true
+    source: modernizacion_v4
     default: "PostgreSQL"
     default_version: "16"
+    dialect: "postgresql"
+    managed_service: "AWS Aurora Serverless v2 (compatible con PostgreSQL)"
+    deployment: "aws_aurora_serverless_v2"
     allowed: ["PostgreSQL", "SQL Server", "Oracle", "MySQL"]
     notes: >-
-      Motor transaccional principal para los sistemas de negocio: PostgreSQL 16.
-      Los demás siguen en la lista blanca porque pueden aparecer en integraciones
-      con sistemas legados, pero un diseño nuevo se modela sobre PostgreSQL.
+      Motor transaccional de los sistemas de negocio: PostgreSQL 16, desplegado
+      como AWS Aurora Serverless v2. El DDL se genera en dialecto `postgresql` sin
+      excepción. Los demás motores siguen en la lista blanca porque aparecen en
+      integraciones con sistemas LEGADOS, pero un diseño nuevo se modela sobre
+      PostgreSQL.
 
   cache:
     # REVISAR: ¿se usa caché distribuida? Si no aplica, el agente lo omite.
@@ -72,17 +176,22 @@ layers:
     notes: "Solo si hay requisitos de latencia/sesión que lo justifiquen."
 
   message_queue:
-    # REVISAR: ¿mensajería/colas corporativas? Solo se recomienda si el diseño
-    # detecta asincronía justificada (eventos, tareas largas). Si no, "ninguna".
-    default: "RabbitMQ"
-    allowed: ["RabbitMQ", "Apache Kafka", "Azure Service Bus", "AWS SQS", "ninguna"]
-    notes: "Por defecto ninguna en monolito modular; añadir solo si se justifica."
+    # REVISAR: ¿qué servicio de mensajería usa el destino? Con arquitectura de
+    # microservicios en AWS la asincronía deja de ser excepcional, pero el
+    # documento no fija el producto concreto. Confirmar antes de validar.
+    default: "AWS SQS"
+    allowed: ["AWS SQS", "Apache Kafka", "RabbitMQ", "ninguna"]
+    notes: >-
+      En microservicios la comunicación asíncrona es habitual, pero se recomienda
+      solo cuando el diseño la justifique (eventos de dominio, tareas largas como
+      la reportería asíncrona). Si no se justifica, "ninguna".
 
   auth:
     # REVISAR (CRÍTICO): ¿hay IdP/SSO corporativo (Active Directory, Azure AD,
-    # Keycloak)? Impacta el requisito transversal de autenticación.
+    # Keycloak, AWS Cognito)? Impacta el requisito transversal de autenticación y
+    # el esquema de seguridad que renderiza el Agente API.
     default: "Keycloak"
-    allowed: ["Keycloak", "Azure AD / Entra ID", "Active Directory (LDAP)", "OAuth2/OIDC propio"]
+    allowed: ["Keycloak", "AWS Cognito", "Azure AD / Entra ID", "Active Directory (LDAP)", "OAuth2/OIDC propio"]
     notes: "Preferir el IdP corporativo existente antes que auth propia."
 
   api_style:
@@ -98,31 +207,40 @@ layers:
     notes: "Estándar de empaquetado."
 
   orchestration:
-    # REVISAR: ¿Kubernetes, un PaaS, o VMs/on-premise tradicional?
+    # REVISAR: ¿ECS/EKS/Fargate, o algo más simple? El documento fija la nube pero
+    # no el orquestador. Confirmar antes de validar.
     default: "Kubernetes"
-    allowed: ["Kubernetes", "OpenShift", "Docker Compose", "VMs / on-premise"]
+    allowed: ["Kubernetes", "AWS ECS / Fargate", "OpenShift", "Docker Compose", "VMs / on-premise"]
     notes: "Kubernetes solo si hay plataforma y equipo que lo operen."
 
   cloud:
-    # REVISAR (CRÍTICO): ¿nube corporativa (Azure/AWS/GCP) u on-premise?
-    default: "on-premise"
-    allowed: ["Azure", "AWS", "GCP", "on-premise", "híbrido"]
-    notes: "Define disponibilidad de servicios gestionados (colas, auth, etc.)."
+    # ✅ VALIDADO: AWS es la nube de destino (Aurora Serverless v2 lo implica).
+    validated: true
+    source: modernizacion_v4
+    default: "AWS"
+    allowed: ["AWS"]
+    notes: >-
+      Nube de destino del programa de modernización. Determina qué servicios
+      gestionados están disponibles (Aurora, colas, identidad, almacenamiento).
+      Un sistema LEGADO puede seguir on-premise: eso se describe en el inventario,
+      no en esta capa, que fija el destino.
 
   ci_cd:
     # REVISAR: herramienta de integración/entrega continua corporativa.
     default: "Azure DevOps"
-    allowed: ["Azure DevOps", "GitLab CI", "Jenkins", "GitHub Actions"]
+    allowed: ["Azure DevOps", "GitLab CI", "Jenkins", "GitHub Actions", "AWS CodePipeline"]
     notes: "Alinear con el repositorio y la nube corporativa."
 
   observability:
     # REVISAR: stack de logs/métricas/trazas si existe estándar.
     default: "ELK (Elastic)"
-    allowed: ["ELK (Elastic)", "Grafana + Prometheus", "Datadog", "Application Insights"]
+    allowed: ["ELK (Elastic)", "Grafana + Prometheus", "Datadog", "AWS CloudWatch"]
     notes: "Opcional; recomendar solo si hay RNF de observabilidad."
 
   reporting:
     # REVISAR: ¿herramienta de reportería/BI corporativa? (logística la suele tener)
+    # No confundir con `reporting_async`, que sí está validada y cubre la
+    # GENERACIÓN de reportes en Python; esta capa es la de explotación/BI.
     default: "Power BI"
     allowed: ["Power BI", "JasperReports", "Tableau", "ninguna"]
     notes: "Solo si el EF pide reportes/tableros."

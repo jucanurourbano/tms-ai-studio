@@ -52,12 +52,43 @@ def load_tech_stack() -> dict:
     return yaml.safe_load(_TECH_STACK_PATH.read_text(encoding="utf-8")) or {}
 
 
+@lru_cache
+def tech_stack_sources() -> dict[str, dict]:
+    """Documentos que respaldan las capas validadas (clave → ficha)."""
+    return dict(load_tech_stack().get("sources", {}) or {})
+
+
+@lru_cache
+def house_architecture_style() -> dict:
+    """Estilo arquitectónico de la casa (**sesga** el default, no lo sustituye).
+
+    Vive fuera de ``layers`` a propósito: el Agente Arquitectura ya decide el
+    estilo como ciudadano de primera clase (``architecture_style`` respaldado por
+    ADR-001 y por el perfil de alcance determinista). Esto es conocimiento de la
+    casa que inclina ese default hacia el destino del programa de modernización;
+    si el agente se aparta, debe justificarlo en su ADR.
+
+    Devuelve ``{}`` si el archivo no declara el bloque, para que quien llame
+    conserve su heurística previa en vez de romperse.
+    """
+    return dict(load_tech_stack().get("architecture", {}) or {})
+
+
 def tech_stack_block() -> str:
     """Renderiza el stack de la casa para inyectar en el prompt de STACK.
 
     Presenta, por capa, la tecnología por defecto y la lista blanca permitida. El
     agente **solo** puede recomendar tecnologías de estas listas; ante una
     necesidad fuera de ellas, pregunta al Arquitecto (no inventa exotismos).
+
+    Las capas ya confirmadas por el equipo se marcan como VALIDADA: el agente debe
+    saber que apartarse de ellas no es una preferencia, es una excepción que hay
+    que justificar. El servicio gestionado (``managed_service``), cuando existe,
+    viaja junto al motor porque cambia las opciones de despliegue sin cambiar el
+    dialecto.
+
+    NO se incluye el estilo arquitectónico: no es una entrada del ``stack[]`` y
+    mostrarlo aquí invitaría al modelo a rellenarlo como si lo fuera.
     """
     data = load_tech_stack()
     layers: dict = data.get("layers", {}) or {}
@@ -70,7 +101,12 @@ def tech_stack_block() -> str:
         cfg = cfg or {}
         default = cfg.get("default", "—")
         allowed = ", ".join(cfg.get("allowed", []) or []) or "—"
-        lines.append(f"- {layer}: por defecto «{default}»; permitidas: [{allowed}]")
+        linea = f"- {layer}: por defecto «{default}»; permitidas: [{allowed}]"
+        if cfg.get("managed_service"):
+            linea += f"; servicio gestionado: {cfg['managed_service']}"
+        if cfg.get("validated"):
+            linea += " (VALIDADA por el equipo)"
+        lines.append(linea)
     return "\n".join(lines)
 
 

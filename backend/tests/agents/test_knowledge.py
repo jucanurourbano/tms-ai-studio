@@ -16,6 +16,7 @@ from ai.knowledge import (
     engine_type_map,
     exposure_for,
     glossary_block,
+    house_architecture_style,
     identity_clause,
     load_api_conventions,
     load_db_conventions,
@@ -26,6 +27,7 @@ from ai.knowledge import (
     security_scheme_for,
     success_status,
     tech_stack_block,
+    tech_stack_sources,
     type_synonyms,
 )
 
@@ -35,6 +37,55 @@ def test_glossary_sigue_disponible():
     terms = load_glossary()
     assert "checkpoint" in terms
     assert "GLOSARIO LOGÍSTICO" in glossary_block()
+
+
+# --- Glosario ampliado (INV0) ------------------------------------------------
+
+
+def test_glosario_cubre_los_terminos_del_programa_de_modernizacion():
+    """INV0: los términos operativos del TMS entran al glosario de TODOS los agentes.
+
+    Sin ellos, `EXTRACT` lee "recaudo" o "manifiesto" como palabras corrientes y
+    el EF sale con entidades mal interpretadas. El glosario es la única defensa.
+    """
+    terms = load_glossary()
+    for termino in (
+        "courier",
+        "Punto Urbano",
+        "DWS",
+        "admisión",
+        "cross-docking",
+        "recaudo",
+        "leadtime",
+        "handheld",
+        "logística inversa",
+        "guía electrónica",
+        "manifiesto",
+    ):
+        assert termino in terms, f"falta el término «{termino}»"
+        assert terms[termino].strip(), f"«{termino}» está sin definir"
+    # Los ocho términos originales de CLAUDE.md §8 siguen intactos.
+    for termino in ("checkpoint", "guía", "shipper", "siniestro", "papeleta", "DEO"):
+        assert termino in terms
+
+
+def test_recaudo_y_recupero_no_se_confunden():
+    """Son dos cosas distintas y se parecen: el glosario debe separarlas.
+
+    `recupero` es recuperación económica interna; `recaudo` es cobro al
+    destinatario contra entrega. Un agente que los mezcle produce reglas de
+    negocio equivocadas sobre el dinero.
+    """
+    terms = load_glossary()
+    assert terms["recaudo"] != terms["recupero"]
+    assert "recupero" in terms["recaudo"], "el glosario no advierte la confusión"
+
+
+def test_todo_termino_del_glosario_llega_al_bloque_del_prompt():
+    """Un término definido pero no renderizado es un término que no existe."""
+    block = glossary_block()
+    for termino in load_glossary():
+        assert f"- {termino}:" in block
 
 
 def test_tech_stack_carga_y_marca_pendiente_de_validacion():
@@ -65,6 +116,117 @@ def test_el_motor_relacional_esta_validado_y_es_postgresql_16():
     # Los otros motores siguen en la lista blanca (integraciones con legados).
     assert set(layer["allowed"]) == {"PostgreSQL", "SQL Server", "Oracle", "MySQL"}
     assert load_tech_stack()["status"] == "pendiente_de_validacion"
+
+
+# --- Stack real del programa de modernización (INV0) -------------------------
+
+
+def test_aurora_serverless_no_contamina_el_allow_list_de_dialectos():
+    """INV0: Aurora es un DESPLIEGUE de PostgreSQL, no un dialecto más.
+
+    Es el candado del bloque. `allowed` de `database_relational` es el contrato de
+    dialectos del Agente BD: `DB_ENGINES` debe coincidir con él y `engine_type_map`
+    traduce cada `logical_type` motor a motor. Si alguien añadiera "Aurora" a esa
+    lista, el mapa de tipos se quedaría sin traducción y el DDL sería
+    irrenderizable. El dato de Aurora vive en claves propias.
+    """
+    layer = load_tech_stack()["layers"]["database_relational"]
+    assert layer["dialect"] == "postgresql"
+    assert "Aurora" in layer["managed_service"]
+    assert layer["deployment"] == "aws_aurora_serverless_v2"
+    # El allow-list sigue siendo EXACTAMENTE el de los dialectos soportados.
+    normalizados = {p.lower().replace(" ", "") for p in layer["allowed"]}
+    assert normalizados == set(DB_ENGINES)
+    assert not any("aurora" in p.lower() for p in layer["allowed"])
+
+
+def test_las_capas_confirmadas_por_el_documento_estan_validadas():
+    """Las capas que el documento de modernización fija dejan de ser borrador."""
+    layers = load_tech_stack()["layers"]
+    esperado = {
+        "framework_frontend": "React",
+        "language_frontend": "TypeScript",
+        "styling_frontend": "Tailwind CSS",
+        "mobile_android": "Kotlin + Jetpack Compose",
+        "mobile_multiplatform": "Flutter",
+        "reporting_async": "Python",
+        "cloud": "AWS",
+        "database_relational": "PostgreSQL",
+    }
+    for capa, tecnologia in esperado.items():
+        assert capa in layers, f"falta la capa {capa}"
+        assert layers[capa]["validated"] is True, f"{capa} no está validada"
+        assert layers[capa]["default"] == tecnologia
+    assert layers["framework_frontend"]["default_version"] == "19"
+
+
+def test_toda_capa_validada_cita_su_fuente():
+    """Una capa validada SIN documento que la respalde es una afirmación desnuda.
+
+    El archivo entero existe para que el agente no invente tecnologías; validar una
+    capa "porque sí" reintroduciría por la puerta de atrás justo eso.
+    """
+    data = load_tech_stack()
+    fuentes = tech_stack_sources()
+    assert fuentes, "el archivo no declara ninguna fuente"
+    for capa, cfg in data["layers"].items():
+        if not (cfg or {}).get("validated"):
+            continue
+        origen = cfg.get("source")
+        assert origen, f"la capa validada «{capa}» no cita fuente"
+        assert origen in fuentes, f"«{capa}» cita una fuente inexistente: {origen}"
+        assert fuentes[origen].get("ref"), f"la fuente «{origen}» no tiene ref"
+
+
+def test_el_lenguaje_de_backend_sigue_SIN_validar():
+    """CANDADO: Python para reportes NO autoriza a asumir Python como backend.
+
+    El documento de modernización fija Python solo para la reportería asíncrona.
+    Dar por validada `language_backend` a partir de ese dato sería exactamente la
+    inferencia sin evidencia que el ISDF prohíbe. Este test impide que se cuele.
+    """
+    layers = load_tech_stack()["layers"]
+    assert not layers["language_backend"].get("validated"), (
+        "language_backend se marcó validada: el documento no fija el lenguaje de "
+        "los microservicios, solo Python para reportería asíncrona."
+    )
+    # Y la capa que SÍ está validada acota su alcance a la reportería.
+    assert layers["reporting_async"]["validated"] is True
+    assert layers["reporting_async"]["default"] == "Python"
+
+
+def test_el_estilo_arquitectonico_vive_fuera_de_layers():
+    """No es una entrada del `stack[]`: el agente ya lo decide vía ADR-001.
+
+    Bajo `layers` habría DOS fuentes de verdad para la misma decisión, y el nodo
+    STACK podría afirmar un estilo esquivando el flujo del ADR.
+    """
+    data = load_tech_stack()
+    assert "architecture_style" not in data["layers"]
+    casa = house_architecture_style()
+    assert casa["style_default"] == "microservices"
+    assert casa["validated"] is True
+    assert casa["source"] in tech_stack_sources()
+
+
+def test_el_estilo_de_la_casa_usa_los_valores_del_enum_de_arquitectura():
+    """Un estilo que el enum no conozca sería incomparable con el artefacto."""
+    from ai.agents.arquitectura.schemas.enums import ArchitectureStyle
+
+    validos = {e.value for e in ArchitectureStyle}
+    casa = house_architecture_style()
+    assert casa["style_default"] in validos
+    assert set(casa["style_allowed"]) <= validos
+
+
+def test_el_bloque_del_prompt_marca_lo_validado_y_no_filtra_el_estilo():
+    """El agente debe distinguir "por defecto" de "confirmado por el equipo"."""
+    block = tech_stack_block()
+    assert "VALIDADA por el equipo" in block
+    assert "Aurora" in block  # el servicio gestionado viaja con el motor
+    # El estilo arquitectónico NO se ofrece como capa rellenable.
+    assert "architecture_style" not in block
+    assert "microservices" not in block
 
 
 def test_tech_stack_block_es_allow_list_para_el_prompt():

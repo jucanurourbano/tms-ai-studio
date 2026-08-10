@@ -1,6 +1,12 @@
 # Glosario logístico del dominio (inyectado en EXTRACT / INTERPRET / CRITIQUE).
 # Fuente de verdad: CLAUDE.md.
+#
+# Los términos marcados "# CONFIRMAR" son de uso interno de Urbano y su
+# definición se dedujo del contexto del programa de modernización: valídalos con
+# el equipo de operaciones antes de darlos por buenos. Un término mal definido
+# aquí se propaga a TODOS los agentes, porque este bloque entra en sus prompts.
 terms:
+  # --- Núcleo original (CLAUDE.md §8) ---------------------------------------
   checkpoint: "estado (de un envío/siniestro), NO un punto de control físico"
   guía: "documento de envío"
   shipper: "cliente"
@@ -9,3 +15,40 @@ terms:
   recupero: "recuperación económica"
   ubigeo: "departamento-provincia-distrito (código de ubicación geográfica)"
   DEO: "depuración operativa"
+
+  # --- Ampliación INV0 (programa de modernización) --------------------------
+  courier: >-
+    persona que ejecuta el reparto en campo (mensajero/repartidor). Es un ACTOR
+    del sistema, no una empresa ni un tipo de servicio
+  Punto Urbano: >-
+    # CONFIRMAR
+    punto de atención físico de la red de Urbano donde se admiten y/o se retiran
+    envíos (red de atención al público)
+  DWS: >-
+    estación automatizada de admisión que mide (Dimensioning), pesa (Weighing) y
+    lee (Scanning) el envío en un solo paso; produce peso y volumen facturables
+  admisión: >-
+    ingreso de un envío a la red: registro, pesaje/dimensionado, etiquetado y
+    primer checkpoint. Es el punto de partida del ciclo de vida del envío
+  cross-docking: >-
+    paso de un envío por un centro de distribución SIN almacenaje: se descarga de
+    una unidad y se reembarca en otra en el mismo movimiento
+  recaudo: >-
+    # CONFIRMAR
+    cobro de dinero al destinatario en el momento de la entrega (contra entrega),
+    que después se liquida al shipper. NO es lo mismo que `recupero`
+  leadtime: >-
+    tiempo comprometido entre la admisión y la entrega de un envío; es la base
+    del cumplimiento del servicio (SLA)
+  handheld: >-
+    terminal móvil de mano que usa el personal de campo para leer códigos y
+    registrar checkpoints, normalmente con captura offline
+  logística inversa: >-
+    flujo de RETORNO de un envío hacia el shipper (rechazo del destinatario,
+    devolución, cambio); recorre la red en sentido contrario al de reparto
+  guía electrónica: >-
+    versión digital de la `guía` con validez ante la autoridad tributaria;
+    sustituye al documento físico, no lo duplica
+  manifiesto: >-
+    documento que agrupa los envíos que viajan juntos en una unidad de transporte
+    o ruta; es la unidad de control del traslado, no del envío individual
