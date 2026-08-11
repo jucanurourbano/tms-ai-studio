@@ -24,8 +24,10 @@ toda la API de agentes y el frontend (ver §6 y §6.1). Agente **Arquitectura** 
 `docs/diseno-agente-arquitectura.md`). Agente **BD** **completo** (backend +
 frontend; bloques BD0→BD8 implementados, ver §5.2 y `docs/diseno-agente-bd.md`).
 Agente **API** **completo** (backend + frontend; bloques API0→API9
-implementados, ver §5.3 y `docs/diseno-agente-api.md`). Siguiente eslabón:
-**Agente Backend**.
+implementados, ver §5.3 y `docs/diseno-agente-api.md`). **MÓDULO INVENTARIO DE
+SISTEMAS + fase RECONCILE** **completo** (bloques INV0→INV6, ver §5.4): el ISDF
+deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
+Siguiente eslabón: **Agente Backend**.
 
 ---
 
@@ -416,6 +418,82 @@ LOAD_SOURCES → RESOURCE_MAP → RESOURCES → ENDPOINTS → SCHEMAS
   se dirigen a **`questions_for_tech_lead`** (quien puede responderlas). El
   arquitecto participa por **grant**, no por excepción a la matriz.
 
+## 5.4 Módulo INVENTARIO DE SISTEMAS + fase RECONCILE (implementado)
+
+> La evolución **brownfield** del ISDF. Hasta INV0 cada agente diseñaba como si la
+> organización partiera de cero; el inventario es la memoria de **lo que ya
+> existe** y RECONCILE es la fase que la usa.
+
+**INV0 — conocimiento de la casa.** `tech_stack.yaml` incorpora el destino real
+(AWS, PostgreSQL 16 sobre **Aurora Serverless v2**, React 19 + TS + Tailwind,
+Kotlin + Compose, Flutter, Python para reportería asíncrona), cada capa validada
+**citando su fuente**. Aurora NO entra en `allowed`: esa lista es el contrato de
+dialectos del Agente BD (`DB_ENGINES` + `engine_type_map`), y Aurora es un
+despliegue de PostgreSQL, no un dialecto — vive en `dialect`/`managed_service`/
+`deployment`. `language_backend` sigue SIN validar con candado: el documento fija
+Python solo para reportes. El estilo (microservicios) vive FUERA de `layers`, en
+el bloque `architecture`, para no duplicar la decisión que ya toma
+`architecture_style` + ADR-001. Glosario ampliado con 11 términos operativos.
+
+**INV1 — modelo.** `inventory_systems` (destino|legado|externo) e
+`inventory_assets` (db_schema|module|api|document) con `content` JSONB, migración
+`0010`. **Versionado sin bandera `is_current`**: recargar inserta `version+1` y la
+vigente es el máximo por `(system_id, asset_type, name)`, resuelto al LEER — un
+máximo derivado no se desincroniza, una bandera sí. Todo activo nace `importado`,
+nunca `validado`: cargar no es revisar.
+
+**INV2 — ingesta de esquemas.** Dump DDL → sqlglot, **sin LLM**. La trampa que
+define el módulo: sqlglot NO lanza excepción ante lo que no entiende, lo degrada a
+`Command` — un importador ingenuo perdería tablas en silencio y RECONCILE diría
+"créala" sobre una tabla de producción. Se trocea con el tokenizador y todo
+`Command` se reporta con su línea. Introspección read-only **fail-closed en cuatro
+capas**: alias (nunca DSN del cliente, sería SSRF), allowlist de hosts, solo
+lectura impuesta por el servidor y credencial siempre redactada. Rol `admin`
+estricto.
+
+**INV3 — ingesta de documentos.** Reutiliza el pipeline del EF + pase LLM que
+extrae módulos, entidades, funcionalidades y **decisiones**. Las defensas viven en
+Python, no en el prompt: se verifica que la `source_ref` sea un `element_id` real
+del fragmento y que haya evidencia verbatim; lo demás se descarta y **se informa**.
+
+**INV4 — la fase RECONCILE.** Nodo en Arquitectura, BD y API. Cuatro veredictos:
+`reuse` (no se construye) · `extend` (**ALTER, no CREATE**) · `new` · `conflict`
+(**pregunta bloqueante**). Entre "claramente lo mismo" y "claramente distinto" hay
+una banda de duda donde **no se adivina, se pregunta**: la diferencia entre no
+saber y equivocarse. Matching léxico/estructural con umbrales calibrados por test;
+gancho para pgvector documentado en `name_similarity`. Consecuencias reales: lo
+reutilizado no se crea **ni se dropea en el rollback**, un catálogo reutilizado no
+se siembra, y una columna añadida NOT NULL sin DEFAULT se relaja (contra una tabla
+con datos ese ALTER reventaría). `reconciliation` es **opcional** en los tres
+contratos: retrocompatible. Sin inventario, la fase se declara no ejecutada **con
+el motivo escrito** y el diseño sigue como greenfield.
+
+**INV5 — UI.** Sección propia "Conocimiento → Inventario", primera en la nav.
+Esquema con tablas plegables y buscador por tabla Y por columna. Badges de
+reconciliación (verde/azul/violeta/rojo) con vocabulario único en
+`lib/reconciliation.ts` y el activo existente al lado de la propuesta.
+
+**INV6 — promoción.** Un artefacto terminado de BD o API se promueve al
+inventario. **Se MEZCLA, no se reemplaza**: reemplazar borraría del inventario lo
+que ese diseño no menciona, y el siguiente reconciliaría contra una foto
+incompleta.
+
+**Permisos:** módulo `inventario` — excepción consciente a la regla de forma:
+FULL para `admin`/`arquitecto` (curarlo es responsabilidad de arquitectura) y READ
+para **todos** los demás, incluido `procesos`. No es una fase, es conocimiento
+transversal.
+
+**Cortafuegos:** `tests/conftest.py` añade `sin_inventario_real` (hermano del de
+la API de Anthropic) para que ningún test abra conexiones al reconciliar.
+
+**Seed de demostración:** `scripts/seed_inventario_demo.py` (TMS Moderno, 15
+tablas maestras). ⚠️ **Nombres SINTÉTICOS**: `PROYECTO_MODERNIZACION_v4` NO está
+en el repositorio; se reprodujo la FORMA acordada (5 apps, 16 microservicios, 15
+maestras), no los nombres reales. Al incorporar el documento, sustituirlos aquí y
+en `tests/inventory/fixtures.py`.
+
+---
+
 ## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
@@ -644,6 +722,8 @@ tms-ai-studio/
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
+        ├── inventory/            # INVENTARIO: ddl_import, doc_import, matching,
+        │                         # reconcile, promote, loader, nodes, contract
         ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, base/)
         │                         # bd/ddl/:      render + validación del DDL (sin LLM)
         │                         # api/openapi/: render + validación del spec (sin LLM)
