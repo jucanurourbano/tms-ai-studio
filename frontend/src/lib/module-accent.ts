@@ -112,6 +112,16 @@ export const MODULE_ACCENT: Record<ModuleKey, ModuleAccent> = {
     iconGradient: "bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-700",
     hoverRing: "hover:ring-emerald-300",
   },
+  // Inventario: piedra. Neutro cálido, distinto del gris de Configuración, para
+  // que se lea como "esto no es una fase del ISDF, es la memoria de lo que hay".
+  inventario: {
+    soft: "bg-stone-100 text-stone-700",
+    text: "text-stone-600",
+    ring: "ring-stone-200",
+    groupHoverText: "group-hover:text-stone-600",
+    iconGradient: "bg-gradient-to-br from-stone-100 to-stone-50 text-stone-700",
+    hoverRing: "hover:ring-stone-300",
+  },
   // Configuración: neutro a propósito, no es una fase del ISDF.
   config: {
     soft: "bg-slate-100 text-slate-700",

@@ -9,6 +9,7 @@ import { canAccess } from "@/lib/permissions";
 import type { EffectiveModules, ModuleKey } from "@/lib/types/auth";
 
 export type AgentIcon =
+  | "boxes"
   | "file-search"
   | "kanban"
   | "layers"
@@ -42,6 +43,26 @@ export interface PhaseNav {
 }
 
 export const ISDF_NAV: PhaseNav[] = [
+  {
+    // El inventario NO es una fase del ISDF: es la memoria de lo que ya existe y
+    // el insumo de la fase RECONCILE de los agentes de diseño. Va en su propio
+    // grupo, y primero, porque se consulta ANTES de especificar nada — que es
+    // justo el hábito que el módulo quiere instaurar.
+    key: "conocimiento",
+    phase: "Conocimiento",
+    agents: [
+      {
+        key: "inventario",
+        module: "inventario",
+        name: "Inventario",
+        href: "/inventario",
+        enabled: true,
+        icon: "boxes",
+        description:
+          "Los sistemas que ya existen: su esquema de datos, sus módulos y sus APIs. Es contra esto que los agentes de diseño reconcilian lo que proponen.",
+      },
+    ],
+  },
   {
     key: "especificar",
     phase: "Especificar",

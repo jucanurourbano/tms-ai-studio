@@ -298,17 +298,20 @@ def render_alter_add_columns(
     sentencias: list[str] = []
     for columna in columnas:
         copia = dict(columna)
+        nota = ""
         if not copia.get("nullable", True) and copia.get("default") is None:
             copia["nullable"] = True
-            comentario = (
-                f" -- se declara NULL: la tabla ya tiene datos y la columna no "
-                "trae DEFAULT"
+            # El comentario va en su PROPIA LÍNEA, ANTES de la sentencia. Si
+            # fuera al final, el `;` que añade el empaquetador quedaría DENTRO
+            # del comentario: la sentencia no terminaría y la siguiente se
+            # fundiría con ella, perdiendo columnas en silencio.
+            nota = (
+                "-- se declara NULL: la tabla ya tiene datos y la columna no "
+                "trae DEFAULT\n"
             )
-        else:
-            comentario = ""
         sentencias.append(
-            f"ALTER TABLE {qualified(table, engine)} "
-            f"ADD COLUMN {render_column(copia, engine)}{comentario}"
+            f"{nota}ALTER TABLE {qualified(table, engine)} "
+            f"ADD COLUMN {render_column(copia, engine)}"
         )
     return sentencias
 

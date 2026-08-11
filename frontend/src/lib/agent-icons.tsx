@@ -4,6 +4,7 @@
 // Centralizado para reutilizar el mismo icono en la sidebar y en las cabeceras.
 
 import {
+  Boxes,
   Database,
   FileSearch,
   Kanban,
@@ -22,6 +23,7 @@ interface IconProps {
 }
 
 const RENDERERS: Record<AgentIcon, (props: IconProps) => React.ReactNode> = {
+  boxes: (p) => <Boxes {...p} />,
   "file-search": (p) => <FileSearch {...p} />,
   kanban: (p) => <Kanban {...p} />,
   layers: (p) => <Layers {...p} />,

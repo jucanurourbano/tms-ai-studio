@@ -2,6 +2,10 @@
 // Claves en inglés (contrato); campos opcionales para tolerar variaciones.
 
 import type {
+  ReconciliationRef,
+  ReconciliationSummary,
+} from "@/lib/reconciliation";
+import type {
   JobStatus,
   Origin,
   QuestionStatus,
@@ -181,6 +185,8 @@ export interface DbTable {
   source_refs: string[];
   confidence?: number | null;
   origin?: Origin | null;
+  /** Veredicto de RECONCILE (INV4). Ausente si la fase no corrió. */
+  reconciliation?: ReconciliationRef | null;
 }
 
 export interface DbDdlScript {
@@ -346,6 +352,8 @@ export interface DatabaseArtifact {
   analysis: DbAnalysis;
   questions_for_dba: DbaQuestion[];
   metrics: DbMetrics;
+  /** Resumen de RECONCILE (INV4). Ausente en artefactos anteriores al módulo. */
+  reconciliation?: ReconciliationSummary | null;
 }
 
 // --- Envolturas de la API ----------------------------------------------------

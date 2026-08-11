@@ -22,6 +22,8 @@ export type ModuleKey =
   | "frontend"
   | "qa"
   | "devops"
+  /** Inventario de sistemas: conocimiento transversal, no una fase. */
+  | "inventario"
   | "config";
 
 /** Especialidad técnica del colaborador (enum cerrado del backend). */

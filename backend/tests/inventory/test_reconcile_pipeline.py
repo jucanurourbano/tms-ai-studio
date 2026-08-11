@@ -146,6 +146,43 @@ def test_una_columna_obligatoria_anadida_se_relaja_a_nullable():
     assert "ya tiene datos" in sentencias[0]
 
 
+def test_la_nota_del_alter_no_se_come_el_punto_y_coma():
+    """REGRESIÓN: el comentario iba al FINAL y se tragaba el separador.
+
+    El empaquetador añade `;` a cada sentencia. Con la nota al final, el `;`
+    quedaba DENTRO del comentario: la sentencia no terminaba y la siguiente se
+    fundía con ella, perdiendo columnas en silencio. Lo destapó ejecutar el
+    render de verdad contra el inventario sembrado.
+    """
+    tablas = [
+        tabla(
+            "T1",
+            "usuarios",
+            columna("usuario_id", "bigint", pk=True),
+            columna("dni", nullable=False),
+            columna("codigo", nullable=False),
+            reconciliation={
+                "status": "extend",
+                "reason": "x",
+                "missing": ["dni", "codigo"],
+            },
+        )
+    ]
+    scripts, _ = build_ddl_scripts(tablas, [], "postgresql")
+    alter = next(s for s in scripts if s["kind"] == "alters")
+
+    # Las DOS columnas llegan como sentencias completas y terminadas.
+    assert alter["sql"].count("ADD COLUMN") == 2
+    for linea in alter["sql"].splitlines():
+        if linea.strip().startswith("--"):
+            assert not linea.rstrip().endswith(
+                ";"
+            ), f"el «;» quedó dentro de un comentario: {linea}"
+    for sentencia in alter["statements"]:
+        # Cada sentencia acaba en la ALTER, nunca en un comentario.
+        assert sentencia.strip().splitlines()[-1].startswith("ALTER TABLE")
+
+
 def test_una_columna_obligatoria_con_default_se_respeta():
     sentencias = render_alter_add_columns(
         {"name": "usuarios"},

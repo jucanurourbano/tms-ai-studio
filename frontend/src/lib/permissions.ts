@@ -57,6 +57,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   frontend: "Agente Frontend",
   qa: "Agente QA",
   devops: "Agente DevOps",
+  inventario: "Inventario de Sistemas",
   config: "Configuración",
 };
 

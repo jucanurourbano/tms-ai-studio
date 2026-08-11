@@ -75,6 +75,11 @@ import {
 } from "@/components/artifact/primitives";
 import { DbaValidationControls } from "@/components/bd/validation-controls";
 import { ConfidenceBadge, JobStatusBadge, Mono } from "@/components/ef/badges";
+import {
+  ReconciliationBadge,
+  ReconciliationDetail,
+  ReconciliationSummaryBar,
+} from "@/components/inventario/reconciliation-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -444,7 +449,16 @@ export function DatabaseResultView({ job }: { job: DbJobDetail }) {
           id: "todas",
           label: "Todas",
           count: a.tables.length,
-          render: ({ query }) => renderTables(a.tables, query),
+          render: ({ query }) => (
+            <>
+              {/* La franja de reconciliación va ARRIBA del listado: antes de
+                  leer qué se propone, hay que saber cuánto de ello ya existe. */}
+              {a.reconciliation && (
+                <ReconciliationSummaryBar summary={a.reconciliation} />
+              )}
+              {renderTables(a.tables, query)}
+            </>
+          ),
         },
         {
           id: "entidades",
@@ -1398,6 +1412,7 @@ function TableBlock({ table }: { table: DbTable }) {
           <Badge variant="outline">{KIND_LABEL[table.kind] ?? table.kind}</Badge>
           {table.entity_ref && <RefChip refId={table.entity_ref} />}
           <ConfidenceBadge value={table.confidence ?? undefined} />
+          <ReconciliationBadge reconciliation={table.reconciliation} />
           {table.normalization.denormalized && (
             <Badge
               variant="outline"
@@ -1407,6 +1422,9 @@ function TableBlock({ table }: { table: DbTable }) {
             </Badge>
           )}
         </div>
+        {table.reconciliation && (
+          <ReconciliationDetail reconciliation={table.reconciliation} />
+        )}
         {table.description && (
           <p className="text-xs text-muted-foreground">{table.description}</p>
         )}
