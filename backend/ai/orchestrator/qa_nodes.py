@@ -17,7 +17,9 @@ from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.qa.auth_cases import build_auth_cases
 from ai.agents.qa.common import merge_metrics
 from ai.agents.qa.criterion_map import build_criterion_map
+from ai.agents.qa.dataset import build_datasets
 from ai.agents.qa.edge_cases import run_edge_cases
+from ai.agents.qa.exec_plan import build_execution_plan
 from ai.agents.qa.load_sources import (
     assert_scrum_ready,
     extract_sources,
@@ -27,6 +29,7 @@ from ai.agents.qa.load_sources import (
 )
 from ai.agents.qa.state import QaState
 from ai.agents.qa.test_design import run_test_design
+from ai.agents.qa.trace_matrix import build_trace_matrix, uncovered_requirements_risks
 
 
 def _llm(config: RunnableConfig):
@@ -163,18 +166,43 @@ async def node_auth_cases(state: QaState) -> dict:
 
 
 async def node_dataset(state: QaState) -> dict:
-    """DATASET (QA4): datos reutilizables por entidad."""
-    return {"datasets": []}
+    """DATASET: datos reutilizables por entidad, cosechados de los casos (sin LLM)."""
+    salida = build_datasets(state.get("test_cases") or [], state.get("sources") or {})
+    return {
+        "datasets": salida["datasets"],
+        "map_observations": list(state.get("map_observations") or [])
+        + salida["observations"],
+    }
 
 
 async def node_trace_matrix(state: QaState) -> dict:
-    """TRACE_MATRIX (QA4): matriz y cobertura, deterministas."""
-    return {"trace_matrix": {}}
+    """TRACE_MATRIX: matriz y cobertura, deterministas.
+
+    Se construye **antes** de QUESTION_GEN, así que los criterios no verificables
+    todavía no tienen id de pregunta. ASSEMBLE vuelve a cerrar el enlace una vez que
+    las preguntas existen: el contrato exige que una fila ``not_testable`` cite la
+    suya, y aquí aún no hay ninguna que citar.
+    """
+    matriz = build_trace_matrix(
+        state.get("criterion_map") or {},
+        state.get("test_cases") or [],
+        state.get("not_testable") or [],
+    )
+    return {
+        "trace_matrix": matriz,
+        "risks": list(state.get("risks") or [])
+        + uncovered_requirements_risks(matriz["coverage"]),
+    }
 
 
 async def node_exec_plan(state: QaState) -> dict:
-    """EXEC_PLAN (QA4): suites por épica, orden topológico y esfuerzo."""
-    return {"execution_plan": {}}
+    """EXEC_PLAN: suites por épica, orden topológico y esfuerzo (sin LLM)."""
+    plan = build_execution_plan(
+        state.get("test_cases") or [],
+        state.get("sources") or {},
+        target=state.get("target"),
+    )
+    return {"execution_plan": plan}
 
 
 async def node_critique(state: QaState) -> dict:
