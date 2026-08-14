@@ -11,6 +11,13 @@ known_first_party = ["app", "shared", "ai"]
 asyncio_mode = "auto"
 pythonpath = ["."]
 testpaths = ["tests"]
+# Los tests de este proyecto son funciones `test_*`, nunca clases. Vaciar
+# `python_classes` evita que pytest intente recolectar clases del DOMINIO cuyo
+# nombre empieza por "Test" — el contrato del Agente QA tiene `TestCase`,
+# `TestStep` y `TestCaseType`, que son modelos Pydantic, no suites. La
+# alternativa era renombrar el dominio para acomodar al runner, y un caso de
+# prueba se llama caso de prueba.
+python_classes = []
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
