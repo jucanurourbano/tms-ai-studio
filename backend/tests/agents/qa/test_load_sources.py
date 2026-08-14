@@ -26,6 +26,7 @@ from ai.agents.scrum.schemas.examples import example_artifact as scrum_example
 from ai.errors import GateError
 from ai.orchestrator import build_qa_graph
 from ai.orchestrator.checkpointer import build_memory_checkpointer
+from tests.mocks import QaMapLLM
 
 
 def _scrum_dict():
@@ -189,8 +190,19 @@ def test_target_solo_pisa_lo_informado():
 
 async def _corre(estado: dict) -> dict:
     graph = build_qa_graph(build_memory_checkpointer())
+    # El LLM va mockeado siempre (REGLA DE PRESUPUESTO). Estos tests miran
+    # LOAD_SOURCES, pero el grafo atraviesa los nodos generativos para llegar al
+    # final, y el cortafuegos autouse de `conftest` corta si alguno cayera en el
+    # cliente real.
     return await graph.ainvoke(
-        estado, config={"configurable": {"thread_id": estado["job_id"]}}
+        estado,
+        config={
+            "configurable": {
+                "thread_id": estado["job_id"],
+                "llm": QaMapLLM(),
+                "today": "2026-08-14",
+            }
+        },
     )
 
 
@@ -233,8 +245,14 @@ async def test_el_grafo_con_contrato_de_api_lo_marca_disponible():
     )
     assert salida["api_available"] is True
     assert salida["api_absent_reason"] is None
-    assert salida["map_observations"] == []
     assert salida["hashes"]["api_artifact_hash"] == "9f8e7d6c5b4a"
+    # Con contrato disponible, LOAD_SOURCES no anota la ausencia. Las demás
+    # observaciones del pipeline (refs limpiadas, reglas ambiguas) sí pueden estar:
+    # lo que este test fija es que no se declare ausente lo que sí llegó.
+    assert not any(
+        "No se diseñaron casos de autorización" in o["description"]
+        for o in salida["map_observations"]
+    )
 
 
 async def test_el_grafo_corta_si_el_plan_no_esta_listo():

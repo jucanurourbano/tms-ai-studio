@@ -56,6 +56,9 @@ class QaState(TypedDict, total=False):
     ambiguous_auth_refs: list[str]
     #: Criterios declarados no verificables, con el motivo. Van a QUESTION_GEN.
     not_testable: list[dict]
+    #: Límites que el modelo propuso y que NO se pudieron anclar (la cita no
+    #: aparecía en el texto de la regla). No producen caso: producen pregunta.
+    unanchored: list[dict]
     risks: list[dict]
     observations: list[dict]
     questions: list[dict]

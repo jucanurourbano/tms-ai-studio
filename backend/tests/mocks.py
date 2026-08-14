@@ -942,3 +942,125 @@ class ApiMapLLM:
                 ensure_ascii=False,
             )
         return "{}"
+
+
+class QaMapLLM:
+    """LLM mock del Agente QA: responde por nodo según el rol del system prompt.
+
+    Devuelve **a propósito** salidas imperfectas, para que los tests comprueben las
+    salvaguardas y no solo el camino feliz:
+
+    - TEST_DESIGN: para ``AC-001`` propone un caso funcional y uno negativo, y en el
+      negativo cita un ``BR-999`` que **no existe en el EF** (debe quitarse del caso
+      con nota, sin invalidar el caso). Para ``AC-002`` declara el criterio **no
+      verificable**, que es una salida legítima del nodo.
+    - EDGE_CASES: para ``AC-001`` propone DOS límites sobre ``VAL-001``: uno con la
+      cita verbatim correcta (debe sobrevivir) y otro con una cita **parafraseada**
+      que no está en el texto (debe descartarse y acabar en pregunta). Es el
+      cortafuegos de QA-D2 ejercitado.
+    """
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Diseñador de casos de prueba" in system:
+            payload = _payload(user, "CRITERIO A CUBRIR:\n")
+            criterio = payload["criterion"]["criterion_ref"]
+            if criterio == "AC-002":
+                return json.dumps(
+                    {
+                        "cases": [],
+                        "not_testable": True,
+                        "not_testable_reason": (
+                            "El criterio no dice qué checkpoint debe quedar "
+                            "registrado ni con qué valores del catálogo."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "cases": [
+                        {
+                            "title": "Registrar un siniestro con su guía asociada",
+                            "negative": False,
+                            "preconditions": ["Existe la guía 000123456."],
+                            "steps": [
+                                {"action": "Abrir el registro de siniestros."},
+                                {
+                                    "action": "Informar la guía 000123456.",
+                                    "expected": "El formulario acepta la guía.",
+                                },
+                                {"action": "Guardar el siniestro."},
+                            ],
+                            "test_data": [
+                                {
+                                    "name": "numero_guia",
+                                    "value": "000123456",
+                                    "kind": "valid",
+                                    "field_ref": "FLD-001",
+                                }
+                            ],
+                            "expected_result": "El siniestro queda registrado.",
+                            "automation_hint": "api",
+                            "source_refs": ["REQ-B-001", "BR-001"],
+                            "confidence": 0.9,
+                        },
+                        {
+                            "title": "Rechazar el registro sin guía",
+                            "negative": True,
+                            "preconditions": [],
+                            "steps": [{"action": "Guardar sin informar la guía."}],
+                            "test_data": [
+                                {
+                                    "name": "numero_guia",
+                                    "value": "",
+                                    "kind": "invalid",
+                                    "field_ref": "FLD-001",
+                                }
+                            ],
+                            "expected_result": "El sistema exige la guía.",
+                            "automation_hint": "api",
+                            # BR-999 no existe: debe quitarse con nota.
+                            "source_refs": ["BR-001", "BR-999"],
+                            "confidence": 0.85,
+                        },
+                    ],
+                    "not_testable": False,
+                },
+                ensure_ascii=False,
+            )
+        if "Diseñador de casos de borde" in system:
+            payload = _payload(user, "CRITERIO A ACOTAR:\n")
+            criterio = payload["criterion"]["criterion_ref"]
+            if criterio != "AC-001":
+                return json.dumps({"boundaries": []}, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "boundaries": [
+                        {
+                            "rule_ref": "VAL-001",
+                            "kind": "max",
+                            "operator": "<=",
+                            "value": "hoy",
+                            # Cita EXACTA del texto de VAL-001: sobrevive.
+                            "evidence": "La fecha del siniestro no puede ser futura.",
+                            "invalid_value": "2026-08-15",
+                            "valid_value": "2026-08-14",
+                            "field_name": "fecha_siniestro",
+                            "confidence": 0.85,
+                        },
+                        {
+                            "rule_ref": "VAL-001",
+                            "kind": "min",
+                            "operator": ">=",
+                            "value": "2020-01-01",
+                            # Paráfrasis: NO está en el texto. Debe descartarse.
+                            "evidence": "La fecha no puede ser anterior a 2020.",
+                            "invalid_value": "2019-12-31",
+                            "field_name": "fecha_siniestro",
+                            "confidence": 0.4,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return "{}"
