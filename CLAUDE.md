@@ -565,6 +565,17 @@ de agentes y el frontend. Sigue la misma arquitectura del proyecto
   1. CLI: `backend/scripts/create_admin.py --email <correo> --name "<nombre>"`
      (pide la contraseña sin eco; idempotente).
   2. Endpoint `POST /auth/register` mientras la tabla `users` esté vacía.
+- **Recuperación de acceso (tercera herramienta de operación):**
+  `backend/scripts/reset_password.py --email <correo>` [`--reactivar`]. Existe
+  porque `create_admin.py` es idempotente pero **no** toca la contraseña del
+  usuario existente, y `POST /auth/users/{id}/password` exige `config` FULL —es
+  decir un token— y **quien no puede iniciar sesión no tiene token**. El script
+  rompe ese círculo desde el servidor. La contraseña se pide **sin eco y con
+  confirmación**, y **no** se acepta por argumento: así no queda en el historial
+  del shell ni en la lista de procesos; solo se persiste el hash. Si la cuenta está
+  desactivada o dada de baja, **se niega** salvo `--reactivar`: resetear sin
+  reactivar dejaría el acceso igual de cerrado, porque esos usuarios no inician
+  sesión por diseño.
 - **Frontend:** `AuthProvider` guarda el token (memoria + `localStorage`), el
   cliente API adjunta el `Bearer` y un handler global de **401** cierra sesión y
   redirige a `/login`. Guarda de rutas (`AppGate`): sin sesión → `/login`; con
@@ -719,6 +730,7 @@ tms-ai-studio/
     │   ├── repositories/         # + story_assignment_repository
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
+    ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
