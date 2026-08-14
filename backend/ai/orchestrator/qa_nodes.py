@@ -16,7 +16,9 @@ from langchain_core.runnables import RunnableConfig
 from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.qa.auth_cases import build_auth_cases
 from ai.agents.qa.common import merge_metrics
+from ai.agents.qa.consolidate import apply_case_cap
 from ai.agents.qa.criterion_map import build_criterion_map
+from ai.agents.qa.critique import deterministic_findings, llm_risks
 from ai.agents.qa.dataset import build_datasets
 from ai.agents.qa.edge_cases import run_edge_cases
 from ai.agents.qa.exec_plan import build_execution_plan
@@ -27,6 +29,7 @@ from ai.agents.qa.load_sources import (
     resolve_hashes,
     resolve_target,
 )
+from ai.agents.qa.question_gen import generate_questions
 from ai.agents.qa.state import QaState
 from ai.agents.qa.test_design import run_test_design
 from ai.agents.qa.trace_matrix import build_trace_matrix, uncovered_requirements_risks
@@ -149,7 +152,12 @@ async def node_edge_cases(state: QaState, config: RunnableConfig) -> dict:
 
 
 async def node_auth_cases(state: QaState) -> dict:
-    """AUTH_CASES: casos de autorización derivados de la matriz (sin LLM)."""
+    """AUTH_CASES: casos de autorización derivados de la matriz (sin LLM).
+
+    Último nodo que añade casos, así que aquí se aplica el **techo por criterio**:
+    hacerlo después de calcular la matriz y el plan los dejaría contando casos que
+    ya no existen, y un total que no cuadra con su lista es peor que un recorte.
+    """
     casos = list(state.get("test_cases") or [])
     salida = build_auth_cases(
         state.get("criterion_map") or {},
@@ -157,11 +165,16 @@ async def node_auth_cases(state: QaState) -> dict:
         used_ids={c["id"] for c in casos},
         target=state.get("target"),
     )
+    consolidado = apply_case_cap(casos + salida["test_cases"], state.get("target"))
+    metrics = dict(state.get("metrics") or {})
+    metrics["pruned_cases"] = metrics.get("pruned_cases", 0) + consolidado["pruned"]
     return {
-        "test_cases": casos + salida["test_cases"],
+        "test_cases": consolidado["test_cases"],
         "ambiguous_auth_refs": salida["ambiguous_auth_refs"],
         "map_observations": list(state.get("map_observations") or [])
-        + salida["observations"],
+        + salida["observations"]
+        + consolidado["observations"],
+        "metrics": metrics,
     }
 
 
@@ -205,14 +218,55 @@ async def node_exec_plan(state: QaState) -> dict:
     return {"execution_plan": plan}
 
 
-async def node_critique(state: QaState) -> dict:
-    """CRITIQUE (QA5): cobertura, duplicados y criterios huérfanos."""
-    return {"risks": [], "observations": []}
+async def node_critique(state: QaState, config: RunnableConfig) -> dict:
+    """CRITIQUE: duplicados, cobertura y ciclos (determinista) + riesgos (LLM)."""
+    casos = state.get("test_cases") or []
+    matriz = state.get("trace_matrix") or {}
+    plan = state.get("execution_plan") or {}
+
+    hallazgos = deterministic_findings(
+        casos,
+        matriz,
+        plan,
+        state.get("criterion_map") or {},
+        state.get("metrics") or {},
+    )
+    riesgos_llm, tokens = await llm_risks(
+        _llm(config),
+        casos,
+        matriz,
+        plan,
+        authoritative_context=state.get("authoritative_context"),
+    )
+    return {
+        "risks": list(state.get("risks") or []) + hallazgos["risks"] + riesgos_llm,
+        "observations": list(state.get("observations") or [])
+        + hallazgos["observations"],
+        "metrics": merge_metrics(state, tokens, []),
+    }
 
 
 async def node_question_gen(state: QaState) -> dict:
-    """QUESTION_GEN (QA5): preguntas al QA lead (agrupadas por clase de vacío)."""
-    return {"questions": []}
+    """QUESTION_GEN: preguntas al QA lead, agrupadas por clase de vacío (sin LLM).
+
+    Recalcula la matriz al final para cerrar el enlace ``not_testable`` → pregunta:
+    el contrato exige que una fila no verificable cite la pregunta que la respalda, y
+    esa pregunta no existía cuando TRACE_MATRIX corrió.
+    """
+    salida = generate_questions(
+        not_testable=state.get("not_testable") or [],
+        unanchored=state.get("unanchored") or [],
+        ambiguous_auth_refs=state.get("ambiguous_auth_refs") or [],
+        criterion_map=state.get("criterion_map") or {},
+        trace_matrix=state.get("trace_matrix") or {},
+    )
+    matriz = build_trace_matrix(
+        state.get("criterion_map") or {},
+        state.get("test_cases") or [],
+        state.get("not_testable") or [],
+        salida["questions_by_criterion"],
+    )
+    return {"questions": salida["questions"], "trace_matrix": matriz}
 
 
 async def node_assemble(state: QaState) -> dict:

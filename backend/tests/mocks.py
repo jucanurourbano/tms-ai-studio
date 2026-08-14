@@ -1028,6 +1028,30 @@ class QaMapLLM:
                 },
                 ensure_ascii=False,
             )
+        if "Crítico del plan de pruebas" in system:
+            payload = _payload(user, "PLAN CONSOLIDADO:\n")
+            suites = payload.get("suites") or []
+            return json.dumps(
+                {
+                    "risks": [
+                        {
+                            "description": (
+                                "El esfuerzo se concentra en una sola suite: será el "
+                                "cuello de botella de la regresión."
+                            ),
+                            "severity": "media",
+                            "mitigation": "Repartir la ejecución en dos sesiones.",
+                            "source_ref": (suites[0]["epic_ref"] if suites else None),
+                        },
+                        {
+                            # Severidad fuera del enum cerrado: debe caer a "media".
+                            "description": "Riesgo con severidad inventada.",
+                            "severity": "apocaliptica",
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
         if "Diseñador de casos de borde" in system:
             payload = _payload(user, "CRITERIO A ACOTAR:\n")
             criterio = payload["criterion"]["criterion_ref"]
