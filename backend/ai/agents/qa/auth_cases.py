@@ -51,19 +51,30 @@ def priority_with_floor(inherited: Optional[str]) -> str:
 
 
 def _entry_for_endpoint(
-    criterion_map: dict[str, Any], endpoint_ref: str, endpoints: list[dict]
+    criterion_map: dict[str, Any],
+    endpoint_ref: str,
+    endpoints: list[dict],
+    excluded: set[str],
 ) -> Optional[dict]:
     """Busca a qué criterio colgar el caso de un endpoint.
 
     El enlace no es directo: la matriz habla de endpoints y el plan de criterios. Se
-    usa el endpoint → su recurso → la entidad, y de ahí el primer criterio cuya
-    historia toque ese terreno. Si no se encuentra nada, se cuelga del primer
-    criterio bloqueante: **un caso de autorización sin criterio no se puede emitir**
-    (el contrato lo prohíbe), y perderlo sería peor que ubicarlo de forma aproximada
-    —queda trazado al endpoint y a la regla en ``source_refs``—.
+    usa el propósito del endpoint contra el texto de los criterios y, si nada
+    coincide, el primer criterio bloqueante: **un caso de autorización sin criterio
+    no se puede emitir** (el contrato lo prohíbe), y perderlo sería peor que ubicarlo
+    de forma aproximada —queda trazado al endpoint y a la regla en ``source_refs``—.
+
+    ``excluded`` son los criterios ya declarados **no verificables**. Nunca se cuelga
+    un caso de uno de ellos: dejaría al plan afirmando dos cosas incompatibles a la
+    vez —que el criterio no se puede comprobar y que hay una prueba que lo comprueba—
+    y la matriz lo contaría como cubierto, borrando la pregunta que ya se hizo.
     """
     endpoint = next((e for e in endpoints if e.get("id") == endpoint_ref), None)
-    entradas = criterion_map.get("entries", []) or []
+    entradas = [
+        e
+        for e in criterion_map.get("entries", []) or []
+        if e.get("criterion_ref") not in excluded
+    ]
     if not entradas:
         return None
     if endpoint:
@@ -83,10 +94,12 @@ def build_auth_cases(
     *,
     used_ids: Optional[set[str]] = None,
     target: Optional[dict] = None,
+    not_testable_refs: Optional[set[str]] = None,
 ) -> dict[str, Any]:
     """Deriva los casos de autorización de la matriz del contrato de API."""
     api = sources.get("api", {}) or {}
     usados = set(used_ids or set())
+    excluidos = set(not_testable_refs or set())
 
     if not api.get("available"):
         return {
@@ -120,8 +133,23 @@ def build_auth_cases(
             )
             continue
 
-        entry = _entry_for_endpoint(criterion_map, regla.get("endpoint_ref"), endpoints)
+        entry = _entry_for_endpoint(
+            criterion_map, regla.get("endpoint_ref"), endpoints, excluidos
+        )
         if entry is None:
+            # Sin criterio verificable al que anclarlo, el caso no puede existir.
+            # Se declara: perderlo en silencio dejaría la regla sin probar y sin
+            # que nadie lo supiera.
+            observaciones.append(
+                {
+                    "description": (
+                        f"No se generó el caso de autorización de {ref}: no hay "
+                        "ningún criterio verificable del plan al que anclarlo."
+                    ),
+                    "reason": "Sin criterio de origen, el caso no es trazable.",
+                    "source_ref": ref,
+                }
+            )
             continue
 
         endpoint = rutas.get(regla.get("endpoint_ref")) or {}

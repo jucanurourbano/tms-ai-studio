@@ -1,12 +1,8 @@
-"""Nodos del grafo LangGraph del Agente QA.
+"""Nodos del grafo LangGraph del Agente QA (los doce, completos).
 
-Bloque QA3: LOAD_SOURCES, CRITERION_MAP, TEST_DESIGN, EDGE_CASES y AUTH_CASES
-están completos; el resto son **stubs** que devuelven vacío para que el grafo corra
-de extremo a extremo. Cada bloque posterior sustituye su stub:
-
-- QA4 → ``dataset``, ``trace_matrix``, ``exec_plan``
-- QA5 → ``critique``, ``question_gen``
-- QA6 → ``assemble``, ``persist``
+Solo tres tocan el LLM —TEST_DESIGN, EDGE_CASES y el pase de riesgos de CRITIQUE—;
+los otros nueve son deterministas, y eso es lo que hace el plan auditable: la
+cobertura y el esfuerzo se recomputan leyendo el artefacto y dan el mismo número.
 """
 
 from datetime import date
@@ -14,6 +10,7 @@ from datetime import date
 from langchain_core.runnables import RunnableConfig
 
 from ai.agents.base.structured import ClaudeLLMClient
+from ai.agents.qa.assemble import assemble_artifact, validate_artifact
 from ai.agents.qa.auth_cases import build_auth_cases
 from ai.agents.qa.common import merge_metrics
 from ai.agents.qa.consolidate import apply_case_cap
@@ -33,6 +30,7 @@ from ai.agents.qa.question_gen import generate_questions
 from ai.agents.qa.state import QaState
 from ai.agents.qa.test_design import run_test_design
 from ai.agents.qa.trace_matrix import build_trace_matrix, uncovered_requirements_risks
+from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
@@ -75,9 +73,22 @@ async def node_load_sources(state: QaState) -> dict:
             }
         )
 
+    # Los umbrales efectivos: los de `settings` como base y lo que la petición haya
+    # pisado encima. Una sola perilla por concepto — si el target se calculara con
+    # sus propios defaults, cambiar `settings` no tendría efecto y el síntoma sería
+    # un semáforo que no obedece a su configuración.
+    overrides = dict(state.get("target_overrides") or {})
     return {
         "sources": sources,
-        "target": resolve_target(),
+        "target": resolve_target(
+            coverage_threshold=overrides.get(
+                "coverage_threshold", settings.QA_COVERAGE_THRESHOLD
+            ),
+            max_cases_per_criterion=overrides.get(
+                "max_cases_per_criterion", settings.QA_MAX_CASES_PER_CRITERION
+            ),
+            manual_capacity_minutes=overrides.get("manual_capacity_minutes"),
+        ),
         "api_available": disponibilidad["available"],
         "api_absent_reason": disponibilidad["reason"],
         "hashes": resolve_hashes(
@@ -140,6 +151,11 @@ async def node_edge_cases(state: QaState, config: RunnableConfig) -> dict:
         today=_today(config),
         used_ids={c["id"] for c in casos},
         target=state.get("target"),
+        not_testable_refs={
+            n_["criterion_ref"]
+            for n_ in state.get("not_testable") or []
+            if n_.get("criterion_ref")
+        },
         authoritative_context=state.get("authoritative_context"),
     )
     return {
@@ -164,6 +180,11 @@ async def node_auth_cases(state: QaState) -> dict:
         state.get("sources") or {},
         used_ids={c["id"] for c in casos},
         target=state.get("target"),
+        not_testable_refs={
+            n_["criterion_ref"]
+            for n_ in state.get("not_testable") or []
+            if n_.get("criterion_ref")
+        },
     )
     consolidado = apply_case_cap(casos + salida["test_cases"], state.get("target"))
     metrics = dict(state.get("metrics") or {})
@@ -270,10 +291,43 @@ async def node_question_gen(state: QaState) -> dict:
 
 
 async def node_assemble(state: QaState) -> dict:
-    """ASSEMBLE (QA6): arma y valida el QaArtifact."""
-    return {"artifact": {}}
+    """ASSEMBLE: arma el QaArtifact y lo revalida contra el esquema v1.0.0."""
+    artifact, _has_warnings = assemble_artifact(dict(state))
+    datos = artifact.model_dump(mode="json")
+    # Revalidación explícita: el ensamblado ya construyó modelos, pero volver a
+    # pasar el `dict` por el contrato es lo que garantiza que lo que se PERSISTE
+    # —no lo que se tenía en memoria— cumple el esquema.
+    validate_artifact(datos)
+    return {"artifact": datos, "metrics": datos.get("metrics") or {}}
 
 
-async def node_persist(state: QaState) -> dict:
-    """PERSIST (QA6): guarda artefacto, validaciones y métricas."""
-    return {}
+async def node_persist(state: QaState, config: RunnableConfig) -> dict:
+    """PERSIST: guarda el artefacto y marca COMPLETED[_WITH_WARNINGS].
+
+    La persistencia es inyectable por config (tests sin Postgres); si no se
+    inyecta, usa la BD real vía ``session_scope``.
+    """
+    artifact = state["artifact"]
+    metrics = artifact.get("metrics") or {}
+    # Un plan con casos en cuarentena o con casos podados no pasa por COMPLETED
+    # limpio: el equipo tiene que enterarse de que el plan no salió íntegro.
+    has_warnings = bool(metrics.get("skipped")) or bool(metrics.get("pruned_cases"))
+    status = "COMPLETED_WITH_WARNINGS" if has_warnings else "COMPLETED"
+
+    persist = (config or {}).get("configurable", {}).get("persist")
+    if persist is not None:
+        await persist(state["job_id"], artifact, status, metrics)
+    else:  # pragma: no cover - ruta runtime con Postgres real
+        from app.dependencies.database import session_scope
+        from app.models.agent import JobStatus
+        from app.repositories.agent_job_repository import AgentJobRepository
+
+        async with session_scope() as session:
+            repo = AgentJobRepository(session)
+            await repo.save_artifact(
+                state["job_id"], artifact, artifact["schema_version"]
+            )
+            await repo.update_job_metrics(state["job_id"], metrics)
+            await repo.update_job_status(state["job_id"], JobStatus[status])
+
+    return {"status": status, "metrics": metrics}

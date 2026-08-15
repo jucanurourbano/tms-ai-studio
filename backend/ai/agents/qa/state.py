@@ -25,6 +25,8 @@ class QaState(TypedDict, total=False):
     api_job_id: Optional[str]
     api_artifact: dict
     api_artifact_hash: Optional[str]
+    #: Umbrales pisados desde la petición (cobertura, techo de casos, capacidad).
+    target_overrides: dict
     authoritative_context: Optional[str]  # ciclo de afinamiento (refine)
     started_at: float
 

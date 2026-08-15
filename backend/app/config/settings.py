@@ -93,6 +93,19 @@ class Settings(BaseSettings):
     # entran al gate: generan preguntas (mismo criterio que los campos en BD).
     API_COVERAGE_THRESHOLD: float = 1.0
 
+    # --- Pipeline del Agente QA ---
+    # Concurrencia de los map de TEST_DESIGN y EDGE_CASES (uno por criterio).
+    QA_MAP_CONCURRENCY: int = 3
+    # Cobertura mínima de los criterios de historias `must`/`should` para el
+    # semáforo (QA-D5). Los criterios de historias `could`/`wont` sin caso son
+    # advertencia y NO entran al gate: así "criterio sin caso = advertencia" y el
+    # umbral del 100% dejan de contradecirse.
+    QA_COVERAGE_THRESHOLD: float = 1.0
+    # Techo de casos por criterio. Existe por aritmética: 40 historias x 5
+    # criterios x 4 tipos son 800 casos, y cada caso de más es tiempo de una
+    # persona ejecutándolo. Lo que se poda deja Observation con su id.
+    QA_MAX_CASES_PER_CRITERION: int = 6
+
     # --- Inventario de Sistemas ---
     # Tamaño máximo del dump DDL que se acepta subir (.sql). Un dump completo de
     # producción puede ser enorme y no aporta más esquema por ser más largo.

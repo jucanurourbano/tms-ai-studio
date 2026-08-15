@@ -188,6 +188,11 @@ def test_target_solo_pisa_lo_informado():
 # --- Grafo de extremo a extremo (con stubs) -----------------------------------
 
 
+async def _sin_persistir(job_id, artifact, status, metrics):
+    """PERSIST inocuo: sin él el nodo cae a la BD real y el fallo llega como
+    violación de clave ajena, ocultando lo que el test comprobaba."""
+
+
 async def _corre(estado: dict) -> dict:
     graph = build_qa_graph(build_memory_checkpointer())
     # El LLM va mockeado siempre (REGLA DE PRESUPUESTO). Estos tests miran
@@ -201,6 +206,7 @@ async def _corre(estado: dict) -> dict:
                 "thread_id": estado["job_id"],
                 "llm": QaMapLLM(),
                 "today": "2026-08-14",
+                "persist": _sin_persistir,
             }
         },
     )

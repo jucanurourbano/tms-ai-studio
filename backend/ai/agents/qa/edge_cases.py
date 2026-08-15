@@ -252,11 +252,24 @@ async def run_edge_cases(
     today: str,
     used_ids: Optional[set[str]] = None,
     target: Optional[dict] = None,
+    not_testable_refs: Optional[set[str]] = None,
     authoritative_context: Optional[str] = None,
     concurrency: int = 3,
 ) -> dict[str, Any]:
-    """Ejecuta el *map*, **verifica cada cita** y arma los casos de borde."""
-    entradas = criterion_map.get("entries", []) or []
+    """Ejecuta el *map*, **verifica cada cita** y arma los casos de borde.
+
+    Los criterios que TEST_DESIGN declaró **no verificables** se saltan enteros. Un
+    borde sobre un criterio que nadie puede comprobar dejaría al plan afirmando dos
+    cosas incompatibles —hay una prueba de esto / esto no se puede probar— y la
+    matriz lo contaría como cubierto, borrando la pregunta que ya se hizo. Además
+    ahorra los tokens de pedir fronteras de algo que no se va a ejecutar.
+    """
+    excluidos = set(not_testable_refs or set())
+    entradas = [
+        e
+        for e in criterion_map.get("entries", []) or []
+        if e.get("criterion_ref") not in excluidos
+    ]
     usados = set(used_ids or set())
     if not entradas:
         return {

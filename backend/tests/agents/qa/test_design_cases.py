@@ -386,6 +386,10 @@ def test_normalize_steps_numera_desde_uno():
 # --- El grafo completo hasta AUTH_CASES ---------------------------------------
 
 
+async def _sin_persistir(job_id, artifact, status, metrics):
+    """PERSIST inocuo (ver test_load_sources): el grafo llega hasta PERSIST."""
+
+
 async def _corre(con_api: bool) -> dict:
     graph = build_qa_graph(build_memory_checkpointer())
     estado = {
@@ -412,6 +416,7 @@ async def _corre(con_api: bool) -> dict:
                 "thread_id": estado["job_id"],
                 "llm": QaMapLLM(),
                 "today": HOY,
+                "persist": _sin_persistir,
             }
         },
     )
@@ -472,6 +477,7 @@ async def test_el_grafo_registra_la_historia_sin_criterios():
                 "thread_id": "01QA0000000000000000000QA5",
                 "llm": QaMapLLM(),
                 "today": HOY,
+                "persist": _sin_persistir,
             }
         },
     )
