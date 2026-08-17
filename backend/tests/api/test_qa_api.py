@@ -368,6 +368,66 @@ async def test_los_planes_scrum_disponibles_se_marcan(ctx):
     assert items[ids["scrum"]]["ready_for_next_stage"] is True
 
 
+# --- Export CSV (QA7) ----------------------------------------------------------
+
+
+async def test_el_export_de_casos_devuelve_envelope_con_filas(ctx):
+    client, ids, _factory, _ = ctx
+    job_id = await _crear_plan(client, ids["scrum"])
+    r = await client.get(f"/api/v1/qa/jobs/{job_id}/export")
+    assert r.status_code == 200
+    datos = r.json()["data"]
+    assert datos["kind"] == "casos"
+    assert datos["rows_total"] == len(datos["rows"]) > 0
+    assert datos["filename"] == f"casos_{job_id}.csv"
+    assert datos["content"].startswith("﻿")
+
+
+async def test_el_export_de_la_matriz_se_pide_por_parametro(ctx):
+    client, ids, _factory, _ = ctx
+    job_id = await _crear_plan(client, ids["scrum"])
+    r = await client.get(f"/api/v1/qa/jobs/{job_id}/export", params={"cual": "matriz"})
+    datos = r.json()["data"]
+    assert datos["kind"] == "trazabilidad"
+    assert datos["rows"][0]["criterion_ref"].startswith("AC-")
+
+
+async def test_el_export_descargable_llega_como_archivo_csv(ctx):
+    """Descargar no es un modo distinto del export: es el mismo contenido."""
+    client, ids, _factory, _ = ctx
+    job_id = await _crear_plan(client, ids["scrum"])
+    envelope = (await client.get(f"/api/v1/qa/jobs/{job_id}/export")).json()["data"]
+    r = await client.get(f"/api/v1/qa/jobs/{job_id}/export", params={"descargar": True})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    assert f'filename="casos_{job_id}.csv"' in r.headers["content-disposition"]
+    # El BOM tiene que sobrevivir al transporte: es lo único que le dice a Excel
+    # que el archivo es UTF-8, y se pierde con la menor recodificación por medio.
+    assert r.content.startswith(b"\xef\xbb\xbf")
+    assert r.text == envelope["content"]
+
+
+async def test_un_cual_desconocido_se_rechaza(ctx):
+    client, ids, _factory, _ = ctx
+    job_id = await _crear_plan(client, ids["scrum"])
+    r = await client.get(
+        f"/api/v1/qa/jobs/{job_id}/export", params={"cual": "loquesea"}
+    )
+    assert r.status_code == 422
+
+
+async def test_el_export_de_un_job_sin_artefacto_no_finge_un_archivo(ctx):
+    client, _ids, factory, _ = ctx
+    async with factory() as session:
+        repo = AgentJobRepository(session)
+        vacio = await repo.create_job(
+            AgentType.QA, input_job_id=None, title="Sin artefacto", source_type="text"
+        )
+        await session.commit()
+    r = await client.get(f"/api/v1/qa/jobs/{vacio.id}/export")
+    assert r.json()["success"] is False
+
+
 # --- Refine --------------------------------------------------------------------
 
 

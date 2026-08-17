@@ -1,6 +1,7 @@
 """Endpoints del Agente QA (API v1). Toda respuesta usa ApiResponse."""
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import AccessLevel, Module
@@ -185,6 +186,42 @@ async def list_jobs(
             ],
         }
     )
+
+
+@router.get(
+    "/jobs/{job_id}/export",
+    summary="Export del plan a CSV (casos o matriz), listo para Excel",
+    # Devuelve envelope o archivo según `descargar`: FastAPI no puede derivar un
+    # response_model de esa unión, y aquí el tipo lo decide el cliente.
+    response_model=None,
+)
+async def export_csv(
+    job_id: str,
+    session: AsyncSession = Depends(get_session),
+    cual: str = Query(
+        "casos",
+        pattern="^(casos|matriz)$",
+        description="`casos` exporta los casos de prueba; `matriz`, la trazabilidad.",
+    ),
+    descargar: bool = Query(
+        False, description="Si es `true`, responde como archivo adjunto."
+    ),
+) -> ApiResponse | PlainTextResponse:
+    """CSV con BOM UTF-8 y delimitador `;`: Excel lo abre en columnas de un clic."""
+    data = await _service(session).export_csv(job_id, cual=cual)
+    if data is None:
+        return ApiResponse.fail(
+            message="Artefacto no disponible", data={"job_id": job_id}
+        )
+    if descargar:
+        return PlainTextResponse(
+            data["content"],
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{data["filename"]}"'
+            },
+        )
+    return ApiResponse.ok(data=data)
 
 
 @router.patch(

@@ -311,6 +311,36 @@ class QaTestDesignService:
             )
         return out
 
+    # --- Export ---------------------------------------------------------------
+
+    async def export_csv(self, job_id: str, *, cual: str = "casos") -> Optional[dict]:
+        """Devuelve el CSV de los casos o de la matriz, listo para Excel."""
+        from ai.agents.qa.export import case_rows, cases_csv, trace_csv, trace_rows
+
+        artifact = await self.get_artifact(job_id)
+        if artifact is None:
+            return None
+
+        if cual == "matriz":
+            contenido, filas, nombre = (
+                trace_csv(artifact),
+                trace_rows(artifact),
+                "trazabilidad",
+            )
+        else:
+            contenido, filas, nombre = (
+                cases_csv(artifact),
+                case_rows(artifact),
+                "casos",
+            )
+        return {
+            "kind": nombre,
+            "rows_total": len(filas),
+            "filename": f"{nombre}_{job_id}.csv",
+            "content": contenido,
+            "rows": filas,
+        }
+
     # --- Validaciones del QA lead + semáforo --------------------------------
 
     async def register_validation(
