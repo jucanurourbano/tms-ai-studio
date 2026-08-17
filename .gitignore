@@ -33,3 +33,6 @@ storage/
 
 # === Logs ===
 *.log
+
+# === Sesiones locales de Claude Code ===
+.claude/
