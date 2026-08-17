@@ -28,6 +28,8 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/agents/bd", module: "bd", level: "read" },
   { prefix: "/agents/api/new", module: "api", level: "full" },
   { prefix: "/agents/api", module: "api", level: "read" },
+  { prefix: "/agents/qa/new", module: "qa", level: "full" },
+  { prefix: "/agents/qa", module: "qa", level: "read" },
   // El inventario lo consulta todo el mundo; escribir se decide por endpoint.
   { prefix: "/inventario", module: "inventario", level: "read" },
   { prefix: "/configuracion", module: "config", level: "read" },

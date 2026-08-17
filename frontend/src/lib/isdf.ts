@@ -1,6 +1,6 @@
 // Navegación por fases del ISDF. Los agentes EF (ESPECIFICAR), Arquitectura y BD
-// (DISEÑAR) y Scrum (GESTIONAR) están activos; los demás se muestran visibles pero
-// deshabilitados ("próximamente").
+// (DISEÑAR), API (CONSTRUIR), QA (VERIFICAR) y Scrum (GESTIONAR) están activos;
+// los demás se muestran visibles pero deshabilitados ("próximamente").
 //
 // Los iconos se referencian por clave (string) y se resuelven a componentes lucide
 // en la sidebar, para mantener este módulo libre de dependencias de UI.
@@ -144,9 +144,11 @@ export const ISDF_NAV: PhaseNav[] = [
         key: "qa",
         module: "qa",
         name: "QA",
-        enabled: false,
+        href: "/agents/qa",
+        enabled: true,
         icon: "shield-check",
-        description: "Diseña casos de prueba y valida la calidad del entregable.",
+        description:
+          "Diseña el plan de pruebas desde un plan ágil listo: casos por tipo, matriz de trazabilidad, datos de prueba y esfuerzo de ejecución.",
       },
     ],
   },
