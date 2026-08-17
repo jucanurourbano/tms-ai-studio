@@ -1088,3 +1088,160 @@ class QaMapLLM:
                 ensure_ascii=False,
             )
         return "{}"
+
+
+class QaRichLLM:
+    """LLM mock **genérico** del Agente QA, para el plan a escala del cierre.
+
+    ``QaMapLLM`` responde a ``AC-001``/``AC-002`` por su nombre: sirve para fijar
+    cortafuegos concretos, pero contra un plan de once criterios devolvería nada
+    para nueve de ellos y la cobertura del cierre mediría el mock, no el agente.
+
+    Este responde a **cualquier** criterio derivando el contenido de lo que recibe,
+    y conserva dos imperfecciones deliberadas —las mismas que en producción
+    importan— para que el cierre compruebe el comportamiento y no solo el camino
+    feliz:
+
+    - El criterio cuyo texto es vago (el que no dice qué se observa, ``AC-011``
+      "responde con fluidez") se declara **no verificable**: es la salida correcta,
+      y debe acabar en pregunta al QA lead en vez de en un caso inventado.
+    - En los bordes, junto al límite con la cita verbatim exacta se cuela uno con
+      la cita **parafraseada**, que el nodo debe descartar (QA-D2).
+    """
+
+    #: Palabras que delatan un criterio que no se puede verificar tal como está.
+    VAGOS = ("fluidez", "rápido", "amigable", "intuitivo")
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        if "Diseñador de casos de prueba" in system:
+            return self._casos(_payload(user, "CRITERIO A CUBRIR:\n"))
+        if "Diseñador de casos de borde" in system:
+            return self._bordes(_payload(user, "CRITERIO A ACOTAR:\n"))
+        if "Crítico del plan de pruebas" in system:
+            return json.dumps(
+                {
+                    "risks": [
+                        {
+                            "description": (
+                                "La regresión completa no cabe en una sola sesión "
+                                "de QA: hay que repartirla por suites."
+                            ),
+                            "severity": "media",
+                            "mitigation": "Ejecutar por épica, en el orden del plan.",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return "{}"
+
+    def _casos(self, payload: dict) -> str:
+        criterio = payload["criterion"]
+        texto = (criterio.get("criterion_text") or "").lower()
+        ref = criterio.get("criterion_ref")
+
+        if any(p in texto for p in self.VAGOS):
+            return json.dumps(
+                {
+                    "cases": [],
+                    "not_testable": True,
+                    "not_testable_reason": (
+                        f"{ref} no dice qué se observa ni con qué valor se compara: "
+                        "«responde con fluidez» no se puede verificar."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        campo = (payload.get("context", {}).get("fields") or [{}])[0]
+        nombre = campo.get("name") or "numero_guia"
+        reglas = [r.get("id") for r in criterio.get("rules", []) if r.get("id")]
+        refs = [*criterio.get("requirement_refs", []), *reglas]
+        return json.dumps(
+            {
+                "cases": [
+                    {
+                        "title": f"Camino feliz de {ref}",
+                        "negative": False,
+                        "preconditions": ["El operador tiene sesión iniciada."],
+                        "steps": [
+                            {"action": "Abrir el módulo de siniestros."},
+                            {
+                                "action": f"Completar {nombre} con un valor válido.",
+                                "expected": "El formulario lo acepta.",
+                            },
+                            {"action": "Confirmar la operación."},
+                        ],
+                        "test_data": [
+                            {
+                                "name": nombre,
+                                "value": "000123456",
+                                "kind": "valid",
+                                "field_ref": campo.get("id"),
+                            }
+                        ],
+                        "expected_result": criterio.get("criterion_text", ""),
+                        "automation_hint": "api",
+                        "source_refs": refs,
+                        "confidence": 0.85,
+                    },
+                    {
+                        "title": f"Rechazo esperado de {ref}",
+                        "negative": True,
+                        "preconditions": [],
+                        "steps": [{"action": f"Confirmar la operación sin {nombre}."}],
+                        "test_data": [
+                            {
+                                "name": nombre,
+                                "value": "",
+                                "kind": "invalid",
+                                "field_ref": campo.get("id"),
+                            }
+                        ],
+                        "expected_result": "El sistema rechaza la operación.",
+                        "automation_hint": "api",
+                        "source_refs": refs,
+                        "confidence": 0.8,
+                    },
+                ],
+                "not_testable": False,
+            },
+            ensure_ascii=False,
+        )
+
+    def _bordes(self, payload: dict) -> str:
+        validaciones = payload["criterion"].get("validations") or []
+        if not validaciones:
+            return json.dumps({"boundaries": []}, ensure_ascii=False)
+        val = validaciones[0]
+        campo = (payload.get("fields") or [{}])[0]
+        return json.dumps(
+            {
+                "boundaries": [
+                    {
+                        "rule_ref": val.get("id"),
+                        "kind": "max",
+                        "operator": "<=",
+                        "value": payload.get("today"),
+                        # Cita EXACTA del texto de la validación: sobrevive.
+                        "evidence": val.get("rule"),
+                        "invalid_value": "2099-01-01",
+                        "valid_value": payload.get("today"),
+                        "field_name": campo.get("name"),
+                        "confidence": 0.85,
+                    },
+                    {
+                        "rule_ref": val.get("id"),
+                        "kind": "min",
+                        "operator": ">=",
+                        "value": "2020-01-01",
+                        # Paráfrasis: NO está en el texto. Debe descartarse.
+                        "evidence": "El valor no puede ser anterior a 2020.",
+                        "invalid_value": "2019-12-31",
+                        "field_name": campo.get("name"),
+                        "confidence": 0.4,
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )

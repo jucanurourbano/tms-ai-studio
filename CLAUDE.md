@@ -27,7 +27,8 @@ Agente **API** **completo** (backend + frontend; bloques API0→API9
 implementados, ver §5.3 y `docs/diseno-agente-api.md`). **MÓDULO INVENTARIO DE
 SISTEMAS + fase RECONCILE** **completo** (bloques INV0→INV6, ver §5.4): el ISDF
 deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
-Siguiente eslabón: **Agente Backend**.
+Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
+ver §5.5 y `docs/diseno-agente-qa.md`). Siguiente eslabón: **Agente Backend**.
 
 ---
 
@@ -494,6 +495,61 @@ en `tests/inventory/fixtures.py`.
 
 ---
 
+## 5.5 Agente QA (diseño validado e implementado)
+
+> Diseño completo en **`docs/diseno-agente-qa.md`**. Sexto agente del ISDF (fase
+> **VERIFICAR**). Consume el `ScrumArtifact` (gate `ready_for_next_stage`), el
+> `EFArtifact` transitivo y —**si se indica**— el `ApiArtifact`. Produce el plan
+> de pruebas ejecutable.
+
+Pipeline **LangGraph** (12 nodos, solo 5 tocan el LLM):
+
+```
+LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
+             → DATASET → TRACE_MATRIX → EXEC_PLAN
+             → CRITIQUE → QUESTION_GEN → ASSEMBLE → PERSIST
+```
+
+- **`CRITERION_MAP` es el cortafuegos anti-invención** (gemelo de `MODEL_MAP` y
+  `RESOURCE_MAP`): fija en Python qué pares (historia, criterio) existen **antes**
+  de gastar un token. El LLM no elige *qué* hay, solo redacta *cómo* se prueba.
+- **La asimetría que gobierna el agente**: un caso ausente se ve en la cobertura;
+  un caso **falso** pasa la ejecución y certifica una mentira. De ahí que un caso
+  de **borde** exija el límite citado **verbatim** (QA-D2) y que los casos de
+  **autorización** se deriven por plantilla de la matriz del contrato de API
+  (QA-D7) — una regla `ambiguous` produce **pregunta**, nunca caso.
+- **La dependencia del `ApiArtifact` es opcional y explícita** (QA-D1): no está en
+  la cadena hacia atrás sino hacia delante, así que se indica y se **verifica que
+  pertenezca a la misma cadena**. Sin contrato no hay casos de autorización y el
+  artefacto **declara el motivo**; el propio contrato Pydantic hace imposible que
+  se cuelen por la puerta de atrás.
+- **Contrato `QaArtifact v1.0.0`**: `source` · `target` (umbrales y tabla de
+  minutos efectivos) · `test_cases[]` · `trace_matrix` (filas + `coverage`) ·
+  `datasets[]` · `execution_plan` (suites, orden topológico, esfuerzo) ·
+  `questions_for_qa_lead[]` · `analysis` · `metrics`.
+- **Determinista** (sin LLM): la matriz, el plan de ejecución con su orden
+  topológico, los casos de autorización y los **minutos** —de una tabla por tipo y
+  prioridad guardada en `target` (QA-D8), no de una estimación del modelo: dos
+  corridas del mismo plan dan el mismo número—.
+- **Semáforo**: sin bloqueantes **y** ≥1 caso **y** todo caso anclado a un criterio
+  real **y** cobertura de criterios `must`/`should` completa. Los de
+  `could`/`wont` sin caso son **advertencia** (QA-D5). QA es hoy el último eslabón:
+  su `ready` significa **"el plan se puede ejecutar"**.
+- **Exports CSV** (casos y matriz) con **BOM UTF-8** y delimitador `;`: Excel en
+  configuración española los abre de un doble clic, sin asistente y sin acentos
+  rotos, y sin añadir `openpyxl` (QA-D6).
+- **Frontend**: nav VERIFICAR, `QaResultView` sobre el centro de comando (§5.1).
+  Su visual insignia es la **matriz de trazabilidad** (criterio × tipo de caso, con
+  el hueco visible y separado por si bloquea o solo avisa). Badges por tipo con
+  vocabulario único en `lib/test-case-kind.ts`.
+- **Seed de demostración**: `scripts/seed_qa_demo.py` siembra la cadena completa
+  EF → Scrum (plan **a escala**) → Arquitectura → BD → API → QA, con el plan de
+  pruebas generado por el **pipeline real** y LLM falso. ⚠️ Pulsar "Generar" en la
+  UI sí llama al modelo real.
+- Sin migraciones de BD. Permisos sin tocar: `qa` FULL para el rol `qa`.
+
+---
+
 ## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
@@ -724,24 +780,25 @@ tms-ai-studio/
     │   ├── core/{logger,security}.py    # security: hashing bcrypt + JWT
     │   ├── core/permissions.py   # MATRIZ rol → módulo/nivel (fuente única)
     │   ├── errors.py             # errores de app (auth/permisos → ApiResponse)
-    │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura}.py
+    │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura,bd,apis,qa}.py
     │   ├── dependencies/         # current_user (401) + permissions (403)
     │   ├── middlewares/  models/    # models: agent, user (+ grants)
     │   ├── repositories/         # + story_assignment_repository
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
+    ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/
         ├── orchestrator/
         ├── inventory/            # INVENTARIO: ddl_import, doc_import, matching,
         │                         # reconcile, promote, loader, nodes, contract
-        ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, base/)
+        ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, qa/, base/)
         │                         # bd/ddl/:      render + validación del DDL (sin LLM)
         │                         # api/openapi/: render + validación del spec (sin LLM)
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml
         ├── tools/{parsers,chunker,validation}/
-        └── prompts/ef/           # (+ scrum/, arquitectura/, bd/, api/)
+        └── prompts/ef/           # (+ scrum/, arquitectura/, bd/, api/, qa/)
 ```
