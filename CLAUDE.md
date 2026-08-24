@@ -28,7 +28,10 @@ implementados, ver §5.3 y `docs/diseno-agente-api.md`). **MÓDULO INVENTARIO DE
 SISTEMAS + fase RECONCILE** **completo** (bloques INV0→INV6, ver §5.4): el ISDF
 deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
 Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
-ver §5.5 y `docs/diseno-agente-qa.md`). Siguiente eslabón: **Agente Backend**.
+ver §5.5 y `docs/diseno-agente-qa.md`). **QA9 —modos de entrada B (sistema del
+inventario) y C (exploración Playwright solo-lectura)— está DISEÑADO pero NO
+implementado**: ver §5.5 *in fine* y la PARTE II del doc. Siguiente eslabón:
+**Agente Backend**.
 
 ---
 
@@ -547,6 +550,63 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   pruebas generado por el **pipeline real** y LLM falso. ⚠️ Pulsar "Generar" en la
   UI sí llama al modelo real.
 - Sin migraciones de BD. Permisos sin tocar: `qa` FULL para el rol `qa`.
+
+### QA9 — modos de entrada B y C (DISEÑO PROPUESTO, **sin implementar**)
+
+> `docs/diseno-agente-qa.md` **PARTE II** (§11–§17). **Nada de esto existe en el
+> código.** Todo lo de arriba describe el **Modo A** (desde el plan Scrum), el único
+> implementado (HEAD `d99c068`).
+
+- **El problema que resuelve el bloque**: el Modo B (desde un sistema del
+  **INVENTARIO**) y el Modo C (**exploración Playwright solo-lectura** de una URL
+  viva) **no tienen `ScrumArtifact`**, así que amputan `CRITERION_MAP` — el órgano
+  que hace confiable al agente. Sin sustituto del ancla serían una fábrica de
+  cobertura falsa a escala.
+- **La distinción que lo ordena todo: especificación vs observación.** El Modo A
+  ancla a *intención* ("el sistema **debe** hacer X"); B y C a *observación* ("**hace**
+  X hoy"). Un caso en rojo significa "el sistema está mal" en A y **"algo cambió"** en
+  B/C. De ahí `evidence_class` **obligatorio por caso** (viaja al CSV, al badge y al
+  PDF): mezclar ambas suites destruye la capacidad de distinguir bug de evolución y
+  degrada la suite a ruido. **Los modos son excluyentes por job.**
+- **Sustitutos del cortafuegos**: `ASSET_MAP` (B) y `SURFACE_MAP` (C), deterministas
+  y previos al LLM, mismo patrón que `CRITERION_MAP`/`MODEL_MAP`/`RESOURCE_MAP`.
+- **Modo B — jerarquía de anclas**: constraint de `db_schema` (nivel 1) · afirmación
+  de `document` con evidencia verbatim (2) · endpoint de `api` **solo alcanzabilidad**
+  (3) · `module` → pregunta (4). El nivel 3 es regla dura:
+  `api_surface_from_artifact` **no guarda códigos de estado ni esquemas**, así que
+  afirmar `→ 201` sería convención disfrazada de evidencia. `importado` vs `validado`
+  modula `confidence` y emite `Risk` pero **NO bloquea**: un ancla mal parseada falla
+  ruidosamente, no miente en silencio — la asimetría rectora no aplica en esa
+  dirección.
+- **Modo C — cinco capas fail-closed** (hereda las cuatro de INV2): (1) **alias,
+  nunca URL del cliente** —sería SSRF, y además el alias transporta la credencial de
+  la cuenta de QA—; (2) **allowlist de hosts**, vacía = nada autorizado; (3) **solo
+  lectura impuesta en red: abortar todo método ≠ GET/HEAD** — "solo pulsamos enlaces"
+  es intención, no *enforcement*, igual que "las consultas son SELECT" no es
+  `default_transaction_read_only=on`; (4) la credencial jamás sale y **no se guardan
+  capturas de pantalla** (una captura autenticada lleva datos reales de producción a
+  un PDF exportable); (5) **la allowlist se re-verifica en CADA navegación** — una BD
+  no redirige, una aplicación web sí. `QA_EXPLORE_ENABLED=false` por defecto.
+- **Rompe dos rachas del proyecto, a conciencia**: el contrato sube a **`QaArtifact`
+  v1.1.0** (retrocompatible — `mode` con default `specification`, así que los
+  artefactos ya persistidos siguen validando) y **exige la migración `0011`**
+  (`agent_jobs.input_params` JSONB). `input_job_id` es **FK a `agent_jobs.id`** y un
+  sistema del inventario **no es un job**; guardarlo solo dentro del artefacto
+  perdería el rastro justo en los jobs que **fallan**, que es cuando más falta hace.
+  De paso cierra el `target_system_id` huérfano de INV (existe en los tres
+  `state.py`, lo leen los tres `*_nodes.py`, **nadie lo rellena**).
+- **Permisos (matriz sin tocar)**: registrar un alias explorable es un acto de
+  **despliegue** (`admin`); lanzar una exploración contra un destino ya acotado es
+  **`qa` FULL**.
+- **Entorno**: `playwright` **no** es dependencia del backend (`ModuleNotFoundError`
+  en el venv) y Chromium no arranca (falta `libnspr4`, sin sudo). Por eso **QA13
+  construye el guard ANTES que el navegador** y QA14 se ejerce contra **HTML de
+  fixtures**, con un cortafuegos `sin_navegador_real` autouse, hermano de
+  `sin_api_real`.
+- **Bloques**: QA9 (diseño) → QA10 contrato v1.1.0 → QA11 migración `0011` +
+  `LOAD_INVENTORY` → QA12 `ASSET_MAP` → QA13 guard del Modo C → QA14
+  `EXPLORE` + `SURFACE_MAP` → QA15 grafos B/C + servicio + API → QA16 frontend →
+  cierre.
 
 ---
 
