@@ -48,7 +48,7 @@ async def run_ef_pipeline(
     reemplaza por un mock (REGLA DE PRESUPUESTO: nunca API real sin autorización).
     """
     from ai.agents.base.pipeline import run_agent_pipeline
-    from ai.agents.base.structured import ClaudeLLMClient
+    from ai.llm import get_llm
     from ai.orchestrator import build_ef_graph
 
     state = {
@@ -62,12 +62,16 @@ async def run_ef_pipeline(
     await run_agent_pipeline(
         job_id=job_id,
         build_graph=build_ef_graph,
-        llm=ClaudeLLMClient(),
+        # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+        # Mientras la clasificación de fuentes no exista (LLM2) se declara
+        # `real`: el valor conservador, el que NO autoriza a un proveedor de
+        # pruebas a ver este contenido.
+        llm=get_llm("ef", data_class="real"),
         initial_state=state,
         # CRITIQUE necesita su propio cliente para el pase semántico (ambigüedades
         # / faltantes). Sin esto QUESTION_GEN se queda en 0 preguntas aunque el
         # texto tenga vacíos claros (mismo patrón que el Agente Scrum).
-        extra_config={"critique_llm": ClaudeLLMClient()},
+        extra_config={"critique_llm": get_llm("ef", data_class="real")},
     )
 
 

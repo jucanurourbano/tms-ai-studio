@@ -9,7 +9,6 @@ from datetime import date
 
 from langchain_core.runnables import RunnableConfig
 
-from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.qa.assemble import assemble_artifact, validate_artifact
 from ai.agents.qa.auth_cases import build_auth_cases
 from ai.agents.qa.common import merge_metrics
@@ -30,13 +29,19 @@ from ai.agents.qa.question_gen import generate_questions
 from ai.agents.qa.state import QaState
 from ai.agents.qa.test_design import run_test_design
 from ai.agents.qa.trace_matrix import build_trace_matrix, uncovered_requirements_risks
+from ai.llm import get_llm
 from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
-    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    """LLM inyectado por config (mock en tests); si no, el de la fábrica."""
     llm = (config or {}).get("configurable", {}).get("llm")
-    return llm if llm is not None else ClaudeLLMClient()
+    if llm is not None:
+        return llm
+    # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+    # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
+    # el valor conservador, el que NO autoriza a un proveedor de pruebas.
+    return get_llm("qa", data_class="real")
 
 
 def _today(config: RunnableConfig) -> str:

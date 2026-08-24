@@ -26,15 +26,20 @@ from ai.agents.arquitectura.load_sources import (
 from ai.agents.arquitectura.question_gen import generate_questions
 from ai.agents.arquitectura.stack import run_stack
 from ai.agents.arquitectura.state import ArchitectureState
-from ai.agents.base.structured import ClaudeLLMClient
 from ai.inventory.nodes import conflict_questions, reconcile_components
+from ai.llm import get_llm
 from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
-    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    """LLM inyectado por config (mock en tests); si no, el de la fábrica."""
     llm = (config or {}).get("configurable", {}).get("llm")
-    return llm if llm is not None else ClaudeLLMClient()
+    if llm is not None:
+        return llm
+    # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+    # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
+    # el valor conservador, el que NO autoriza a un proveedor de pruebas.
+    return get_llm("arquitectura", data_class="real")
 
 
 def _adr_valid_refs(

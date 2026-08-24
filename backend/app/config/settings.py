@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     CLAUDE_PRICE_INPUT_PER_MTOK: float = 3
     CLAUDE_PRICE_OUTPUT_PER_MTOK: float = 15
 
+    # --- Proveedor de LLM (ver ai/llm/ y docs/diseno-multiproveedor-llm.md) ---
+    # `anthropic` es el default IRRENUNCIABLE: sin nada configurado el sistema
+    # usa Anthropic. Los overrides son por rol (gana sobre el global) y el modelo
+    # se elige por PROVEEDOR, no por rol.
+    #   LLM_ROLE_OVERRIDES='{"qa": "gemini"}'
+    #   LLM_MODEL_OVERRIDES='{"gemini": "gemini-2.5-flash-lite"}'
+    LLM_PROVIDER: str = "anthropic"
+    LLM_ROLE_OVERRIDES: dict[str, str] = {}
+    LLM_MODEL_OVERRIDES: dict[str, str] = {}
+
     # --- Infraestructura (contenedores de docker-compose) ---
     DATABASE_URL: str = (
         "postgresql+asyncpg://tms:tms_dev_password@localhost:5432/tms_ai_studio"

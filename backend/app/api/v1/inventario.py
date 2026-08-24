@@ -279,10 +279,15 @@ async def upload_document(
             "versión no hace OCR."
         )
 
-    from app.dependencies.claude import get_claude_client
+    from ai.llm import get_llm
 
+    # Único punto que ingiere documentos reales de Urbano sin pasar por
+    # ``run_agent_pipeline``. Antes construía el chat crudo (``get_claude_client``)
+    # y se lo pasaba a ``extract_knowledge``, que espera un ``LLMClient``: además
+    # de evadir la política del proveedor, el chat crudo NO tiene
+    # ``complete_json``. Ahora entra por la misma puerta que todos los demás.
     conocimiento = await extract_knowledge(
-        get_claude_client(),
+        get_llm("inventory_doc", data_class="real"),
         fragmentos,
         concurrency=settings.INVENTORY_EXTRACT_CONCURRENCY,
     )

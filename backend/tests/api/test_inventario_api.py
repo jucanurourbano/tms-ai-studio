@@ -408,7 +408,6 @@ async def test_subir_un_documento_extrae_conocimiento(
     import json
     import re
 
-    import app.api.v1.inventario as inventario_api
     from app.config.settings import settings as app_settings
     from tests.inventory.fixtures import (
         APLICACIONES,
@@ -420,15 +419,34 @@ async def test_subir_un_documento_extrae_conocimiento(
 
     monkeypatch.setattr(app_settings, "STORAGE_DIR", str(tmp_path))
 
-    class MockLLM:
-        async def complete_json(self, *, system: str, user: str) -> str:
+    class _Mensaje:
+        def __init__(self, content):
+            self.content = content
+
+    class ChatFalso:
+        """Emula ``ChatAnthropic``: ``ainvoke`` devuelve un mensaje con ``.content``.
+
+        El doble tiene que ser el **chat**, no un ``LLMClient``: el endpoint le
+        pasa a ``extract_knowledge`` lo que devuelve la fábrica, y eso es el
+        adaptador real del proveedor. Se responde con la forma de LISTA DE
+        BLOQUES (thinking + text) que devuelve claude-sonnet-5, para que el
+        camino ejercitado sea el de producción de punta a punta.
+        """
+
+        async def ainvoke(self, messages):
+            _rol, user = messages[1]
             ids = re.findall(r"\[(el-\d+)\]", user)
-            return json.dumps(knowledge_del_documento(ids[0] if ids else "el-0000"))
+            payload = json.dumps(knowledge_del_documento(ids[0] if ids else "el-0000"))
+            return _Mensaje(
+                [
+                    {"type": "thinking", "thinking": "...", "signature": "abc"},
+                    {"type": "text", "text": payload},
+                ]
+            )
 
     monkeypatch.setattr(
-        inventario_api, "get_claude_client", lambda: MockLLM(), raising=False
+        "app.dependencies.claude.get_claude_client", lambda **_kwargs: ChatFalso()
     )
-    monkeypatch.setattr("app.dependencies.claude.get_claude_client", lambda: MockLLM())
 
     system_id = await _crear_sistema(client, admin_token)
     r = await client.post(

@@ -3,7 +3,8 @@
 Factoriza el patrón del Agente EF para que los siguientes agentes (Scrum,
 Arquitectura, ...) lo reutilicen sin duplicar infraestructura:
 
-- ``structured``: protocolo ``LLMClient``, ``ClaudeLLMClient`` y el map genérico
+- ``structured``: protocolo ``LLMClient``, el alias ``ClaudeLLMClient`` (el
+  proveedor real vive en ``ai/llm/``) y el map genérico
   con reparación de esquema + cuarentena (``run_structured_map``).
 - ``graph``: compilación lineal de grafos LangGraph con checkpointer.
 - ``refine``: construcción del "contexto autoritativo" desde validaciones.

@@ -10,7 +10,6 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
-from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.scrum.assemble import assemble_artifact, validate_artifact
 from ai.agents.scrum.common import merge_metrics
 from ai.agents.scrum.criteria import run_criteria
@@ -23,13 +22,19 @@ from ai.agents.scrum.question_gen import generate_questions
 from ai.agents.scrum.sprint_plan import annotate_goals, plan_sprints
 from ai.agents.scrum.state import ScrumState
 from ai.agents.scrum.stories import run_stories
+from ai.llm import get_llm
 from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
-    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    """LLM inyectado por config (mock en tests); si no, el de la fábrica."""
     llm = (config or {}).get("configurable", {}).get("llm")
-    return llm if llm is not None else ClaudeLLMClient()
+    if llm is not None:
+        return llm
+    # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+    # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
+    # el valor conservador, el que NO autoriza a un proveedor de pruebas.
+    return get_llm("scrum", data_class="real")
 
 
 async def node_load_ef(state: ScrumState) -> dict:

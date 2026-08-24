@@ -51,7 +51,7 @@ async def run_bd_pipeline(
 ) -> None:  # pragma: no cover - ruta runtime con Redis/Postgres reales
     """Ejecuta el grafo del Agente BD en segundo plano y persiste resultados."""
     from ai.agents.base.pipeline import run_agent_pipeline
-    from ai.agents.base.structured import ClaudeLLMClient
+    from ai.llm import get_llm
     from ai.orchestrator import build_bd_graph
 
     state = {
@@ -75,7 +75,11 @@ async def run_bd_pipeline(
     await run_agent_pipeline(
         job_id=job_id,
         build_graph=build_bd_graph,
-        llm=ClaudeLLMClient(),
+        # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+        # Mientras la clasificación de fuentes no exista (LLM2) se declara
+        # `real`: el valor conservador, el que NO autoriza a un proveedor de
+        # pruebas a ver este contenido.
+        llm=get_llm("bd", data_class="real"),
         initial_state=state,
     )
 

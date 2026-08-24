@@ -78,11 +78,16 @@ async def node_segment(state: EFState) -> dict:
 
 async def node_extract(state: EFState, config: RunnableConfig) -> dict:
     """EXTRACT: map por dimensiones sobre los chunks (LLM inyectable por config)."""
-    from ai.agents.ef.extract import ClaudeLLMClient, run_extract
+    from ai.agents.ef.extract import run_extract
+    from ai.llm import get_llm
 
     llm = (config or {}).get("configurable", {}).get("llm")
     if llm is None:
-        llm = ClaudeLLMClient()
+        # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+        # Mientras la clasificación de fuentes no exista (LLM2) se declara
+        # `real`: el valor conservador, el que NO autoriza a un proveedor de
+        # pruebas.
+        llm = get_llm("ef", data_class="real")
 
     chunks = (state.get("chunks") or {}).get("chunks", [])
     results, skipped, tokens = await run_extract(

@@ -40,16 +40,21 @@ from ai.agents.api.resource_map import build_resource_map
 from ai.agents.api.resources import run_resources
 from ai.agents.api.rule_mapping import run_rule_mapping
 from ai.agents.api.state import ApiState
-from ai.agents.base.structured import ClaudeLLMClient
 from ai.inventory.nodes import conflict_questions, reconcile_endpoints
 from ai.knowledge import load_api_conventions
+from ai.llm import get_llm
 from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
-    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    """LLM inyectado por config (mock en tests); si no, el de la fábrica."""
     llm = (config or {}).get("configurable", {}).get("llm")
-    return llm if llm is not None else ClaudeLLMClient()
+    if llm is not None:
+        return llm
+    # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+    # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
+    # el valor conservador, el que NO autoriza a un proveedor de pruebas.
+    return get_llm("api", data_class="real")
 
 
 async def node_load_sources(state: ApiState) -> dict:

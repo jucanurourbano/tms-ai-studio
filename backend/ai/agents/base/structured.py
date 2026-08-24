@@ -3,8 +3,8 @@
 Extrae el patrón embebido en ``ai/agents/ef/extract.py`` a una base compartida:
 
 - ``LLMClient``: protocolo agnóstico (system + user -> texto JSON crudo).
-- ``ClaudeLLMClient``: implementación real sobre ChatAnthropic (import perezoso;
-  NUNCA se usa en tests por la REGLA DE PRESUPUESTO).
+- ``ClaudeLLMClient``: alias de compatibilidad sobre el proveedor ``anthropic``
+  de ``ai/llm/`` (NUNCA se usa en tests por la REGLA DE PRESUPUESTO).
 - ``complete_structured``: una llamada con loop de reparación ante schema inválido.
 - ``run_structured_map``: map (ítem × tarea) con concurrencia limitada y cuarentena
   de los ítems irreparables (nunca tumba el job).
@@ -176,27 +176,24 @@ async def run_structured_map(
     return results, skipped, tokens
 
 
-class ClaudeLLMClient:
-    """Implementación real de ``LLMClient`` sobre ChatAnthropic (import perezoso).
+def ClaudeLLMClient(client=None) -> LLMClient:
+    """Alias delgado sobre el proveedor ``anthropic`` (compatibilidad).
 
-    No se usa en tests (REGLA DE PRESUPUESTO): allí se inyecta un mock.
+    El adaptador real es ``ai.llm.providers.anthropic.AnthropicLLMClient``, donde
+    vive junto a la política de reintentos y la tarifa del proveedor. Este nombre
+    sobrevive porque lo instancian tests que le inyectan un chat falso, y porque
+    ``ai/agents/ef/extract.py`` lo reexporta.
+
+    Es una **función** y no un alias de clase a propósito: el import del
+    proveedor se hace aquí dentro, y así este módulo —que define el protocolo que
+    importan los ~30 nodos generativos— no depende de ``ai.llm`` al cargarse.
+
+    Para código nuevo la puerta es ``ai.llm.get_llm(rol, data_class=...)``, que
+    además aplica la política del proveedor; esto solo construye Anthropic.
     """
+    from ai.llm.providers.anthropic import AnthropicLLMClient
 
-    def __init__(self, client=None) -> None:
-        self._client = client
-
-    async def complete_json(self, *, system: str, user: str) -> str:
-        from app.dependencies.claude import call_with_retry, get_claude_client
-
-        client = self._client or get_claude_client()
-
-        async def _call() -> str:
-            msg = await client.ainvoke([("system", system), ("user", user)])
-            # ``content`` puede ser string o lista de bloques (thinking+text) en
-            # langchain-anthropic 1.x: extraer SIEMPRE el texto, nunca str(lista).
-            return message_text(msg.content)
-
-        return await call_with_retry(_call)
+    return AnthropicLLMClient(client=client)
 
 
 # Reexport para tipado explícito de factories.

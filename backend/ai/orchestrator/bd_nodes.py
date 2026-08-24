@@ -15,7 +15,6 @@ import time
 
 from langchain_core.runnables import RunnableConfig
 
-from ai.agents.base.structured import ClaudeLLMClient
 from ai.agents.bd.assemble import assemble_artifact, validate_artifact
 from ai.agents.bd.catalogs import run_catalogs
 from ai.agents.bd.common import merge_metrics
@@ -39,13 +38,19 @@ from ai.agents.bd.state import DatabaseState
 from ai.agents.bd.tables import run_tables
 from ai.inventory.nodes import conflict_questions, reconcile_tables
 from ai.knowledge import default_schema, load_db_conventions
+from ai.llm import get_llm
 from app.config.settings import settings
 
 
 def _llm(config: RunnableConfig):
-    """LLM inyectado por config (mock en tests); si no, el cliente real."""
+    """LLM inyectado por config (mock en tests); si no, el de la fábrica."""
     llm = (config or {}).get("configurable", {}).get("llm")
-    return llm if llm is not None else ClaudeLLMClient()
+    if llm is not None:
+        return llm
+    # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
+    # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
+    # el valor conservador, el que NO autoriza a un proveedor de pruebas.
+    return get_llm("bd", data_class="real")
 
 
 def _conventions_payload(engine: str, audit_columns: bool) -> dict:
