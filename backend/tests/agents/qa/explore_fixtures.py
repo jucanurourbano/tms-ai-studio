@@ -20,11 +20,14 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from ai.agents.qa.explore.driver import RespuestaNavegacion
+from ai.agents.qa.explore.network import METODOS_DE_LECTURA
 
 DIRECTORIO = Path(__file__).resolve().parents[2] / "fixtures" / "qa_explore"
 
-#: Los únicos métodos que la capa 3 deja salir.
-METODOS_DE_LECTURA = frozenset({"GET", "HEAD"})
+# ``METODOS_DE_LECTURA`` se IMPORTA de la capa 3 desde QC5, en vez de declararse
+# aquí como en QC4 (cuando el módulo de producción no existía todavía). Un doble
+# con su propia copia de la regla deja de modelar el original en cuanto la regla
+# cambia, y entonces la suite queda verde contra un comportamiento que ya no es.
 
 
 @dataclass(frozen=True)

@@ -428,7 +428,23 @@ def test_f2_tambien_sobre_la_fixture_comiteada_de_verdad():
 #: Lo único que este módulo puede importar. Lista **cerrada**: añadir un import es
 #: una decisión que hay que justificar aquí, y eso es exactamente lo que se quiere
 #: para el módulo que decide qué existe antes de que hable el modelo.
-IMPORTS_PERMITIDOS = {"re", "dataclasses", "typing", "ai.agents.qa.explore"}
+IMPORTS_PERMITIDOS = {
+    "re",
+    "dataclasses",
+    "typing",
+    "ai.agents.qa.explore",
+    # Añadido en QC5, y la justificación es el criterio 5 de A6: el tope de la
+    # evidencia de un enum se escribe UNA vez, en ``common``, y lo comparten los dos
+    # modos. Tenía que aplicarse AQUÍ y no en ``SURFACE_MAP`` porque por encima del
+    # tope la evidencia pasa a ser la etiqueta de apertura del ``<select>``, y esa
+    # etiqueta literal solo la tiene quien parseó: reconstruirla después exigiría un
+    # segundo parser del mismo documento, que es lo que §13.5 prohíbe.
+    #
+    # No debilita el candado, que sigue diciendo lo mismo: ni navegador, ni red, ni
+    # disco, ni los módulos hermanos que conducen el navegador. La lista es CERRADA,
+    # no congelada: cada entrada se justifica aquí.
+    "ai.agents.qa.common",
+}
 
 #: Trozos que delatan a un literal que nombra un fichero del repositorio. El
 #: extractor recibe HTML como cadena: si nombra un fichero es que lo va a abrir.

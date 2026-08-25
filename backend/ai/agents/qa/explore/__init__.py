@@ -16,10 +16,12 @@ Las cinco capas fail-closed (heredadas de INV2,
    el servidor a un host arbitrario — un SSRF de manual. Y aquí hay un segundo
    motivo: el destino transporta la **credencial de la cuenta de QA**.
 2. **Allowlist de hosts** (``target.py``). Lista vacía = **nada autorizado**.
-3. **Solo lectura impuesta**, no prometida: la política de pulsado
-   (``clicking.py``) se evalúa sobre el DOM y el presupuesto de clics vive en
-   ``ExploreSession``; el aborto de todo método ≠ ``GET``/``HEAD`` en la red se
-   instala con el driver real (QC5), sobre esta misma costura.
+3. **Solo lectura impuesta**, no prometida, y con dos mitades: la política de
+   pulsado (``clicking.py``) se evalúa sobre el DOM y el presupuesto de clics vive
+   en ``ExploreSession``; el aborto en red de todo método ≠ ``GET``/``HEAD``
+   —más la neutralización del ``submit``, que va **antes**— vive en
+   ``network.py`` (QC5) y lo instala ``driver.py`` sobre el contexto, antes de que
+   exista una página.
 4. **La credencial nunca sale** (``target.py``: ``redact_url``), ni en el
    artefacto, ni en un log, ni en un mensaje de error. Corolario del navegador:
    **no se guardan capturas de pantalla** (candado AST en
@@ -32,7 +34,7 @@ al destino es ``assert_target_authorized`` y el único camino al navegador es
 ``ExploreSession``.
 
 Y una pieza que **no** es una capa: ``extract.py``, el extractor determinista de
-anclas (QC4.5). No es parte de la jaula porque no toca nada — recibe el HTML como
+anclas (QC4.5/QC5). No es parte de la jaula porque no toca nada — recibe el HTML como
 cadena y devuelve la lista cerrada de lo anclable, sin red, sin navegador y sin
 LLM. Vive aquí porque es la otra mitad de la misma costura (§6.2): lo que hace
 ejercitable el 99% del Modo C en un host donde Chromium no arranca.

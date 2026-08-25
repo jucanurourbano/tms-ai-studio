@@ -13,26 +13,23 @@ Uso (desde ``backend/``)::
 El ``--path`` es el de la página observada, y es el que entra en cada ``ref``. Es
 un *path*, nunca una URL: el host viene del alias y no viaja en el artefacto.
 
-Lo que la tabla enseña además de las anclas: **los controles que se quedaron sin
-ninguna**. Un hueco es una decisión —sin selector estable no se ancla— y verlo es
-la mitad del valor de mirar.
+Lo que la tabla enseña además de las anclas: **los descartes con su motivo**. Un
+hueco es una decisión —sin selector estable no se ancla, un catálogo que en
+realidad es una lista de clientes no ancla, una cita que no cabe en la celda del
+analista no ancla— y verla es la mitad del valor de mirar. Una decisión
+fail-closed y un olvido se ven exactamente igual desde fuera: en los dos casos
+falta un ancla. La diferencia la hace decir por qué.
 """
 
 import argparse
 import os
 import sys
+import textwrap
 
 # Permite ejecutar el archivo directamente (agrega backend/ al path).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai.agents.qa.explore import dom  # noqa: E402
-from ai.agents.qa.explore.extract import (  # noqa: E402
-    CONTROLES,
-    Ancla,
-    anclas_de,
-    selector_de_ancla,
-    veces_por_selector,
-)
+from ai.agents.qa.explore.extract import Ancla, extraer  # noqa: E402
 
 ANCHO_VALOR = 28
 ANCHO_EVIDENCIA = 64
@@ -68,26 +65,13 @@ def _fila(ancla: Ancla) -> str:
     )
 
 
-def _sin_ancla(html: str) -> list[dom.Elemento]:
-    """Los controles sin selector estable, para que el hueco se vea.
-
-    Un control con selector y sin atributos de validación no sale aquí: no hay
-    hueco que enseñar, simplemente no había nada que anclar."""
-    elementos = dom.elementos(html)
-    veces = veces_por_selector(elementos)
-    return [
-        elemento
-        for elemento in elementos
-        if elemento.tag in CONTROLES and selector_de_ancla(elemento, veces) is None
-    ]
-
-
 def main() -> None:
     args = _argumentos()
     with open(args.html, encoding="utf-8") as fichero:
         html = fichero.read()
 
-    anclas = anclas_de(html, args.path)
+    extraccion = extraer(html, args.path)
+    anclas = extraccion.anclas
 
     print(f"\n{args.html}  →  path {args.path}\n")
     print(
@@ -108,14 +92,27 @@ def main() -> None:
         f"{len(frágiles)} frágiles (⚠ structural: un <div> nuevo las rompe)."
     )
 
-    huerfanos = _sin_ancla(html)
-    if huerfanos:
+    if extraccion.descartes:
         print(
-            f"\n{len(huerfanos)} controles SIN SELECTOR — de estos no se ancla nada, "
-            "aunque lleven atributos de validación, y el hueco se ve en la cobertura:"
+            f"\n{len(extraccion.descartes)} DESCARTES — de estos no se ancla nada, "
+            "aunque hubiera algo que anclar. Cada uno dice por qué: una decisión "
+            "fail-closed y un olvido se ven igual desde fuera, y la diferencia la "
+            "hace decirlo."
         )
-        for elemento in huerfanos:
-            print(f"  línea {elemento.linea:>4}: {_recortar(elemento.origen, 90)}")
+        for descarte in extraccion.descartes:
+            print(f"  línea {descarte.linea:>4}  [{descarte.clave}]")
+            print(f"         {_recortar(descarte.origen, 88)}")
+            # El motivo se envuelve entero y NO se recorta: es lo único que
+            # distingue una decisión fail-closed de un olvido, y recortarlo por la
+            # mitad devuelve al lector justo a la duda que el bloque vino a quitar.
+            print(
+                textwrap.fill(
+                    descarte.motivo,
+                    width=100,
+                    initial_indent="         └ ",
+                    subsequent_indent="           ",
+                )
+            )
 
     if not anclas:
         print(

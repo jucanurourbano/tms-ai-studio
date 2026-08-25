@@ -563,7 +563,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | **QC3** ✅ | **El guard, antes del navegador.** `QA_EXPLORE_*` en settings, alias con `readonly_verified`, allowlist, validación de esquema, revalidación por navegación, redacción, topes, política de pulsado (§3.2) evaluada sobre HTML, `ExploreSession` **con el driver inyectado**, `sin_navegador_real` autouse, candado AST (§3.3.3). **Sin una línea de Playwright.** | alias inexistente → error · allowlist vacía ⇒ nada autorizado · `302` fuera de host no se sigue y se registra · `file:`/`data:`/`javascript:` rechazados · `readonly_verified=false` → 409 · credencial ausente de artefacto, log y respuesta · `<button>` sin `type` en `<form>` **no** es pulsable · candado AST: cero `fill`/`type`/`screenshot` | — **IMPLEMENTADO** (§11) |
 | **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
 | **QC4.5** ✅ | **El extractor determinista de anclas**: vocabulario cerrado de atributos-ancla, `anchor_ref` canónico, cinco estrategias de selector con unicidad comprobada, `@enum`, y un lector de `.html` de disco para mirar la tabla con los ojos. Sin red, sin LLM, sin navegador, sin clic. | cada atributo del vocabulario produce su ancla y `value`/`disabled`/`placeholder` no · una etiqueta que no se escribe en CSS **no** ancla (fail-closed) · dos pasadas dan los mismos refs en el mismo orden · toda evidencia es subcadena exacta del HTML · **F2 fijada**: el enum se ve en crudo y no en la fixture saneada | — **IMPLEMENTADO** (§13) |
-| **QC5** | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes · **C1 — tests de enum con HTML sintético, nunca contra fixtures** (allí hay cero enums: F2, §13.4) · **C2 — `radio`/`checkbox` entran en el vocabulario**, agrupados por `name` igual que `@enum` agrupa las `<option>` por prefijo de ruta · **C3 — el tope de A6, con huella**: por encima del tope se emite cardinalidad + hash del conjunto ordenado + primeros valores, **nunca** un conjunto recortado; un `<select>` de 1.874 opciones no mete el catálogo ni en el prompt ni en el artefacto y el ancla sigue en pie, y ninguna `evidence` supera los **32.767** caracteres de una celda de Excel · **C4 — enums falsos**: un `<select>` cuyos valores son ULIDs o nombres de persona **no** ancla como conjunto cerrado; QC5 **propone** el discriminador catálogo-de-dominio vs lista-de-datos (el mismo que bloquea F2) y no se decide antes · **C5 — anclas inestables**: ningún `anchor_ref` cambia entre corridas si no cambió la aplicación, así que un `aria-label` que interpola un id (`{storyId}`) no ancla — una suite de caracterización con refs inestables no caracteriza nada | **entorno**: `libnspr4` con `sudo` (§1.1) — solo para una prueba manual, no para la suite |
+| **QC5** ✅ | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes · **C1 — tests de enum con HTML sintético, nunca contra fixtures** (allí hay cero enums: F2, §13.4) · **C2 — `radio`/`checkbox` entran en el vocabulario**, agrupados por `name` igual que `@enum` agrupa las `<option>` por prefijo de ruta · **C3 — el tope de A6, con huella**: por encima del tope se emite cardinalidad + hash del conjunto ordenado + primeros valores, **nunca** un conjunto recortado; un `<select>` de 1.874 opciones no mete el catálogo ni en el prompt ni en el artefacto y el ancla sigue en pie, y ninguna `evidence` supera los **32.767** caracteres de una celda de Excel · **C4 — enums falsos**: un `<select>` cuyos valores son ULIDs o nombres de persona **no** ancla como conjunto cerrado; QC5 **propone** el discriminador catálogo-de-dominio vs lista-de-datos (el mismo que bloquea F2) y no se decide antes · **C5 — anclas inestables**: ningún `anchor_ref` cambia entre corridas si no cambió la aplicación, así que un `aria-label` que interpola un id (`{storyId}`) no ancla — una suite de caracterización con refs inestables no caracteriza nada | **CERRADO** (§14). `libnspr4`/`libnss3` instalados; `playwright==1.62.0` (chromium **1234**, ya descargado). **Ninguna exploración real**, ni una vez |
 | **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está | **entorno** (igual que QC5) |
 | **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
 | **QC8** | Frontend (§7): selector de modo, select de alias **sin campo de URL**, `evidence-class.ts`, ancla en la fila, `HubSection` "Exploración", `UI:` sin destino, columna del CSV. | Modo A renderiza idéntico · alias vacío ⇒ opción deshabilitada con motivo · `UI:` no abre panel | **⚠️ LLM5** — §9.3 |
@@ -1265,3 +1265,182 @@ vigilar la copia sin adivinar cómo la escribirá quien la escriba), de modo que
 la importa o el test falla al escribirla.
 
 **Suite:** 1607 → 1625 (+18), **ningún test existente modificado**.
+
+---
+
+## 14. QC5 — `EXPLORE`: el navegador, la capa 3 de red y los conjuntos cerrados (cerrado)
+
+El bloque que trae el animal, después de la valla. Playwright entra en
+`requirements.txt`, `test_qc3_no_introduce_playwright` se borra —su acto visible de
+muerte— y la capa 3 deja de estar modelada para estar impuesta.
+
+### 14.1 El pin dice más que «no subas de versión»
+
+`playwright==1.62.0`. **La revisión del navegador que trae cada versión es parte
+del contrato**: 1.62.0 trae `chromium` **1234**, que es el que ya estaba descargado
+en el host, así que instalar no bajó un solo byte de navegador. Comprobado abriendo
+el wheel (`playwright/driver/package/browsers.json`) y **no** inferido del número de
+versión — la primera cifra que se dio de memoria, `1.62.1`, ni siquiera existe para
+Python. Cambiar el pin sin repetir esa comprobación obliga a bajar un Chromium
+nuevo, que es tráfico que no ocurre por accidente y que por eso está escrito al lado
+de la línea.
+
+### 14.2 La capa 3 tiene dos mitades y viven en ficheros gemelos
+
+`clicking.py` decide qué se **toca** leyendo el DOM (QC3); `network.py` decide qué se
+**envía** (QC5). La segunda es la traducción literal de
+`default_transaction_read_only=on`: **se aborta toda petición cuyo método no sea
+`GET`/`HEAD`**, sea de navegación o de un `fetch`, vaya al propio origen o a otro.
+Lista **blanca**, no negra: el verbo que nadie ha inventado todavía también muere.
+
+**La política es una función pura y el driver una cáscara que pregunta y obedece.**
+Es lo que permite ejercer la capa entera sin arrancar nada: el manejador de ruta se
+prueba con un doble que apunta si continuó o abortó, y `preparar_contexto` con otro
+que apunta el **orden** de las llamadas.
+
+**Y el orden es un criterio, no un detalle.** Primero `add_init_script` neutraliza el
+`submit`; después se instala la intercepción de red. Al revés el navegador formaría
+envíos que mueren abortados, y **un envío que muere se observa como «no hubo
+validación»** — la observación falsa que este agente no puede producir, y el mismo
+motivo por el que teclear (nivel 2) está fuera de v1.
+
+La neutralización cubre las **tres** vías y ninguna cubre a las otras: el evento
+`submit` en fase de captura con `stopImmediatePropagation`, `HTMLFormElement.
+prototype.submit` (que **no** dispara el evento y se escaparía de la primera) y
+`requestSubmit`. Lo que **no** se toca es la validación: el mensaje de error que el
+navegador renderiza es justo la evidencia que QA-D2 manda citar verbatim, y un guion
+que la apagara convertiría al explorador en un mentiroso.
+
+**Un subrecurso `GET` a otro origen SÍ pasa, y es una decisión declarada.** Abortar
+el CSS o el JS que la aplicación carga de un CDN deja una página rota, y de una
+página rota salen casos que afirman comportamientos que el sistema no tiene. Se
+prefiere el riesgo menor —una petición de lectura a un tercero, que la aplicación
+hace igual cuando la abre una persona— al riesgo mayor. **Residual abierto**, no
+descuido: la cabecera `Referer` de esa petición lleva la URL interna.
+
+### 14.3 El candado del clic tiene dos dueños, y decirlo es más fuerte que exceptuarlo
+
+No hay forma de pulsar en Playwright sin llamar a algo que se llame `click`: las
+alternativas (`dispatch_event`, `evaluate`) están en `METODOS_PROHIBIDOS` por motivos
+peores. Así que `DUENO_DEL_CLIC` pasa a `DUENOS_DEL_CLIC` = {`session.py::pulsar_si_procede`
+(quien **decide**), `driver.py::click` (quien **ejecuta**)}. Lo que el candado sigue
+garantizando es lo que importaba: **ningún nodo y ningún otro módulo pulsa nada**. Un
+segundo dueño nombrado se ve en la revisión; una lista de ficheros exentos, no.
+
+### 14.4 `sin_navegador_real` pasa a proteger de un riesgo presente
+
+Hasta aquí, dos de las tres entradas de la capa 5 se saltaban en silencio: sin el
+paquete instalado no había constructor que parchear. Ahora lo hay, y hay un test que
+comprueba que el blindaje **llegó**, no que la lista los nombre. Más el que importa:
+usando la referencia REAL a `build_driver` —resuelta al importar, saltándose la
+primera entrada— el navegador **sigue sin arrancar**, porque la segunda entrada lo
+para. `build_driver` no arranca nada al construir (un job que muere en una validación
+previa no debe dejar un Chromium levantado); el intento ocurre en la primera
+navegación, y ahí es donde choca.
+
+La jaula se instala **sobre el contexto y antes de que exista una página**, con
+candado de fuente: si `new_page` ocurriera antes de `preparar_contexto` habría una
+ventana —corta, pero real— con un navegador vivo y sin capa 3. Se comprueba en el
+código porque comprobarlo en comportamiento exigiría arrancar Chromium, y el criterio
+7 del bloque lo prohíbe.
+
+### 14.5 C1, C2, C3 y C5
+
+- **C1 — los enums se prueban con HTML sintético, nunca contra fixtures**, y hay un
+  candado que lo obliga (por AST: un candado que busca su propia palabra prohibida en
+  el fichero se encuentra dentro de su propio `assert`). En las fixtures hay cero
+  enums por F2, así que probarlos allí sería probarlos contra listas vacías.
+- **C2 — `radio`/`checkbox` por `name` son un conjunto cerrado.** El navegador envía
+  UNO de los `value` declarados: es un enum con otra sintaxis. La diferencia está en
+  el selector — aquí el `[name]` casa con **todos** los miembros a propósito, eso *es*
+  el grupo, así que la unicidad que se exige a un ancla de atributo sería justo lo
+  contrario de lo que hace falta. Hacen falta **dos** miembros: un `checkbox` suelto
+  declara un sí/no, no un conjunto, y su ancla útil es `required`. La evidencia es un
+  **tramo del documento**, no las etiquetas concatenadas: la concatenación no es
+  subcadena de nada y la verificación verbatim (§2.4.3) la rechazaría.
+- **C3 — el tope de A6, reutilizado y no reescrito.** `extract.py` importa
+  `common.enum_evidence`; el candado del `hashlib` sigue verde por construcción. El
+  `<select>` de 1.874 distritos ancla con su huella y su evidencia pasa a ser la
+  **etiqueta de apertura**. Y el tope gobierna también al grupo de radios: es del
+  conjunto, no del `<select>`, o el mismo catálogo daría dos evidencias distintas.
+- **C5 — ningún `anchor_ref` cambia entre corridas si no cambió la aplicación.** Un
+  candidato de selector cuyo **valor de atributo** interpola una plantilla sin
+  renderizar (`{storyId}`), un ULID/UUID, un hexadecimal largo o el número de una fila
+  **se salta**, y se prueba el siguiente. Rechazarlo no abre un hueco: cae hasta la
+  ruta estructural, que es estable por construcción y **frágil**, y por eso nace
+  marcada. El test que es el criterio entero: la misma plantilla renderizada con dos
+  filas distintas produce refs **idénticos** — y no se consigue emitiendo cero anclas.
+
+### 14.6 C4 — el discriminador catálogo-de-dominio vs lista-de-datos, y su residual
+
+**Mira solo los `value`, nunca los rótulos.** Tres reglas, y todas tienen que pasar:
+(1) forma de código —sin espacios, ≤32 caracteres, alfabeto de código—; (2) ningún
+valor con forma de identificador de fila (ULID, UUID, hexadecimal largo, o ≥20
+caracteres mezclando minúsculas, mayúsculas y dígitos); (3) si **todos** son enteros,
+longitud uniforme de al menos 4 dígitos. Fail-closed ante la duda: un solo valor que
+falle descarta el conjunto entero, y el `<select>` conserva sus **otras** anclas —lo
+que se retira es la afirmación «este es el conjunto de lo aceptado», que es la que
+mentiría—.
+
+**Por qué no mira los rótulos, que es la decisión.** «La Libertad» y «Juan Pérez» son
+estructuralmente idénticos: cualquier regla sobre texto o mata las provincias o deja
+pasar los nombres. Y hay un motivo más fuerte que su imprecisión — leer el texto para
+decidir mete el texto en el camino de la decisión, y el texto es justo lo que no
+queremos que viaje.
+
+**Cierra la fuga que A6 midió y no rompe su ejemplo.** Los cuatro `<select>` de
+nuestro propio frontend con identificadores de usuario o nombres completos mueren por
+las reglas 2 y 1. Ubigeo —seis dígitos uniformes— sobrevive, y con 1.874 opciones
+ancla con su huella: es literalmente el punto 4 de A6, intacto.
+
+**El motivo del descarte describe la REGLA, y no cita ningún valor.** Un motivo viaja
+al artefacto, al CSV y al PDF exactamente igual que una evidencia; citar un nombre de
+cliente para explicar por qué no se citan los nombres de los clientes sería la misma
+fuga por la puerta de atrás. Quién es el infractor se ve abriendo la página. El
+bloque de descartes de `scripts/anclas_de_html.py` imprime el motivo **entero, sin
+recortar**: es lo único que distingue una decisión fail-closed de un olvido, y
+recortarlo devuelve al lector a la duda que el bloque vino a quitar.
+
+#### RESIDUAL ABIERTO de C4 — la regla 3 falla a plazo, no hoy
+
+Una lista de clientes con clave primaria entera y longitud uniforme de al menos
+cuatro dígitos (1000–9999) **pasa** el discriminador y ancla como si fuera un
+catálogo. El día que la tabla cruce a 10000 las longitudes dejarán de ser uniformes y
+el mismo `<select>` **dejará de anclar**, sin que haya cambiado la aplicación: ruido
+con aspecto de hallazgo, a plazo. Que sea diferido lo hace **peor** que uno que falla
+hoy, porque nadie lo ve venir.
+
+- **Estado:** conocido, aceptado y **fijado como comportamiento** en
+  `test_c4_RESIDUAL_una_pk_uniforme_de_cuatro_digitos_todavia_ancla`, que ejerce las
+  dos mitades: ancla con 1000–1009 y deja de anclar al añadir 10000. No es una
+  sorpresa esperando a ocurrir; es una expectativa escrita.
+- **Por qué no se refina ahora:** la regla no se ha visto funcionar contra una
+  aplicación real ni una vez. Calibrar un umbral contra casos imaginados es cómo se
+  fabrican umbrales que no sirven.
+- **Dueño:** la primera exploración autorizada contra un host real. Quien la ejecute
+  mira el bloque de descartes, cuenta cuántos `<select>` cayeron por «secuencia
+  sustituta» y cuántos pasaron siéndolo, y **entonces** se decide: o un segundo
+  criterio (cardinalidad del conjunto frente al total de filas conocidas, que hoy no
+  se tiene), o dejarla como está con el residual escrito.
+- **Cómo se verá:** el motivo del descarte dice «secuencia sustituta» literalmente, y
+  el lector lo imprime sin recortar. Es mirable sin instrumentar nada.
+
+### 14.7 Lo que este bloque NO trae
+
+- **Ninguna exploración real.** Ni contra `localhost`, ni contra ningún host, ni una
+  sola vez para ver arrancar el driver. `sin_navegador_real` bloquea la suite entera y
+  la primera corrida contra un host se autoriza aparte.
+- **`SURFACE_MAP` como nodo del grafo** y su traducción al contrato: son de QC7, que
+  es donde hay grafo y servicio. Lo que QC5 cierra es la lista cerrada que ese
+  cortafuegos consumirá y el guard que la produce.
+- **F2**, confirmada fuera del bloque. El discriminador que le faltaba ya existe
+  (§14.6), así que la puerta queda abierta: aplicarlo al saneador exige bufferizar las
+  `<option>` para decidir al cerrar el `<select>`, y eso es un cambio propio.
+- **`storage_state` poblado** — el CLI de login es QC6.
+
+**Suite:** 1625 → 1735 (+110). Se borró `test_qc3_no_introduce_playwright` (criterio
+1) y se movieron tres tests que el bloque invalida por construcción: el del dueño
+único del clic, el de la fábrica sin driver y la copia local de `METODOS_DE_LECTURA`
+en el doble de fixtures, que ahora **importa** la del módulo de producción —un doble
+con su propia copia de la regla deja de modelar el original en cuanto la regla
+cambia—.

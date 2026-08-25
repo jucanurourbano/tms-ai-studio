@@ -205,6 +205,19 @@ class ExploreSession:
         driver = self._driver_activo()
         respuesta = await driver.goto(absoluta, timeout_ms=self.limites.timeout_ms)
 
+        # El navegador se negó: la capa 3 abortó la petición (método que no es de
+        # lectura) o la capa 5 la sacó de la jaula desde dentro (un 302 llega al
+        # navegador como una petición de documento nueva). Se registra con su
+        # motivo: un explorador que anota "algo pasó" produce una cobertura que
+        # nadie puede auditar.
+        if respuesta.status == 0:
+            self._bloquear(
+                redact_url(respuesta.url or absoluta),
+                respuesta.motivo_bloqueo or "El navegador abortó la petición.",
+                origen_path,
+            )
+            return None
+
         if 300 <= respuesta.status < 400 and respuesta.location:
             return await self._seguir_redireccion(
                 respuesta, absoluta, depth, desde, _redirecciones
@@ -320,6 +333,11 @@ class ExploreSession:
             selector.valor, timeout_ms=self.limites.timeout_ms
         )
 
+        if respuesta.status == 0:
+            motivo = respuesta.motivo_bloqueo or "El navegador abortó la petición."
+            self._bloquear(redact_url(respuesta.url or pagina.url), motivo, pagina.path)
+            return Veredicto(False, motivo), None
+
         final = evaluar_navegacion(self.target, respuesta.url or pagina.url)
         if not final.permitida:
             self._bloquear(
@@ -357,6 +375,7 @@ class ExploreSession:
             # alcanzaría a este enlace ya resuelto. Es el mismo motivo por el que
             # la capa 1 envuelve ``build_client`` en vez de sustituir ``get_llm``.
             self.__driver = _driver.build_driver(
+                target=self.target,
                 timeout_ms=self.limites.timeout_ms,
                 storage_state=self.target.storage_state,
             )

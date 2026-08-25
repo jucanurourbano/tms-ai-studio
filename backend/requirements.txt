@@ -49,6 +49,20 @@ sqlglot==30.15.0
 # ramas incompatibles. 0.8.5 es la última pareja que soporta OpenAPI 3.1 en ambas.
 openapi-spec-validator==0.8.5
 
+# === Navegador (Agente QA, Modo C: exploración de solo lectura) ===
+# playwright conduce un Chromium headless contra una aplicación viva. Pinneado
+# como el resto, y aquí el pin dice ALGO MÁS que "no subas de versión": la
+# revisión del navegador que trae cada versión es parte del contrato. 1.62.0 trae
+# `chromium` **1234**, que es el que ya está descargado en el host; cambiar el pin
+# sin comprobar la revisión obliga a bajar un Chromium nuevo — tráfico que no
+# ocurre por accidente. Comprobado en el propio wheel
+# (`playwright/driver/package/browsers.json`), no inferido del número de versión.
+#
+# NO se ejecuta `playwright install` en la suite: los tests corren contra HTML de
+# fixtures y la capa 5 del cortafuegos (`sin_navegador_real`) bloquea el arranque
+# de cualquier navegador. El navegador se usa SOLO en una exploración autorizada.
+playwright==1.62.0
+
 # === Subida de archivos (multipart/form-data) ===
 # Necesario para CUALQUIER endpoint que reciba un archivo: el DDL del inventario
 # (INV2) y el documento del Agente EF. Faltaba, y como la subida del EF no tenía

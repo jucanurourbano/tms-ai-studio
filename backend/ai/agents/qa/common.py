@@ -112,6 +112,16 @@ ENUM_MAX_CHARS = 1000
 #: enum».
 ENUM_DIGEST_MUESTRA = 3
 
+#: El límite **duro**: una celda de Excel no admite más caracteres que éstos, y el
+#: CSV que abre el analista se rompe al alcanzarlos. No es el tope de arriba —ése
+#: es muy anterior, el punto en que la celda se abre pero ya no se lee—: es el
+#: punto de ROTURA, y por eso ninguna evidencia de ningún ancla puede alcanzarlo
+#: (A6, criterio 3: *"ningún `evidence`"*, sea o no de un enum).
+#:
+#: Vive aquí con sus hermanas y no en quien lo comprueba, por el mismo motivo: dos
+#: declaraciones del mismo límite físico se separan el día que una se ajusta.
+CELDA_EXCEL_MAX_CHARS = 32_767
+
 
 def enum_digest(values: Sequence[str]) -> str:
     """Huella de un conjunto de valores: cardinalidad + hash + primeros valores.

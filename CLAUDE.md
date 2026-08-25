@@ -31,9 +31,11 @@ Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
 ver §5.5 y `docs/diseno-agente-qa.md`). Del **QA9** —modos de entrada B (sistema
 del inventario) y C (exploración solo-lectura de una URL viva)— están implementados
 el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`), sus **fixtures y
-saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`) y el
-**extractor determinista de anclas** (bloque **QC4.5**: `extract.py`), sin una línea
-de Playwright; el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
+saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`), el
+**extractor determinista de anclas** (bloque **QC4.5**: `extract.py`) y el
+**navegador con su capa 3 de red** (bloque **QC5**: `driver.py` + `network.py`,
+Playwright pinneado); **ninguna exploración real todavía**, la suite entera corre
+contra HTML de fixtures y sintético. El resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
 PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`. Siguiente
 eslabón: **Agente Backend**.
 
@@ -606,15 +608,17 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
 - **Permisos (matriz sin tocar)**: registrar un alias explorable es un acto de
   **despliegue** (`admin`); lanzar una exploración contra un destino ya acotado es
   **`qa` FULL**.
-- **Entorno**: `playwright` **no** es dependencia del backend
-  (`ModuleNotFoundError` en el venv) y Chromium no arranca (falta `libnspr4`, sin
-  sudo). Por eso el guard se construye **ANTES** que el navegador y el Modo C se
-  ejerce contra **HTML de fixtures**.
+- **Entorno**: desbloqueado en QC5 — `libnspr4`/`libnss3` instalados y
+  `playwright==1.62.0` en `requirements.txt`. **El pin incluye la revisión del
+  navegador**: 1.62.0 trae `chromium` **1234**, el que ya está descargado, así que
+  cambiarlo sin comprobar `playwright/driver/package/browsers.json` obliga a bajar un
+  Chromium nuevo. Aun así **la suite no arranca ningún navegador**: el Modo C se
+  ejerce contra HTML de fixtures y sintético, y `sin_navegador_real` lo impone.
 - **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ → QC1
   contrato v1.1.0 → QC2 migración `0011` + `data_class` (**después de LLM2**) →
   **QC3 el guard ✅** → **QC4 fixtures y saneador ✅** → **QC4.5 el extractor de
-  anclas ✅** → QC5 `EXPLORE` + `SURFACE_MAP` → QC6 CLI de login → QC7 grafo C +
-  servicio + API → QC8 frontend
+  anclas ✅** → **QC5 navegador + capa 3 de red + conjuntos cerrados ✅** → QC6 CLI de
+  login → QC7 grafo C + `SURFACE_MAP` + servicio + API → QC8 frontend
   (**no en paralelo con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`,
   `ASSET_MAP`) sigue con el plan QA11–QA12 de la PARTE II.
 
@@ -758,6 +762,61 @@ dan de comer— fabricada en Python **antes** de gastar un token.
 - **`scripts/anclas_de_html.py`** imprime la tabla de anclas de un `.html` de disco,
   con las frágiles marcadas y **los controles que se quedaron sin selector**: la
   decisión fail-closed se mira, en vez de deducirse de una ausencia.
+
+#### QC5 — el navegador, la capa 3 de red y los conjuntos cerrados (implementado)
+
+`ai/agents/qa/explore/network.py` + `driver.py` reescrito + `extract.py` ampliado.
+`playwright==1.62.0` entra en `requirements.txt` y
+`test_qc3_no_introduce_playwright` se borra: es su acto visible de muerte.
+
+- **La capa 3 tiene dos mitades en ficheros gemelos**: `clicking.py` decide qué se
+  **toca** leyendo el DOM (QC3), `network.py` qué se **envía** (QC5) — se aborta
+  toda petición cuyo método no sea `GET`/`HEAD`, por lista **blanca**. La política
+  es una función pura y el driver una cáscara que pregunta y obedece: por eso la
+  capa entera se ejerce **sin arrancar nada**.
+- **El orden es un criterio.** Primero `add_init_script` neutraliza el `submit`
+  (evento en captura + `prototype.submit`, que NO dispara el evento, +
+  `requestSubmit`), después la intercepción de red. Al revés el navegador formaría
+  envíos que mueren abortados, y **un envío que muere se observa como "no hubo
+  validación"** — la observación falsa que el agente no puede producir, y el mismo
+  motivo por el que teclear está fuera de v1. Lo que NO se toca es la validación:
+  el mensaje de error renderizado es la evidencia verbatim de QA-D2.
+- **Un subrecurso `GET` a otro origen sí pasa, declarado**: abortar el JS de un CDN
+  deja una página rota, y de una página rota salen casos que afirman lo que el
+  sistema no hace. Residual escrito (la cabecera `Referer`).
+- **`DUENO_DEL_CLIC` pasa a `DUENOS_DEL_CLIC`**, dos: la sesión que **decide** y el
+  driver que **ejecuta**. No hay forma de pulsar en Playwright sin llamar a algo
+  llamado `click`, y las alternativas están prohibidas por motivos peores. Sigue
+  garantizando lo que importaba: ningún nodo pulsa nada.
+- **`sin_navegador_real` pasa a proteger de un riesgo presente**: sus dos entradas
+  de Playwright ya no se saltan por falta de paquete, y hay test de que el blindaje
+  **llegó**. Saltándose la primera entrada (referencia real a `build_driver`) el
+  navegador **sigue sin arrancar**. `build_driver` no lanza nada al construir; la
+  jaula se instala sobre el contexto **antes** de que exista una página, con
+  candado de fuente.
+- **C4 — el discriminador catálogo-de-dominio vs lista-de-datos.** Mira **solo los
+  `value`, nunca los rótulos**: forma de código · ningún identificador de fila
+  (ULID/UUID/hex/token) · si todos son enteros, longitud uniforme ≥4 dígitos.
+  Fail-closed: un valor malo descarta el conjunto, y el `<select>` conserva sus
+  otras anclas. No mira el texto porque «La Libertad» y «Juan Pérez» son idénticos
+  estructuralmente **y** porque leer el texto para decidir mete el texto en el
+  camino de la decisión. Cierra la fuga que A6 midió y deja ubigeo en pie.
+  **Residual ABIERTO y fijado con test**: una PK entera uniforme de 4 dígitos ancla
+  hoy y dejará de anclar cuando la tabla cruce a 10000 — diferido, con dueño
+  escrito (`docs/diseno-qa-modo-c.md` §14.6).
+- **C2** `radio`/`checkbox` por `name` son un conjunto cerrado (mínimo dos: uno
+  suelto declara un sí/no); su selector `[name]` casa con todos **a propósito**.
+  **C3** el tope de A6 se **reutiliza** de `common.enum_evidence` —el candado del
+  `hashlib` sigue verde— y por encima del tope la evidencia es la etiqueta de
+  apertura, que es la razón por la que el tope vive en `extract` y no en
+  `SURFACE_MAP`. **C5** un selector que interpola una plantilla o un id de fila se
+  salta; cae a la ruta estructural, estable y marcada frágil.
+- **Todo descarte dice POR QUÉ** (`Descarte`, vocabulario cerrado con su caso
+  escrito). El motivo describe la **regla**, nunca cita un valor: viaja al PDF
+  igual que una evidencia. `scripts/anclas_de_html.py` lo imprime **entero**.
+- **La lista de imports de `extract.py` se amplía a `ai.agents.qa.common`**, con la
+  justificación escrita en el propio candado. Sigue diciendo lo mismo: ni
+  navegador, ni red, ni disco. Es **cerrada, no congelada**.
 
 ---
 
@@ -1027,9 +1086,11 @@ tms-ai-studio/
         ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, qa/, base/)
         │                         # bd/ddl/:      render + validación del DDL (sin LLM)
         │                         # api/openapi/: render + validación del spec (sin LLM)
-        │                         # qa/explore/:  guard del Modo C (5 capas, sin navegador)
+        │                         # qa/explore/:  guard del Modo C (5 capas) + navegador
         │                         #               + sanitize.py: saneador de capturas (A3)
-        │                         #               + extract.py:  anclas deterministas (QC4.5)
+        │                         #               + extract.py:  anclas deterministas (QC4.5+QC5)
+        │                         #               + network.py:  capa 3 en red (QC5)
+        │                         #               + driver.py:   Playwright, la única cáscara
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml

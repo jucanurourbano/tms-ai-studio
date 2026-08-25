@@ -17,6 +17,7 @@ Dos mitades, y la segunda es la que importa para mañana:
 import ast
 from pathlib import Path
 
+from ai.agents.qa.common import CELDA_EXCEL_MAX_CHARS as CELDA_EXCEL
 from ai.agents.qa.common import (
     ENUM_DIGEST_MUESTRA,
     ENUM_MAX_CHARS,
@@ -26,10 +27,6 @@ from ai.agents.qa.common import (
 )
 
 BACKEND = Path(__file__).resolve().parents[3]
-
-#: El límite de una celda de Excel. No es el tope —se topa mucho antes—, es el
-#: punto en que el CSV que abre el analista se rompe. Ninguna evidencia lo alcanza.
-CELDA_EXCEL = 32_767
 
 
 def _catalogo(n: int, prefijo: str = "VAL") -> list[str]:
@@ -154,7 +151,14 @@ def test_el_modo_a_usa_la_funcion_y_no_su_propio_join():
 DUENO = "ai/agents/qa/common.py"
 
 #: Los nombres que solo puede ligar el dueño.
-CONSTANTES = {"ENUM_MAX_OPCIONES", "ENUM_MAX_CHARS", "ENUM_DIGEST_MUESTRA"}
+CONSTANTES = {
+    "ENUM_MAX_OPCIONES",
+    "ENUM_MAX_CHARS",
+    "ENUM_DIGEST_MUESTRA",
+    # Desde QC5: el límite de rotura de la celda lo comprueba el extractor del
+    # Modo C, así que ya son dos módulos los que podrían escribir el número.
+    "CELDA_EXCEL_MAX_CHARS",
+}
 
 
 def _fuentes_de_qa():

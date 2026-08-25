@@ -9,6 +9,7 @@ mandarle al proveedor del modelo el mapa de la infraestructura.
 """
 
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,8 +63,20 @@ METODOS_PROHIBIDOS = frozenset(
 #: ``ExploreSession`` destruiría este candado.
 PERMITIDOS_ESCRITURA = {"ai/agents/qa/explore/login.py"}
 
-#: ``click`` sí existe, y **solo** dentro de este método.
-DUENO_DEL_CLIC = ("ai/agents/qa/explore/session.py", "pulsar_si_procede")
+#: ``click`` sí existe, y **solo** dentro de estos dos métodos. Son dos desde QC5
+#: y no es una excepción al candado: es el candado diciendo la verdad. La sesión
+#: es quien **decide** (aplica la lista blanca del nivel 1 sobre el DOM); el driver
+#: es quien **ejecuta** (``page.click``), y no hay forma de pulsar en Playwright sin
+#: llamar a algo que se llame ``click`` — las alternativas (``dispatch_event``,
+#: ``evaluate``) están en METODOS_PROHIBIDOS por motivos peores.
+#:
+#: Lo que el candado sigue garantizando, que es lo que importa: **ningún nodo, ni
+#: ningún otro módulo, pulsa nada**. Un segundo dueño nombrado se ve en la revisión;
+#: una lista de ficheros exentos, no.
+DUENOS_DEL_CLIC = {
+    ("ai/agents/qa/explore/session.py", "pulsar_si_procede"),
+    ("ai/agents/qa/explore/driver.py", "click"),
+}
 
 
 def _fuentes():
@@ -96,10 +109,11 @@ def test_ninguna_escritura_ni_captura_en_el_navegador():
     )
 
 
-def test_el_clic_solo_vive_en_pulsar_si_procede():
+def test_el_clic_solo_vive_en_sus_dos_duenos():
     """Los nodos no reciben el driver: reciben la sesión. Y la sesión solo pulsa
-    en el método que aplica la lista blanca."""
-    fichero, metodo = DUENO_DEL_CLIC
+    en el método que aplica la lista blanca, que delega en el único método del
+    driver que ejecuta el clic."""
+    ficheros = {fichero for fichero, _ in DUENOS_DEL_CLIC}
     fuera: list[str] = []
     for relativa, arbol in _fuentes():
         clics = [
@@ -107,43 +121,46 @@ def test_el_clic_solo_vive_en_pulsar_si_procede():
         ]
         if not clics:
             continue
-        if relativa != fichero:
+        if relativa not in ficheros:
             fuera += [f"{relativa}:{linea}" for linea in clics]
             continue
+        metodos = {m for f, m in DUENOS_DEL_CLIC if f == relativa}
         permitidas = {
             nodo.lineno
             for definicion in ast.walk(arbol)
             if isinstance(definicion, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and definicion.name == metodo
+            and definicion.name in metodos
             for nodo in ast.walk(definicion)
             if isinstance(nodo, ast.Call)
             and isinstance(nodo.func, ast.Attribute)
             and nodo.func.attr == "click"
         }
         fuera += [f"{relativa}:{linea}" for linea in clics if linea not in permitidas]
-    assert fuera == [], f"Clics fuera de {fichero}::{metodo}: " + ", ".join(fuera)
+    assert fuera == [], "Clics fuera de sus dueños: " + ", ".join(fuera)
 
 
-def test_qc3_no_introduce_playwright():
-    """Criterio del bloque: cero líneas de Playwright. **QC5 borra este test.**
-
-    Y borrarlo es un acto visible en la revisión, que es exactamente el punto: la
-    valla (``sin_navegador_real``) tiene que estar puesta antes de que llegue el
-    animal.
-    """
-    requisitos = (BACKEND / "requirements.txt").read_text(encoding="utf-8")
-    assert "playwright" not in requisitos.lower()
-    importadores = [
-        relativa
-        for relativa, arbol in _fuentes()
-        for nodo in ast.walk(arbol)
-        if (
-            isinstance(nodo, ast.Import)
-            and any("playwright" in alias.name for alias in nodo.names)
-        )
-        or (isinstance(nodo, ast.ImportFrom) and "playwright" in (nodo.module or ""))
-    ]
-    assert importadores == []
+def test_el_candado_del_clic_ve_un_clic_fuera_de_sitio():
+    """**Verlo fallar.** Se le mete la violación en el sitio más tentador: otro
+    método del propio fichero que ya tiene permiso."""
+    arbol = ast.parse(
+        "class D:\n"
+        "    async def click(self, s):\n"
+        "        await self._p.click(s)\n"
+        "    async def otro(self, s):\n"
+        "        await self._p.click(s)\n"
+    )
+    permitidas = {
+        nodo.lineno
+        for definicion in ast.walk(arbol)
+        if isinstance(definicion, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and definicion.name == "click"
+        for nodo in ast.walk(definicion)
+        if isinstance(nodo, ast.Call)
+        and isinstance(nodo.func, ast.Attribute)
+        and nodo.func.attr == "click"
+    }
+    todos = {linea for nombre, linea in _llamadas_a_metodo(arbol) if nombre == "click"}
+    assert todos - permitidas, "El candado no vio el clic del método intruso."
 
 
 # --- candado 2: la costura del navegador no se puede esquivar ----------------
@@ -172,11 +189,43 @@ def test_nuestra_fabrica_esta_en_la_lista_de_blindadas():
     assert "ai.agents.qa.explore.driver.build_driver" in firewall.FABRICAS_DE_NAVEGADOR
 
 
-def test_sin_cortafuegos_la_fabrica_falla_explicando_que_no_hay_driver():
-    """En producción no devuelve un doble silencioso: un driver de mentira
-    exploraría cero páginas y el artefacto diría "no se observó nada", que es
-    indistinguible de una aplicación vacía."""
-    with pytest.raises(DriverNoDisponibleError, match="QC5"):
+def _destino_de_prueba():
+    from ai.agents.qa.explore.target import ExploreTarget
+
+    return ExploreTarget(alias="tms-qa", url=URL_BASE, readonly_verified=True)
+
+
+async def test_saltarse_nuestra_fabrica_no_arranca_ningun_navegador():
+    """**Criterio 2 del bloque, y ahora es cuando cuenta.** Hasta QC5 esta capa
+    protegía de un riesgo futuro; con Playwright instalado protege de uno presente.
+
+    Se usa la referencia REAL a ``build_driver`` (resuelta al importar, antes de
+    que las fixtures autouse parcheen el módulo), así que este test **se salta la
+    primera entrada** de la capa 5. No basta: la segunda entrada —el constructor
+    de Playwright— sigue puesta, y el navegador no arranca igualmente.
+
+    Construir el driver no arranca nada a propósito (un job que muere en una
+    validación previa no debe dejar un Chromium levantado); el intento ocurre en
+    la primera navegación, y ahí es donde choca.
+    """
+    driver = build_driver_real(target=_destino_de_prueba(), timeout_ms=1000)
+    with pytest.raises(AssertionError, match="navegador REAL"):
+        await driver.goto(URL_BASE, timeout_ms=1000)
+
+
+def test_sin_playwright_la_fabrica_falla_diciendo_que_falta_el_paquete(monkeypatch):
+    """Sigue sin devolver un doble silencioso cuando no puede construir: un driver
+    de mentira exploraría cero páginas y el artefacto diría "no se observó nada",
+    que es indistinguible de una aplicación vacía."""
+    monkeypatch.setitem(sys.modules, "playwright.async_api", None)
+    with pytest.raises(DriverNoDisponibleError, match="playwright"):
+        build_driver_real(target=_destino_de_prueba(), timeout_ms=1000)
+
+
+def test_la_fabrica_exige_el_destino_y_no_lo_toma_por_defecto():
+    """La jaula no es un parámetro opcional que alguien pueda olvidar pasar: sin
+    destino no hay contra qué revalidar, así que no hay driver."""
+    with pytest.raises(TypeError, match="target"):
         build_driver_real(timeout_ms=1000)
 
 
@@ -198,6 +247,30 @@ def test_build_driver_no_se_importa_por_nombre_en_ninguna_parte():
     assert infractores == [], "Importan build_driver por nombre: " + ", ".join(
         infractores
     )
+
+
+def test_las_tres_fabricas_de_navegador_estan_realmente_parcheadas():
+    """Hasta QC5 dos de las tres entradas de la capa 5 se saltaban en silencio:
+    sin el paquete instalado no había nada que parchear. Ahora **sí** lo hay, y
+    este test comprueba que el blindaje llegó — no que la lista las nombre."""
+    import playwright.async_api
+    import playwright.sync_api
+
+    for fabrica in (
+        playwright.async_api.async_playwright,
+        playwright.sync_api.sync_playwright,
+    ):
+        with pytest.raises(AssertionError, match="navegador REAL"):
+            fabrica()
+
+
+def test_la_jaula_se_instala_ANTES_de_que_exista_una_pagina():
+    """Orden, y por eso es un candado de fuente: si ``new_page`` ocurriera antes
+    de ``preparar_contexto``, existiría una ventana —corta, pero real— con un
+    navegador vivo y sin capa 3. Se comprueba en el código porque comprobarlo en
+    comportamiento exigiría arrancar Chromium, y el criterio 7 lo prohíbe."""
+    fuente = (BACKEND / "ai/agents/qa/explore/driver.py").read_text(encoding="utf-8")
+    assert fuente.index("preparar_contexto(") < fuente.index("new_page(")
 
 
 # --- candado 3: el destino tiene un único lector -----------------------------
