@@ -30,6 +30,12 @@ Las cinco capas fail-closed (heredadas de INV2,
 Ninguna de estas capas depende de que alguien recuerde llamarla: el único camino
 al destino es ``assert_target_authorized`` y el único camino al navegador es
 ``ExploreSession``.
+
+Y una pieza que **no** es una capa: ``extract.py``, el extractor determinista de
+anclas (QC4.5). No es parte de la jaula porque no toca nada — recibe el HTML como
+cadena y devuelve la lista cerrada de lo anclable, sin red, sin navegador y sin
+LLM. Vive aquí porque es la otra mitad de la misma costura (§6.2): lo que hace
+ejercitable el 99% del Modo C en un host donde Chromium no arranca.
 """
 
 from ai.agents.qa.explore.clicking import (
@@ -37,7 +43,15 @@ from ai.agents.qa.explore.clicking import (
     elementos_pulsables,
     es_pulsable,
 )
-from ai.agents.qa.explore.dom import Elemento, elementos, selector_de
+from ai.agents.qa.explore.dom import (
+    Elemento,
+    Selector,
+    elementos,
+    selector_de,
+    selector_estructural,
+    selector_por_atributo,
+)
+
 # ``build_driver`` NO se reexporta: es una costura parcheable y la regla R1
 # prohíbe el enlace por nombre. Un ``from …explore import build_driver`` resolvería
 # el atributo al importar y el parche del cortafuegos no lo alcanzaría — y un
@@ -47,6 +61,17 @@ from ai.agents.qa.explore.driver import (
     BrowserDriver,
     DriverNoDisponibleError,
     RespuestaNavegacion,
+)
+from ai.agents.qa.explore.extract import (
+    ANCLA_ENUM,
+    ATRIBUTOS_ANCLA,
+    ESTRATEGIAS_DE_ANCLA,
+    Ancla,
+    anchor_ref,
+    anclas_de,
+    anclas_por_control,
+    selector_de_ancla,
+    veces_por_selector,
 )
 from ai.agents.qa.explore.limits import LimitesExploracion, limites_efectivos
 from ai.agents.qa.explore.navigation import (
@@ -82,10 +107,14 @@ from ai.agents.qa.explore.target import (
 )
 
 __all__ = [
+    "ANCLA_ENUM",
+    "ATRIBUTOS_ANCLA",
+    "Ancla",
     "BrowserDriver",
     "CapturaSuciaError",
     "DriverNoDisponibleError",
     "ESQUEMAS_PERMITIDOS",
+    "ESTRATEGIAS_DE_ANCLA",
     "Elemento",
     "Escenario",
     "ExploreSession",
@@ -97,10 +126,14 @@ __all__ = [
     "RespuestaNavegacion",
     "ResultadoSaneado",
     "SalidaBloqueada",
+    "Selector",
     "Veredicto",
     "VeredictoNavegacion",
     "Violacion",
     "alcance_para_prompt",
+    "anchor_ref",
+    "anclas_de",
+    "anclas_por_control",
     "assert_navigation_allowed",
     "assert_target_authorized",
     "available_targets",
@@ -115,5 +148,9 @@ __all__ = [
     "redact_url",
     "sanear_html",
     "selector_de",
+    "selector_de_ancla",
+    "selector_estructural",
+    "selector_por_atributo",
+    "veces_por_selector",
     "violaciones",
 ]

@@ -74,6 +74,15 @@ comprobable sin explorar nada:
 * ``title`` → el navegador lo pinta como *tooltip* al posar el cursor.
 * ``alt`` → sustituye a la imagen cuando no carga, y lo lee el lector de pantalla.
 * ``placeholder`` → se pinta dentro del control mientras está vacío.
+
+  **Residual con dueño:** un ``placeholder`` de FORMATO dentro de una celda —una
+  edición en línea, ``<td><input placeholder="RUC de 11 dígitos"></td>``— se vacía
+  con el resto del texto de la celda, y ahí se pierde señal: ese texto es un límite
+  citable **verbatim**, exactamente el estatus que QA-D2 exige para un caso de
+  borde. La dirección es la barata (se pierde señal, no se comitea un dato) y el
+  descarte queda anotado, así que quien captura lo ve. Pero el arreglo tiene dueño:
+  es la mitad pendiente de (b) —**``aria-`` y sus vecinos como FUENTE DE RÓTULO**, y
+  no solo como texto que se lee—, y **este es su primer test** el día que se abra.
 * ``label`` → es el rótulo visible de un ``<option>``/``<optgroup>``/``<track>``.
 * ``abbr`` → la forma corta del encabezado que anuncia el lector de pantalla.
 * ``download`` → el nombre de fichero que ve quien descarga
@@ -151,6 +160,22 @@ ninguna fixture con una secuencia de 8+ dígitos, ni el dominio de la casa, ni u
 atributo ``value`` con contenido, ni un atributo de texto visible con contenido
 dentro de una celda de datos. Es el mismo criterio con el que ``redact_dsn``
 protege la introspección de INV2, aplicado al artefacto de test.
+
+**REGLA DEL CANDADO: puede mirar una VENTANA DE TEXTO; nunca construir un árbol ni
+consultar ancestros.** No es el criterio de esta vez, es el límite del sitio. El
+candado tiene que valer igual para un ``.html``, un ``manifest.json`` y un README
+—tres formatos de los que solo uno es un documento— y tiene que poder entenderlo
+entero quien lo lee: un candado en el que hay que confiar sin entenderlo no es un
+candado. Una ventana de subcadena (:data:`PATRON_CELDA`) cumple las dos cosas; un
+árbol no cumple ninguna.
+
+El corolario es la parte útil: **si una comprobación necesita el padre de algo, la
+señal no es «hazla mejor», es que esa comprobación no va aquí.** Va en el saneador,
+que sí parsea y sí tiene la pila de ancestros, y cuya salida vuelve a pasar por este
+candado antes de tocar el disco. Así se resolvió F2 —distinguir el ``value`` de un
+enum de dominio del ``value`` de un dato exige saber dentro de qué se está, es decir
+árbol y ancestros— y así se resolverá la siguiente: el candado no crece hacia el
+DOM, se queda tonto y la comprobación se muda.
 """
 
 import re
@@ -777,6 +802,10 @@ def violaciones(texto: str, *, hosts_prohibidos: Iterable[str] = ()) -> list[Vio
     dominio de la casa y un ``value`` con contenido están de más en cualquier
     sitio. La cuarta —:func:`_texto_visible_en_celdas`— es la única que necesita
     saberlo, y por eso usa lo más tonto que sirve: una ventana de subcadena.
+
+    El límite está escrito arriba, en el docstring del módulo, y es una **regla**:
+    una ventana de texto sí, un árbol y sus ancestros nunca. Lo que necesite el
+    padre no va aquí — va al saneador, cuya salida vuelve a pasar por este candado.
     """
     prohibidos = _hosts_efectivos(hosts_prohibidos)
     encontradas: list[Violacion] = []

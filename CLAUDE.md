@@ -30,9 +30,10 @@ deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
 Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
 ver §5.5 y `docs/diseno-agente-qa.md`). Del **QA9** —modos de entrada B (sistema
 del inventario) y C (exploración solo-lectura de una URL viva)— están implementados
-el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`) y sus **fixtures
-y saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`), sin
-una línea de Playwright; el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
+el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`), sus **fixtures y
+saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`) y el
+**extractor determinista de anclas** (bloque **QC4.5**: `extract.py`), sin una línea
+de Playwright; el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
 PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`. Siguiente
 eslabón: **Agente Backend**.
 
@@ -554,14 +555,15 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   UI sí llama al modelo real.
 - Sin migraciones de BD. Permisos sin tocar: `qa` FULL para el rol `qa`.
 
-### QA9 — modos de entrada B y C (diseñado; **del Modo C existen el guard y las fixtures**)
+### QA9 — modos de entrada B y C (diseñado; **del Modo C existen el guard, las fixtures y el extractor**)
 
 > `docs/diseno-agente-qa.md` **PARTE II** (§11–§17) y `docs/diseno-qa-modo-c.md`
 > (QA-D19…QA-D25 + los ajustes A1–A4). Todo lo de arriba describe el **Modo A**
-> (desde el plan Scrum). Del resto están implementados **QC3 (el guard)** y
-> **QC4 (fixtures y saneador)** —`ai/agents/qa/explore/` y
-> `tests/fixtures/qa_explore/`—; el Modo B sigue en cero y el Modo C no explora
-> nada todavía: no hay navegador, y por eso todo se ejerce contra HTML congelado.
+> (desde el plan Scrum). Del resto están implementados **QC3 (el guard)**,
+> **QC4 (fixtures y saneador)** y **QC4.5 (el extractor de anclas)**
+> —`ai/agents/qa/explore/` y `tests/fixtures/qa_explore/`—; el Modo B sigue en cero
+> y el Modo C no explora nada todavía: no hay navegador, y por eso todo se ejerce
+> contra HTML congelado.
 
 - **El problema que resuelve el bloque**: el Modo B (desde un sistema del
   **INVENTARIO**) y el Modo C (**exploración Playwright solo-lectura** de una URL
@@ -610,8 +612,9 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   ejerce contra **HTML de fixtures**.
 - **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ → QC1
   contrato v1.1.0 → QC2 migración `0011` + `data_class` (**después de LLM2**) →
-  **QC3 el guard ✅** → **QC4 fixtures y saneador ✅** → QC5 `EXPLORE` +
-  `SURFACE_MAP` → QC6 CLI de login → QC7 grafo C + servicio + API → QC8 frontend
+  **QC3 el guard ✅** → **QC4 fixtures y saneador ✅** → **QC4.5 el extractor de
+  anclas ✅** → QC5 `EXPLORE` + `SURFACE_MAP` → QC6 CLI de login → QC7 grafo C +
+  servicio + API → QC8 frontend
   (**no en paralelo con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`,
   `ASSET_MAP`) sigue con el plan QA11–QA12 de la PARTE II.
 
@@ -705,6 +708,56 @@ Sigue sin haber una línea de Playwright.
   aborto (devuelve la página sin cambios) para dejar el caso escrito: es la
   especificación ejecutable contra la que QC5 tendrá que quedar verde, no su
   demostración.
+
+#### QC4.5 — el extractor determinista de anclas (implementado)
+
+`ai/agents/qa/explore/extract.py` + `scripts/anclas_de_html.py`. **Entra `html` y
+`path`, sale la lista de anclas con evidencia literal. Nada más**: sin red, sin
+LLM, sin navegador, sin clic y sin tocar el disco. Es la lista cerrada con la que
+`SURFACE_MAP` (QC5) será un cortafuegos —un cortafuegos vale lo que valga lo que le
+dan de comer— fabricada en Python **antes** de gastar un token.
+
+- **Vocabulario cerrado, un atributo = un ancla**: los once atributos de validación
+  más `@enum`, cada entrada **con su caso escrito al lado** y un test que obliga a
+  escribirlo al ampliar la lista (misma regla que `PIEZAS_DE_MENSAJE`). Que
+  `required` y `maxlength` sean dos anclas y no una es lo que impide esconder media
+  rotura. **Fuera, anotados con su motivo**: `value` (el dato, no el límite),
+  `disabled` (no valida nada) y `placeholder` (texto, no restricción). `type` ancla
+  solo cuando restringe la forma del dato: un caso «escribe texto en un campo de
+  texto» entierra al que importa.
+- **Cinco estrategias de selector** —`[name]` › `#id` › `[data-testid]` ›
+  `[aria-label]` › estructural— y la lista **extiende** la de pulsar en vez de
+  copiarla. Las dos últimas no sirven para pulsar: equivocarse de elemento contra
+  una aplicación viva es una acción, no una nota. **Desviación declarada de §2.1**:
+  el prefijo de ancestro del ejemplo (`form[...] input[...]`) no desambigua el caso
+  que ocurre —dos radios del mismo grupo comparten `name` y formulario— así que en
+  su lugar se **comprueba la unicidad** del selector y el ambiguo cae a la
+  estrategia siguiente. El estructural **nace marcado**; `aria-label` no, porque
+  frágil no es «puede cambiar» sino «puede romperse sin que haya cambiado nada que
+  importe».
+- **Fail-closed con una rama real**: una etiqueta que no se puede escribir en CSS
+  (`<asp:TextBox>` de WebForms) **no ancla**, porque el ref no resolvería nunca y el
+  caso fallaría por el motivo equivocado. El hueco se ve en la cobertura; el ruido
+  con aspecto de hallazgo, no. El `path` de un ref se **rechaza** si es una URL, no
+  se recorta: el host viene del alias y no viaja al artefacto (capa 4 / A1).
+- **F2 fijada con un test, no resuelta**: el saneador vacía todo `value` porque es un
+  dato, pero el `value` de un `<option>` es el **conjunto de lo aceptado**, un límite
+  citable. Distinguirlos exige árbol y ancestros, y el candado tiene prohibido
+  construirlos. Consecuencia escrita: en crudo se ve el enum, en la fixture saneada
+  no —incluido el `<select name="ubigeo">` ya comiteado—. Un enum a medias tampoco se
+  emite: un hueco se ve, un conjunto incompleto **pasa la ejecución certificando una
+  mentira**.
+- **`dom.py` gana tres datos del parse** (`origen` literal, `ruta` `nth-of-type`,
+  `inicio`) porque reconstruirlos después exigiría un segundo parser del mismo
+  documento, y dos parsers se separan en cuanto una etiqueta cierra mal.
+- **Candados del bloque**: lista de imports **cerrada** (solo `re`, `dataclasses`,
+  `typing` y `dom`), nada que abra un fichero ni literal que nombre uno del
+  repositorio, síncrono a propósito, y extracción idempotente y estable —dentro de un
+  control manda el vocabulario, nunca el orden en que la aplicación escribió los
+  atributos—. Y **se ven fallar**, como los de QC4.
+- **`scripts/anclas_de_html.py`** imprime la tabla de anclas de un `.html` de disco,
+  con las frágiles marcadas y **los controles que se quedaron sin selector**: la
+  decisión fail-closed se mira, en vez de deducirse de una ausencia.
 
 ---
 
@@ -963,6 +1016,7 @@ tms-ai-studio/
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
     ├── scripts/capture_explore_fixture.py  # captura fixtures del Modo C (manual)
+    ├── scripts/anclas_de_html.py   # imprime la tabla de anclas de un .html (manual)
     ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
@@ -975,6 +1029,7 @@ tms-ai-studio/
         │                         # api/openapi/: render + validación del spec (sin LLM)
         │                         # qa/explore/:  guard del Modo C (5 capas, sin navegador)
         │                         #               + sanitize.py: saneador de capturas (A3)
+        │                         #               + extract.py:  anclas deterministas (QC4.5)
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml

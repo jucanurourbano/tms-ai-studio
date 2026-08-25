@@ -1,7 +1,8 @@
 # Diseño — Agente QA, Modo C (exploración de una URL viva)
 
-> **Estado: DISEÑO APROBADO. QC0 (este documento) y QC3 (el guard, sin
-> Playwright) están IMPLEMENTADOS; el resto sigue en cero.** El inventario de §1
+> **Estado: DISEÑO APROBADO. QC0 (este documento), QC3 (el guard), QC4 (fixtures
+> y saneador) y QC4.5 (el extractor de anclas) están IMPLEMENTADOS —los tres
+> últimos sin una línea de Playwright—; el resto sigue en cero.** El inventario de §1
 > se verificó en HEAD `9e1064a` (LLM1) y describe el punto de partida; lo que QC3
 > cambió está en §11 y en la tabla de bloques de la PARTE 3.
 >
@@ -561,6 +562,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | **QC2** | Migración **`0011`** `agent_jobs.input_params` JSONB + repositorio + `clasificar()` de `data_class` + herencia en refine. Cierra de paso el `target_system_id` huérfano de INV. | `mode=exploration` ⇒ `real` · declararla → 422 · el hijo del refine hereda `real` · `input_params` sobrevive a un job que **falla** | **⚠️ LLM2** — §9.1 |
 | **QC3** ✅ | **El guard, antes del navegador.** `QA_EXPLORE_*` en settings, alias con `readonly_verified`, allowlist, validación de esquema, revalidación por navegación, redacción, topes, política de pulsado (§3.2) evaluada sobre HTML, `ExploreSession` **con el driver inyectado**, `sin_navegador_real` autouse, candado AST (§3.3.3). **Sin una línea de Playwright.** | alias inexistente → error · allowlist vacía ⇒ nada autorizado · `302` fuera de host no se sigue y se registra · `file:`/`data:`/`javascript:` rechazados · `readonly_verified=false` → 409 · credencial ausente de artefacto, log y respuesta · `<button>` sin `type` en `<form>` **no** es pulsable · candado AST: cero `fill`/`type`/`screenshot` | — **IMPLEMENTADO** (§11) |
 | **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
+| **QC4.5** ✅ | **El extractor determinista de anclas**: vocabulario cerrado de atributos-ancla, `anchor_ref` canónico, cinco estrategias de selector con unicidad comprobada, `@enum`, y un lector de `.html` de disco para mirar la tabla con los ojos. Sin red, sin LLM, sin navegador, sin clic. | cada atributo del vocabulario produce su ancla y `value`/`disabled`/`placeholder` no · una etiqueta que no se escribe en CSS **no** ancla (fail-closed) · dos pasadas dan los mismos refs en el mismo orden · toda evidencia es subcadena exacta del HTML · **F2 fijada**: el enum se ve en crudo y no en la fixture saneada | — **IMPLEMENTADO** (§13) |
 | **QC5** | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes | **entorno**: `libnspr4` con `sudo` (§1.1) — solo para una prueba manual, no para la suite |
 | **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está | **entorno** (igual que QC5) |
 | **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
@@ -962,16 +964,169 @@ de una celda es legítimo — prohibirlo en todas partes dejaría a QC4.5 sin fi
 la que ejercer su cuarta estrategia de ancla. Se implementa con lo más tonto que
 sirve: una **ventana de subcadena** entre `<td` y `</td>`, sin árbol, sin ancestros y
 sin anidamiento, con la **misma** función de rótulo que usa el saneador —no una
-copia— aplicada a la etiqueta que lleva el atributo. **Residual declarado:** mira esa
+copia— aplicada a la etiqueta que lleva el atributo.
+
+> **REGLA (no criterio de esta vez): el candado puede mirar una VENTANA DE TEXTO;
+> nunca construir un árbol ni consultar ancestros.** Tiene que valer igual para un
+> `.html`, un `manifest.json` y un README, y tiene que poder entenderlo entero quien
+> lo lee. El corolario es la parte útil: **si una comprobación necesita el padre de
+> algo, la señal no es «hazla mejor», es que esa comprobación no va en el candado**
+> — va en el saneador, que sí parsea, y cuya salida vuelve a pasar por el candado
+> antes de tocar el disco. Así queda **F2** (§13.4) y así quedará la siguiente.
+> Escrita en el docstring de `sanitize.py`, que es donde la lee quien la necesita. **Residual declarado:** mira esa
 etiqueta y no sus ancestros, así que un `<td class="mensaje-error">` con un botón
 dentro salta en el candado y no en el saneador. Es la dirección segura —el candado
 puede ser más estricto que el saneador, nunca al revés— y se arregla a mano.
 
-**Segundo residual declarado:** un `placeholder` de formato **dentro** de una celda
-(una edición en línea) se pierde. Es la dirección barata —se pierde señal, no se
-comitea un dato— y el descarte queda anotado, así que quien captura lo ve.
+**Segundo residual declarado, y ahora con dueño:** un `placeholder` de formato
+**dentro** de una celda (una edición en línea) se pierde. Es la dirección barata
+—se pierde señal, no se comitea un dato— y el descarte queda anotado, así que quien
+captura lo ve. Lo que arreglaría ese caso es la mitad **pendiente** de (b) —`aria-`
+y sus vecinos como **fuente de rótulo**, no solo como texto que se lee— y este es
+**su primer test** el día que se abra: un `placeholder` de formato es un límite
+citable verbatim, exactamente el estatus que QA-D2 exige para un caso de borde.
+Queda anotado en `sanitize.py`, junto al atributo.
 
 **Suite:** 1495 → 1533 (+38), ningún test existente reescrito; en
 `test_fixtures_candado.py` se añaden casos a las dos listas parametrizadas porque el
 candado pasó de tres comprobaciones a cuatro. El caso F1 exacto está fijado con
 nombre y **comprobado contra el código anterior**, donde falla.
+
+---
+
+## 13. QC4.5 — el extractor determinista de anclas (cerrado)
+
+`ai/agents/qa/explore/extract.py` + `scripts/anclas_de_html.py`. Sigue sin haber
+una línea de Playwright. **Entra `html: str` y `path: str`, sale una lista de
+anclas con evidencia literal. Nada más**: sin red, sin LLM, sin navegador, sin clic
+y sin tocar el disco.
+
+Es la mitad barata del Modo C y la que decide si el resto sirve de algo:
+`SURFACE_MAP` (QC5) es el cortafuegos anti-invención del modo —el gemelo de
+`CRITERION_MAP`, `MODEL_MAP` y `RESOURCE_MAP`— y **un cortafuegos vale lo que valga
+la lista cerrada que le dan de comer**. Esa lista se fabrica aquí, en Python, antes
+de gastar un token: el modelo no elige *qué* hay, solo redacta *cómo* se prueba.
+
+### 13.1 El vocabulario es cerrado y un atributo es un ancla
+
+Once atributos —`required`, `maxlength`, `minlength`, `pattern`, `min`, `max`,
+`step`, `type`, `readonly`, `accept`, `multiple`— más `@enum`, que no es un
+atributo sino el conjunto de valores que acepta un `<select>`. **Cada entrada lleva
+su caso escrito al lado**, y un test exige que ampliarla obligue a escribir ese
+caso: una lista de atributos sin su caso es indistinguible de una lista copiada de
+la especificación de HTML, y entonces nadie sabe por qué falta el que falta. Es la
+misma regla que gobierna `PIEZAS_DE_MENSAJE`.
+
+Que `required` y `maxlength` del mismo campo sean **dos** anclas y no una no es
+burocracia (§2.1): habilitan casos distintos y se pueden romper por separado, así
+que fundirlas escondería media rotura.
+
+**Tres candidatos anotados y deliberadamente fuera**, por la misma razón por la que
+`messages` está anotado fuera del vocabulario de mensajes: `value` es el dato y no
+el límite —es justo lo que el saneador vacía—; `disabled` no valida nada, porque un
+campo deshabilitado no se envía; y `placeholder` puede llevar el formato y por tanto
+un límite citable, pero es **texto**, no una restricción que el navegador imponga —
+anclarlo mezclaría lo observado con lo insinuado, y su arreglo tiene dueño: la mitad
+pendiente de (b), `aria-` y sus vecinos como **fuente de rótulo** (§12.7).
+
+**`type` ancla solo cuando restringe la forma del dato** (`number`, `email`, `date`,
+`file`…). Un caso «escribe texto en un campo de texto» es ruido que entierra al que
+importa —el mismo motivo por el que las preguntas al DBA se agrupan por clase de
+vacío— y no se pierde nada: el límite real de esos campos vive en
+`maxlength`/`pattern`/`required`, que sí se anclan.
+
+### 13.2 Cinco estrategias de selector, y la unicidad sustituye al prefijo de §2.1
+
+`[name]` › `#id` › `[data-testid]` › `[aria-label]` › ruta estructural
+`nth-of-type`. Las dos últimas **no** se añaden a la lista de pulsar
+(`dom.ESTRATEGIAS`), y la asimetría es deliberada: un selector que una traducción
+rompe o que un envoltorio nuevo rompe basta para **anclar** un caso que una persona
+va a leer, y no basta para **pulsar** contra una aplicación viva, donde equivocarse
+de elemento es una acción y no una nota. La lista de anclas **extiende** la de
+pulsar en vez de copiarla, con test: dos listas copiadas se separan.
+
+**Desviación declarada respecto del ejemplo de §2.1.** Aquel ejemplo escribe el ref
+con un prefijo de ancestro (`form[name=guia] input[name=ruc]`) para desambiguar. El
+prefijo **no desambigua el caso que de verdad ocurre**: dos radios del mismo grupo
+comparten `name` *y* comparten formulario. Aquí se exige lo que el prefijo
+insinuaba —que el selector case con **un** elemento— y se comprueba de verdad
+(`veces_por_selector`), lo que es estrictamente más fuerte y además más corto. Un
+candidato ambiguo cae a la estrategia siguiente; en el ejemplo de los radios, a
+`#id`.
+
+**El structural nace marcado** (`fragil`), para que `CRITIQUE` pueda emitir su
+`Risk` con el porcentaje. `aria-label` **no** se marca, y conviene decir por qué:
+frágil no es «puede cambiar», es «puede romperse sin que haya cambiado nada que
+importe». Un `<div>` de maquetación rompe el structural sin cambiar nada
+observable; un `aria-label` que cambia es un cambio en lo que el usuario lee, y una
+suite de caracterización **debe** enterarse de eso.
+
+### 13.3 Fail-closed: sin selector no se emite ancla
+
+Y la rama es real, no decorativa: **una etiqueta que no se puede escribir en CSS no
+ancla**. El legado de WebForms sirve `<asp:TextBox name="ruc" required>`, y
+`asp:textbox[name="ruc"]` no selecciona nada —los dos puntos abren una
+pseudo-clase—. Emitir ese ancla daría un ref que no resuelve nunca, es decir un caso
+condenado a fallar por el motivo equivocado, que es ruido con aspecto de hallazgo.
+Se prefiere el hueco, que **sí se ve en la cobertura**.
+
+El `path` se comprueba en la única fábrica de refs: una URL, un `//host` o un path
+relativo se **rechazan**, no se recortan. Recortar en silencio acepta la
+equivocación de quien llama y la repite en la siguiente; y lo que se coló sería el
+host del destino dentro de un CSV que se exporta (capa 4 / A1).
+
+### 13.4 F2: visible, fijada con un test, y NO resuelta
+
+El saneador vacía **todo** atributo `value` porque un `value` es un dato de
+producción. Pero el `value` de un `<option>` no es un dato: es el **conjunto de lo
+aceptado**, es decir un límite citable. Distinguirlos exige saber dentro de qué
+elemento se está —árbol y ancestros— y el candado de fixtures tiene prohibido
+construir un árbol (la regla, en §12.7). F2 es exactamente la comprobación que cae
+del lado equivocado de esa línea.
+
+Consecuencia, fijada con dos tests y no con una nota: **sobre HTML crudo el
+extractor ve el enum de un `<select>`; sobre la fixture saneada del mismo `<select>`
+no ve ninguno** —incluido el `<select name="ubigeo">` que ya está comiteado, que
+conserva su `required` y pierde su enum—. No se parchea aquí: un enum reconstruido a
+partir de valores vacíos sería el error que este agente no puede cometer. Un enum a
+medias tampoco se emite, por lo mismo: un hueco se ve en la cobertura, mientras que
+un conjunto incompleto produce un caso que afirma que un valor legítimo debe
+rechazarse, y ese caso **pasa la ejecución certificando una mentira**.
+
+### 13.5 Lo que se añadió a `dom.py`, y por qué ahí
+
+Tres datos del parse: `origen` (el texto **literal** de la etiqueta de apertura, que
+es lo que hace citable una observación), `ruta` (el camino `nth-of-type`) e `inicio`
+(el desplazamiento, para recortar el fragmento literal de un `<select>`).
+Reconstruirlos después obligaría a recorrer el HTML con un segundo mecanismo, y dos
+parsers del mismo documento se separan el día que uno tropieza con etiquetas mal
+cerradas.
+
+### 13.6 Los candados del bloque, y verlos fallar
+
+- **Cero navegador**, por lista de imports **cerrada**: el extractor solo puede
+  importar `re`, `dataclasses`, `typing` y el `dom` del propio paquete. Ni
+  Playwright, ni red, ni disco, ni los módulos hermanos que conducen el navegador.
+- **Nada que abra un fichero**, ni un literal que nombre uno del repositorio (los
+  docstrings quedan fuera: hablan de las fixtures precisamente para decir que no las
+  tocan). Más un test de comportamiento: con `open` inutilizado, extraer funciona.
+- **Síncrono a propósito**: lo que no puede esperar no puede esperar a la red.
+- **Idempotente y estable**: dos pasadas dan los mismos refs en el mismo orden, y
+  dentro de un control manda el vocabulario y **no** el orden en que la aplicación
+  escribió los atributos —ese orden cambia entre despliegues sin que cambie nada, y
+  con él cambiarían los refs de una corrida a otra—.
+- Y como en QC4, **los candados se ven fallar**: seis fuentes sintéticas
+  (`import playwright`, `from …driver import build_driver`, `open("tests/…")`…)
+  comprueban que saltan. Un candado que solo se ha visto pasar es indistinguible de
+  una función que devuelve la lista vacía.
+
+### 13.7 Un lector para mirarlo con los ojos
+
+`scripts/anclas_de_html.py <fichero.html> --path /guias/nueva [--evidencia]` imprime
+la tabla: línea, estrategia (con `⚠` en las frágiles), atributo, valor y selector,
+más el recuento y **los controles que se quedaron sin selector**. Ese último bloque
+es la mitad del valor de mirar: enseña la decisión fail-closed en vez de dejarla
+implícita en una ausencia. No forma parte de la suite y no escribe nada.
+
+**Suite:** 1533 → 1607 (+74), **ningún test existente modificado**. Sin red, sin
+LLM, sin navegador y sin dependencias nuevas.
