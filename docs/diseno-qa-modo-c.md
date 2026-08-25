@@ -752,10 +752,11 @@ las capturas de pantalla (capa 4). La huella no lo lleva.
    de Excel. Es un test, no una recomendación.
 4. Un `<select>` de 1.874 opciones **no** mete el catálogo ni en el prompt ni en el
    artefacto, y **sí** deja el ancla en pie: el hueco no se abre.
-5. **Aplica también al Modo A.** `api_field_boundaries` hace
-   `", ".join(campo["enum"])` sin tope (`edge_cases.py:178`), y un catálogo del
-   `DatabaseArtifact` puede ser igual de largo. El tope se escribe una vez y lo
-   comparten los dos modos, o se arregla la mitad del problema.
+5. **El tope se escribe UNA vez y lo comparten los dos modos.** El Modo A tiene
+   hoy el mismo `", ".join(...)` sin tope, y está **en producción**: es el hallazgo
+   **F3** (§13.8), que no es un criterio de QC5 sino un arreglo previo. Si QC5
+   escribe su tope dentro de `explore/`, la mitad del Modo A se queda rota o acaba
+   con una segunda copia de las constantes, y dos copias se separan.
 
 ---
 
@@ -1212,3 +1213,41 @@ implícita en una ausencia. No forma parte de la suite y no escribe nada.
 
 **Suite:** 1533 → 1607 (+74), **ningún test existente modificado**. Sin red, sin
 LLM, sin navegador y sin dependencias nuevas.
+
+### 13.8 F3 — el Modo A tiene el mismo agujero, y está en producción
+
+Medir A6 destapó que el problema **no nace en el Modo C**. `api_field_boundaries`
+hace `", ".join(campo["enum"])` sin tope alguno (`edge_cases.py:179`) desde que se
+cerró QA. No es una grieta del bloque que se está construyendo: es código que hoy
+corre contra los planes que usa el equipo.
+
+**Qué tan grande es de verdad, dicho con lo medido y no con lo temido.** El `enum`
+de un campo del `ApiArtifact` tiene **una sola** procedencia: un `CHECK … IN (…)`
+del `DatabaseArtifact`, leído por `_enum_values` (`api/resource_map.py:131`). Los
+catálogos de verdad grandes —ubigeo, agencias— **no** llegan por ahí: son tablas con
+su FK, no un CHECK. Así que para romper la celda de Excel harían falta ~3.600
+valores en un único CHECK, que no es un escenario real. Lo que sí es real con unos
+cientos de valores —un CHECK de motivos de DEO, de estados de guía— es una celda
+«Límite probado» ilegible en el CSV del analista, un `title` de caso que no se lee y
+un PDF inflado. Y si algún CHECK llega a enumerar nombres, es exactamente la misma
+fuga que A6 describe, sin el tamaño.
+
+**Dónde aterriza y dónde no.** El valor viaja a `boundary.value` → artefacto (JSONB
+y PDF) y a la columna «Límite probado» del CSV (`export.py:43`). **No viaja al
+prompt**: `build_user` de EDGE_CASES manda criterio, reglas, validaciones y campos
+del EF, y `api_field_boundaries` corre **después** del *map*. Comprobado, no
+supuesto — es la diferencia entre este hallazgo y el del Modo C, donde el prompt sí
+era el primer damnificado.
+
+**El arreglo, y por qué es pequeño.** Las dos constantes con su motivo escrito al
+lado y una función que devuelve o el conjunto o su huella, en `ai/agents/qa/common.py`
+—que es de los dos modos—; **una** llamada cambia (`edge_cases.py:179`). No toca el
+contrato: la huella cabe en `boundary.value`, que ya es `Optional[str]`. Sin
+migración, sin prompt, sin fixture nueva. Y la regla que gobierna sigue siendo la de
+A6: **por encima del tope, huella; nunca un conjunto recortado**, porque un enum a
+medias produce un caso que afirma que un valor legítimo debe rechazarse y ese caso
+pasa la ejecución certificando una mentira.
+
+**No merece bloque propio; sí merece ir antes que QC5**, por la razón del punto 5 de
+A6: es el sitio donde el tope se escribe una vez para los dos modos. Después, QC5 lo
+importa en vez de volver a decidirlo.
