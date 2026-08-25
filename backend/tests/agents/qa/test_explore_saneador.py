@@ -7,10 +7,12 @@ Por eso el saneador borra por defecto y el candado (``violaciones``) es lo que
 prueba que la línea quedó donde debía.
 """
 
+import re
 from datetime import datetime, timezone
 
 import pytest
 
+from ai.agents.qa.explore import sanitize
 from ai.agents.qa.explore.sanitize import (
     MASCARA,
     ORIGEN_DE_FIXTURE,
@@ -184,6 +186,54 @@ def test_los_descartes_nunca_son_silenciosos(saneada):
     }
 
 
+# --- el vocabulario es auditable, y eso es un test ---------------------------
+#
+# Una lista de literales cuyo caso vive en un docstring solo es auditable si los dos
+# no pueden separarse. Sin este candado, añadir una pieza al ``frozenset`` sin
+# tocar la prosa deja una lista que *dice* llevar su origen anotado y no lo lleva.
+
+#: El formato de una línea de la lista del docstring: pieza y etiqueta.
+LINEA_DEL_VOCABULARIO = re.compile(
+    r"^\* ``([a-z]+)`` — \*\*(observado|prospectivo|heredado sin caso)\*\*",
+    re.MULTILINE,
+)
+
+
+def _vocabulario_documentado() -> dict[str, str]:
+    return dict(LINEA_DEL_VOCABULARIO.findall(sanitize.__doc__ or ""))
+
+
+def test_el_docstring_documenta_exactamente_las_piezas_que_hay():
+    """El candado de la decisión: cada pieza lleva su caso escrito, ni una de más
+    ni una de menos. Si esto se rompe, la lista dejó de ser auditable."""
+    assert set(_vocabulario_documentado()) == set(sanitize.PIEZAS_DE_MENSAJE)
+
+
+def test_son_diecisiete_piezas():
+    """De 20 a 17: salieron ``errors``, ``errores`` y ``mensajes``. El número está
+    aquí para que reducirlo o ampliarlo sea una decisión, no un descuido."""
+    assert len(sanitize.PIEZAS_DE_MENSAJE) == 17
+
+
+def test_una_sola_pieza_tiene_caso_observado():
+    """El resultado incómodo de la auditoría, fijado para que no se olvide: el
+    vocabulario no se derivó de observaciones, se heredó. De ahí que el peso recaiga
+    en las señales estructurales (``role``, ``aria-live``, ``TAGS_ROTULO``) y que
+    ampliar la lista exija evidencia de un sistema explorado (§12.6 del diseño)."""
+    documentado = _vocabulario_documentado()
+    observadas = [p for p, caso in documentado.items() if caso == "observado"]
+    assert observadas == ["destructive"]
+
+
+@pytest.mark.parametrize("plural", ["errors", "errores", "mensajes", "messages"])
+def test_los_plurales_no_vuelven_por_simetria(plural):
+    """Los tres primeros se fueron por no tener caso; ``messages`` —el canónico de
+    Django— está **anotado como candidato y fuera**. Completar la lista por simetría
+    ensancha la dirección irreversible: casar de menos vacía el texto de una celda,
+    casar de más comitea un dato de producción."""
+    assert plural not in sanitize.PIEZAS_DE_MENSAJE
+
+
 # --- reconocer un mensaje: piezas exactas, sin herencia hacia la tabla --------
 #
 # La fuga que cierra este bloque fallaba hacia CONSERVAR, que es la dirección mala:
@@ -222,6 +272,21 @@ def test_el_corte_tabular_tampoco_hereda_desde_role_ni_aria_live():
     assert "Andina" not in sanear_html(sucio).html
 
 
+def test_una_marca_en_el_tbody_no_cuenta():
+    """La otra mitad de la frontera. Un ``<tbody class="mensaje-error">`` tiene la
+    misma forma de falso positivo que el ``<div class="error-boundary">``: envuelve
+    la tabla entera, así que no es un mensaje ni marcando el elemento mismo. El
+    corte se aplica igual a ``<table>``, ``<thead>`` y ``<tfoot>``; ``<tr>`` es la
+    excepción, y la excepción tiene su propio test."""
+    for envoltorio in ("table", "tbody", "thead", "tfoot"):
+        sucio = (
+            f'<table><{envoltorio} class="mensaje-error">'
+            "<tr><td>Comercializadora Andina S.A.C.</td></tr>"
+            f"</{envoltorio}></table>"
+        )
+        assert "Andina" not in sanear_html(sucio).html, envoltorio
+
+
 @pytest.mark.parametrize(
     "marca",
     ["text-destructive", "mensaje-error", "estado-error", "mensaje-ayuda"],
@@ -241,9 +306,26 @@ def test_las_marcas_legitimas_siguen_conservando_el_mensaje(marca):
 
 def test_la_marca_puede_ir_en_la_propia_celda():
     """El corte tabular no se lleva la marca del ``<td>`` mismo: corta la
-    herencia de los ancestros, no lo que está en la celda o por debajo."""
+    herencia de los ancestros, no lo que está en la fila, en la celda o por
+    debajo —que es la frontera real—."""
     sucio = '<table><tbody><tr><td class="mensaje-error">Sin stock</td></tr></tbody></table>'
     assert "Sin stock" in sanear_html(sucio).html
+
+
+def test_la_marca_en_la_propia_fila_cuenta_y_conserva_sus_celdas():
+    """Validación **por fila**: ``<tr class="fila-error">`` es el patrón real con el
+    que una aplicación marca la fila rechazada, y ese texto es la evidencia verbatim
+    que pide QA-D2. El corte tabular guarda y reinicia el contador **antes** de sumar
+    la marca del propio elemento, así que la fila se concede a sí misma lo que no
+    hereda de un envoltorio. Residual declarado: se conserva el texto de TODAS sus
+    celdas, y lo que sigue defendiéndolas es el enmascarado de dígitos y el candado.
+    """
+    sucio = (
+        "<table><tbody>"
+        '<tr class="fila-error"><td>Peso 0 kg: no admitido</td></tr>'
+        "</tbody></table>"
+    )
+    assert "Peso 0 kg: no admitido" in sanear_html(sucio).html
 
 
 def test_las_piezas_de_class_y_de_id_no_se_concatenan():

@@ -39,6 +39,73 @@ Tres decisiones que conviene justificar porque no están en la tabla del diseño
    solo podía conservar datos de producción. El mismo corte se aplica a ``role``
    y ``aria-live``, que comparten el contador de la concesión.
 
+   **La frontera exacta es «en la fila, en la celda o por debajo».** Un
+   ``<tr class="fila-error">`` cuenta: la fila es la unidad que una aplicación
+   marca cuando rechaza un registro, y ese texto es la evidencia verbatim de
+   QA-D2. Un ``<tbody class="mensaje-error">`` **no** cuenta, y tampoco
+   ``<table>``, ``<thead>`` ni ``<tfoot>``: tienen la misma forma de falso
+   positivo que el ``<div class="error-boundary">`` —envuelven la tabla entera—,
+   así que se les aplica el corte igual que a un ancestro cualquiera.
+
+**El vocabulario, pieza por pieza.** :data:`PIEZAS_DE_MENSAJE` tiene **17** piezas
+y la lista es auditable a propósito: cada una lleva escrito su caso, porque una
+lista de literales sin su caso al lado es indistinguible de una lista completada a
+mano. La regla para añadir la dieciochoava es una sola —**una pieza = un caso
+verificado en un sistema que exploramos de verdad**— y hay tres etiquetas:
+
+* ``observado``: marca un mensaje en HTML que **este** repositorio renderiza.
+* ``prospectivo``: su caso es una convención que se puede nombrar, en un sistema
+  que NO hemos explorado. Vale como red secundaria; no cuenta como evidencia.
+* ``heredado sin caso``: entró con la primera versión de la lista y no tiene ni lo
+  uno ni lo otro. Se queda porque quitarla no es gratis —una fixture o un test
+  puede depender de ella— pero **no** justifica añadir sus variantes.
+
+La lista, una por línea, con su caso:
+
+* ``destructive`` — **observado**: ``<p role="alert" class="… text-destructive">``
+  en ``frontend/src/components/ui/field.tsx``. Es el error de campo de la casa.
+* ``alert`` — **prospectivo**: Bootstrap escribe ``class="alert alert-danger"``. El
+  token viaja en el **mismo atributo** que ``danger``, así que es la misma
+  evidencia, no una variante deducida de ella.
+* ``danger`` — **prospectivo**: Bootstrap en sistemas de terceros (``text-danger``,
+  ``alert-danger``). **No observado en este repositorio.**
+* ``error`` — **prospectivo**: el legado PHP/ExtJS (``x-form-error-msg``; §12.6 del
+  diseño del Modo C). Nuestro frontend **no** lo usa —rotula con ``role="alert"``
+  y ``text-destructive``—; sí lo usan las fixtures de ``qa_explore/``, y una
+  fixture que escribimos nosotros no es una observación.
+* ``invalid`` — **prospectivo**: ExtJS (``x-form-invalid-field``). Aparece en
+  nuestro frontend, pero como prefijo de variante de Tailwind
+  (``aria-invalid:border-destructive``) sobre un control: es una **aparición sin
+  caso**, y además un vector de falso positivo, no una justificación.
+* ``warning`` — **heredado sin caso**. Bootstrap tiene ``alert-warning``, pero
+  tomarla por eso sería recorrer el enum de sufijos (``success``, ``info``…), que
+  es exactamente la simetría prohibida.
+* ``aviso`` — **heredado sin caso**.
+* ``mensaje`` — **heredado sin caso**; lo usan las fixtures (``mensaje-error``,
+  ``mensaje-ayuda``), que escribimos nosotros.
+* ``message`` — **heredado sin caso**.
+* ``help`` — **heredado sin caso**. Y con un falso positivo a la vista: Tailwind
+  tiene ``cursor-help``, que casa por esta pieza sin ser un mensaje.
+* ``hint`` — **heredado sin caso**, y con el caso EN CONTRA delante: el ``hint`` de
+  ``ui/field.tsx`` se rotula ``text-meta-foreground``.
+* ``ayuda`` — **heredado sin caso**; lo usan las fixtures (``mensaje-ayuda``).
+* ``feedback`` — **heredado sin caso**.
+* ``validation`` — **heredado sin caso**.
+* ``validacion`` — **heredado sin caso**.
+* ``required`` — **heredado sin caso**. En nuestro frontend ``required`` es un
+  atributo de ``<input>``, nunca una pieza de ``class``.
+* ``requerido`` — **heredado sin caso**.
+
+**Candidato anotado y deliberadamente FUERA de la lista:** ``messages``, el plural
+canónico de Django. Entra el día que se explore un sistema que lo emita, no antes.
+
+**Tres piezas se fueron (de 20 a 17): ``errors``, ``errores`` y ``mensajes``.** El
+conjunto llevaba esos tres plurales y no llevaba ``messages``, que es justo el
+plural que un framework de verdad emite. Una asimetría así no sale de casos
+observados: sale de completar plurales a mano. Y la dirección importa —quedarse
+corto solo vacía el texto de una celda, ensanchar conserva datos de producción—,
+así que ensanchar la fuga en el mismo commit que la cerró no se sostenía.
+
 El candado (:func:`violaciones`) es lo que prueba que la línea quedó donde debía:
 ninguna fixture con una secuencia de 8+ dígitos, ni el dominio de la casa, ni un
 atributo ``value`` con contenido. Es el mismo criterio con el que ``redact_dsn``
@@ -122,13 +189,24 @@ TAGS_ROTULO = frozenset(
     }
 )
 
+#: Envoltorios de una tabla. Son estructura, nunca un mensaje: una marca puesta
+#: **aquí** tiene la misma forma de falso positivo que el
+#: ``<div class="error-boundary">`` —cubre la tabla entera— así que ni se hereda ni
+#: cuenta para el propio elemento. Es la mitad de arriba de la frontera «en la
+#: fila, en la celda o por debajo».
+ENVOLTORIOS_TABULARES = frozenset({"table", "thead", "tbody", "tfoot"})
+
 #: Elementos de estructura tabular. Abrir cualquiera de ellos **corta la herencia**
-#: de la concesión de mensaje: solo cuenta una marca puesta en la celda o dentro
-#: de ella. Sin este corte, un ``<div class="error-boundary">`` —un envoltorio de
-#: React, no un mensaje— alrededor de una tabla conservaba la tabla entera. Y no
+#: de la concesión de mensaje: solo cuenta una marca puesta en la fila, en la celda
+#: o por debajo. Sin este corte, un ``<div class="error-boundary">`` —un envoltorio
+#: de React, no un mensaje— alrededor de una tabla conservaba la tabla entera. Y no
 #: se pierde nada: fuera de una celda el texto se conserva de todas formas, así
 #: que una marca por encima de la tabla nunca aportaba, solo podía conservar de más.
-TAGS_TABULARES = frozenset({"table", "thead", "tbody", "tfoot", "tr"})
+#:
+#: ``<tr>`` está aquí —corta lo que hereda— pero **no** en
+#: :data:`ENVOLTORIOS_TABULARES`: su propia marca sí cuenta, porque la fila es la
+#: unidad que una aplicación marca cuando rechaza un registro.
+TAGS_TABULARES = ENVOLTORIOS_TABULARES | {"tr"}
 
 #: Piezas de ``class``/``id`` con las que una aplicación marca un mensaje. Un
 #: mensaje de error renderizado es una validación observada: sobrevive.
@@ -141,11 +219,15 @@ TAGS_TABULARES = frozenset({"table", "thead", "tbody", "tfoot", "tr"})
 #: La lista es de piezas literales a propósito: añadir una variante es una línea y
 #: no cambia la semántica de nadie. Casar de menos solo vacía el texto de una celda
 #: —se pierde señal, no se filtra un dato—, así que el default es benigno.
+#:
+#: **El caso de cada pieza está escrito en el docstring del módulo, una por línea**
+#: (``observado`` / ``prospectivo`` / ``heredado sin caso``). Se añade una pieza
+#: cuando hay **un caso verificado en un sistema que exploramos de verdad**, y
+#: completarla «por simetría» —el plural de otra, el resto del enum de sufijos de
+#: Bootstrap— **está prohibido**: el motivo está en §12.6 del diseño del Modo C.
 PIEZAS_DE_MENSAJE = frozenset(
     {
         "error",
-        "errors",
-        "errores",
         "invalid",
         "warning",
         "alert",
@@ -153,7 +235,6 @@ PIEZAS_DE_MENSAJE = frozenset(
         "danger",
         "destructive",
         "mensaje",
-        "mensajes",
         "message",
         "help",
         "hint",
@@ -358,7 +439,10 @@ class _Saneador(HTMLParser):
             return
 
         celda = tag == "td"
-        rotulo = self._es_rotulo(tag, mapa)
+        # Un ``<tbody class="mensaje-error">`` es un envoltorio, no un mensaje: su
+        # marca no cuenta ni para sí misma. La fila sí, y por eso ``<tr>`` no está
+        # en este conjunto.
+        rotulo = tag not in ENVOLTORIOS_TABULARES and self._es_rotulo(tag, mapa)
 
         if not suprimido and self._suprimidos == 0:
             self._piezas.append(self._apertura(tag, attrs, cierre_propio))
@@ -367,8 +451,9 @@ class _Saneador(HTMLParser):
             return
 
         # La estructura tabular corta la herencia de la concesión de mensaje: lo
-        # que valga aquí dentro tiene que estar marcado desde la celda o por
-        # debajo. La marca del propio elemento sí cuenta, se aplica después.
+        # que valga aquí dentro tiene que estar marcado desde la fila, la celda o
+        # por debajo. La marca del propio elemento se suma después del corte, así
+        # que un ``<tr>`` marcado se concede a sí mismo lo que no hereda.
         guardado: Optional[int] = None
         if tag in TAGS_TABULARES:
             guardado = self._rotulos

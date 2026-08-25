@@ -570,7 +570,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 **El Modo B no está en este plan.** Está en cero (§1.2) y su plan es QA11–QA12 de la
 PARTE II. QC1 y QC2 le sirven a los dos, así que hacerlos ahora no lo estorba.
 
-## 8.bis Ajustes aprobados antes de implementar (A1–A4)
+## 8.bis Ajustes aprobados antes de implementar (A1–A4) + pendientes (A5)
 
 Cuatro ajustes al diseño de arriba, acordados al aprobar el plan. Los tres
 primeros se implementaron en QC3; el cuarto es una nota de riesgo que se deja
@@ -638,6 +638,46 @@ cuando QC5 descubra qué se observa de verdad (un `selector_strategy` más, el
 fragmento de DOM que respalda la evidencia, el motivo por el que una página quedó
 a medias). No es una desviación: es el precio de fijar un contrato antes de la
 primera observación real, y se asume explícitamente.
+
+### A5 — PENDIENTE, no implementado: un `<td>` con un control es cromo, no dato
+
+La regla se propuso al diseñar A3 y **no aterrizó**. Se anota aquí con número para
+que no vuelva a perderse, y **queda fuera de QC4**: hoy no está implementada.
+
+**El caso, verificado contra el saneador de HEAD.** Dentro de un `<td>` sobrevive
+solo el texto *rotulado*, y ni `<button>` ni `<a>` están en `TAGS_ROTULO`. Así que
+una **columna de acciones** —el patrón exacto de `/configuracion/usuarios`, con su
+kebab por fila— se vacía:
+
+```html
+<!-- entra -->  <td><button type="button" id="kebab-1">Editar</button></td>
+<!-- sale  -->  <td><button type="button" id="kebab-1"></button></td>
+```
+
+Lo que se pierde no es un dato: es el **vocabulario de lo pulsable**. "Editar",
+"Eliminar", "Ver ficha" son el rótulo con el que el explorador nombraría un caso y
+con el que `SURFACE_MAP` describiría la superficie. Un `<option>` dentro de la misma
+tabla sí sobrevive; un `<button>` no, y la asimetría no responde a ningún criterio.
+
+**La forma ingenua de la regla es una fuga, y por eso no se implementa a la ligera.**
+"El `<td>` que contiene un control es cromo" concedería la celda **entera**, y una
+celda mixta es corriente:
+
+```html
+<td>Comercializadora Andina S.A.C. <button type="button">Editar</button></td>
+```
+
+Ahí el nombre del cliente sobreviviría por vecindad con un botón. La regla falla
+hacia **CONSERVAR** dentro de una celda, que es la dirección mala (§12.5), así que
+su forma segura es la estrecha: **es rótulo el texto que está DENTRO del control**
+—descendiente de `<button>`, `<a>`, `<summary>`— **no el que comparte celda con
+él**. Es decir, no una regla sobre el `<td>`, sino dos tags más en `TAGS_ROTULO`
+con su candado de celda mixta.
+
+**Cuándo.** Con **QC5**, junto a `SURFACE_MAP`: es entonces cuando se sabe qué
+rótulo necesita de verdad un caso observado, y la fixture del panel de usuarios se
+captura con el explorador real. Antes sería ensanchar la dirección de fuga sin un
+consumidor que lo justifique.
 
 ---
 
@@ -762,7 +802,7 @@ sin haber una línea de Playwright, y `test_qc3_no_introduce_playwright` sigue v
 | `sanitize.py` | `sanear_html()` (A3), `violaciones()` (el candado) y `escenario_saneado()` (que aplica el candado **antes** de escribir) |
 | `capture_explore_fixture.py` | La captura manual, con autorización explícita. Hoy falla en `build_driver` diciendo que QC5 trae el driver: no finge que exploró |
 
-**Cinco decisiones que conviene no perder:**
+**Seis decisiones que conviene no perder:**
 
 1. **El manifiesto ejerce la capa 5 sin navegar.** Con `status`, `location` y la
    URL final, la revalidación en cada salto —incluida la de la URL con la que
@@ -775,6 +815,15 @@ sin haber una línea de Playwright, y `test_qc3_no_introduce_playwright` sigue v
    demás se vacía. Es lo que deja pasar un mensaje de error renderizado y las
    opciones de un `<select>` dentro de una celda —la evidencia verbatim de QA-D2— y
    deja fuera el nombre del cliente de la fila de al lado.
+
+   **La frontera exacta de la marca es «en la fila, en la celda o por debajo».** Un
+   `<tr class="fila-error">` cuenta —la fila es la unidad que una aplicación marca
+   cuando rechaza un registro— y con ella se conserva el texto de todas sus celdas.
+   Un `<tbody class="mensaje-error">` **no** cuenta, ni `<table>`, ni `<thead>`, ni
+   `<tfoot>`: tienen la misma forma de falso positivo que el
+   `<div class="error-boundary">` de React —envuelven la tabla entera— así que se
+   les aplica el corte igual que a cualquier ancestro. Los dos lados están fijados
+   con test.
 3. **Los manejadores en línea se borran, por el mismo motivo que `<script>`**: son
    código, no estructura ni rótulo, y arrastran rutas con identificadores reales.
    Consecuencia declarada: la trampa del `POST` **no** sobrevive a una captura, así
@@ -790,6 +839,47 @@ sin haber una línea de Playwright, y `test_qc3_no_introduce_playwright` sigue v
    (`escenario_saneado()` lanza `CapturaSuciaError`) y no solo en la suite: un aviso
    por consola se lee cuando ya está comiteado.
 
+6. **NOTA DE DISEÑO — el vocabulario está afinado contra NUESTRO frontend, y el
+   Modo C no existe para explorar nuestro frontend.** Es la limitación estructural
+   de `PIEZAS_DE_MENSAJE`, y conviene que esté escrita antes de que alguien la
+   descubra ampliando la lista.
+
+   Las 17 piezas se auditaron contra lo único que podíamos mirar de verdad: el HTML
+   que renderiza `frontend/`. El resultado de esa auditoría es incómodo y por eso
+   vale la pena: **una sola pieza tiene un caso observado** (`destructive`, del
+   `<p role="alert" class="… text-destructive">` de `ui/field.tsx`). Nuestro
+   frontend **no** marca sus errores con una `class` que contenga `error`, y su
+   `hint` se rotula `text-meta-foreground`. Es decir: el vocabulario no se derivó
+   de observaciones, se heredó.
+
+   Y el objetivo real es otro sistema. El legado de Urbano es **PHP/ExtJS**, cuyo
+   vocabulario es `x-form-invalid-field`, `x-form-error-msg` y compañía. De esos
+   dos ejemplos, los dos caen dentro de la lista —troceados dan `invalid` y
+   `error`—, pero eso es **suerte del troceo, no cobertura**: no hemos explorado
+   ese sistema, así que no sabemos cuáles de sus marcas reconocemos ni cuántas se
+   nos escapan. Contra un objetivo no observado, una lista de literales solo puede
+   quedarse corta.
+
+   **Consecuencia de diseño, no una advertencia:** el peso recae en las señales
+   **estructurales**, que no dependen del vocabulario de nadie —`role` de mensaje,
+   `aria-live`, `TAGS_ROTULO` (`<label>`, `<option>`, `<th>`, `<legend>`,
+   `<caption>`, `<summary>`, encabezados)—. `PIEZAS_DE_MENSAJE` es **red
+   secundaria**, y se amplía **solo con evidencia de un sistema explorado**: una
+   pieza = un caso verificado, con su origen anotado en el docstring del módulo
+   (`observado` / `prospectivo` / `heredado sin caso`).
+
+   **Completar la lista «por simetría» está PROHIBIDO.** Ni el plural de una pieza
+   que ya está, ni el resto del enum de sufijos de Bootstrap porque `danger` esté
+   dentro, ni la traducción al español de una pieza inglesa. El motivo es la
+   asimetría rectora del bloque leída en esta dirección concreta: casar de menos
+   **vacía el texto de una celda** —se pierde señal, se ve, se arregla—, mientras
+   casar de más **conserva un dato de producción en una fixture comiteada para
+   siempre**. Una pieza añadida por simetría ensancha la dirección irreversible sin
+   un caso que la respalde, que es exactamente la fuga que este bloque cerró: por
+   eso salieron `errors`, `errores` y `mensajes` (20 → 17) y por eso `messages`
+   —canónico de Django— se queda **anotado como candidato y fuera de la lista**
+   hasta que se explore un sistema que lo emita.
+
 **El residual, con fixture y test esperando a QC5.** `<button type="button">` con
 un manejador que manda un `POST` **es pulsable** para la lista blanca del DOM, y
 hace bien: leyendo el DOM no hay forma de saber qué dispara. Quien lo para es la
@@ -800,3 +890,10 @@ dice explícitamente que eso es una especificación ejecutable, no una demostrac
 
 **Suite:** 1395 → 1477 (+82; 77 de QC4 y 5 del candado de la regla R1), sin red,
 sin LLM, sin navegador y sin dependencias nuevas. Frontend intacto (120).
+
+**Dos afinamientos posteriores al cierre, sobre el mismo saneador** (1477 → 1495):
+el reconocimiento de un mensaje pasó de subcadena a **piezas exactas** con corte de
+herencia en la tabla (la fuga que fallaba hacia conservar), y después la frontera de
+la marca quedó fijada en **«en la fila, en la celda o por debajo»** más la auditoría
+del vocabulario que dejó la lista en 17 piezas, con su candado (decisión 6). No
+abren bloque: QC4 sigue cerrado y QC5 sigue siendo el siguiente.
