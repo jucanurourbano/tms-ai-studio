@@ -28,10 +28,12 @@ implementados, ver §5.3 y `docs/diseno-agente-api.md`). **MÓDULO INVENTARIO DE
 SISTEMAS + fase RECONCILE** **completo** (bloques INV0→INV6, ver §5.4): el ISDF
 deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
 Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
-ver §5.5 y `docs/diseno-agente-qa.md`). **QA9 —modos de entrada B (sistema del
-inventario) y C (exploración Playwright solo-lectura)— está DISEÑADO pero NO
-implementado**: ver §5.5 *in fine* y la PARTE II del doc. Siguiente eslabón:
-**Agente Backend**.
+ver §5.5 y `docs/diseno-agente-qa.md`). Del **QA9** —modos de entrada B (sistema
+del inventario) y C (exploración solo-lectura de una URL viva)— está implementado
+el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`, sin una línea de
+Playwright); el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
+PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`. Siguiente
+eslabón: **Agente Backend**.
 
 ---
 
@@ -551,11 +553,13 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   UI sí llama al modelo real.
 - Sin migraciones de BD. Permisos sin tocar: `qa` FULL para el rol `qa`.
 
-### QA9 — modos de entrada B y C (DISEÑO PROPUESTO, **sin implementar**)
+### QA9 — modos de entrada B y C (diseñado; **solo el guard del Modo C existe**)
 
-> `docs/diseno-agente-qa.md` **PARTE II** (§11–§17). **Nada de esto existe en el
-> código.** Todo lo de arriba describe el **Modo A** (desde el plan Scrum), el único
-> implementado (HEAD `d99c068`).
+> `docs/diseno-agente-qa.md` **PARTE II** (§11–§17) y `docs/diseno-qa-modo-c.md`
+> (QA-D19…QA-D25 + los ajustes A1–A4). Todo lo de arriba describe el **Modo A**
+> (desde el plan Scrum). Del resto **solo está implementado QC3, el guard**
+> (`ai/agents/qa/explore/`); el Modo B sigue en cero y el Modo C no explora nada
+> todavía.
 
 - **El problema que resuelve el bloque**: el Modo B (desde un sistema del
   **INVENTARIO**) y el Modo C (**exploración Playwright solo-lectura** de una URL
@@ -598,15 +602,66 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
 - **Permisos (matriz sin tocar)**: registrar un alias explorable es un acto de
   **despliegue** (`admin`); lanzar una exploración contra un destino ya acotado es
   **`qa` FULL**.
-- **Entorno**: `playwright` **no** es dependencia del backend (`ModuleNotFoundError`
-  en el venv) y Chromium no arranca (falta `libnspr4`, sin sudo). Por eso **QA13
-  construye el guard ANTES que el navegador** y QA14 se ejerce contra **HTML de
-  fixtures**, con un cortafuegos `sin_navegador_real` autouse, hermano de
-  `sin_api_real`.
-- **Bloques**: QA9 (diseño) → QA10 contrato v1.1.0 → QA11 migración `0011` +
-  `LOAD_INVENTORY` → QA12 `ASSET_MAP` → QA13 guard del Modo C → QA14
-  `EXPLORE` + `SURFACE_MAP` → QA15 grafos B/C + servicio + API → QA16 frontend →
-  cierre.
+- **Entorno**: `playwright` **no** es dependencia del backend
+  (`ModuleNotFoundError` en el venv) y Chromium no arranca (falta `libnspr4`, sin
+  sudo). Por eso el guard se construye **ANTES** que el navegador y el Modo C se
+  ejerce contra **HTML de fixtures**.
+- **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ → QC1
+  contrato v1.1.0 → QC2 migración `0011` + `data_class` (**después de LLM2**) →
+  **QC3 el guard ✅** → QC4 fixtures y saneador → QC5 `EXPLORE` + `SURFACE_MAP` →
+  QC6 CLI de login → QC7 grafo C + servicio + API → QC8 frontend (**no en paralelo
+  con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`, `ASSET_MAP`) sigue con el plan
+  QA11–QA12 de la PARTE II.
+
+#### QC3 — el guard del Modo C (implementado)
+
+`backend/ai/agents/qa/explore/`: `target.py` (capas 1, 2 y 4) · `navigation.py`
+(capa 5) · `clicking.py` + `dom.py` (la mitad de la capa 3 que se decide leyendo el
+DOM) · `limits.py` · `driver.py` (protocolo estrecho, **cero Playwright**) ·
+`session.py` (`ExploreSession`). Lo que no se puede perder de vista:
+
+- **A1 — el alias no viaja al prompt.** El host ya no viajaba; el alias sí, y un
+  `tms-prod-urbano-aws` filtraría el mapa de infraestructura al proveedor del
+  modelo. Se cerró por **estructura y no por nomenclatura**: `alcance_para_prompt()`
+  es lo ÚNICO que el modelo sabe del destino (`origen`, `data_class`, `paths`), y
+  QC5 amplía **esa función**, de modo que el candado cubre lo que se añada después.
+  Refuerzo: el alias coincide con `^[a-z][a-z0-9-]{1,31}$`, así que no puede *ser*
+  un host ni una URL, y `QA_EXPLORE_TARGETS` tiene **un único lector**.
+- **A2 — un destino puede declararse `sintetico` SOLO si su host es local**
+  (`localhost`/`127.0.0.1`/`::1`), verificado por el validador y no por confianza.
+  Sin esa excepción el Modo C era imposible de probar de punta a punta sin saldo del
+  proveedor; con ella, cualquier host no local sigue siendo `real` sin excepción.
+- **`readonly_verified: true` es obligatorio** por destino (409 si falta): sin una
+  cuenta de solo lectura en la aplicación explorada, lo único que separa una
+  escritura de producción de nosotros son nuestras propias capas.
+- **La capa 5 revalida cuatro cosas**: la URL pedida, la `location` de una
+  redirección, **la URL final con la que vuelve el driver** y el destino de un clic.
+  Lo que cae fuera no se sigue y queda registrado con su motivo.
+- **La trampa del `<button>`**: en HTML un `<button>` sin `type` dentro de un
+  `<form>` es `type="submit"`. Se exige el `type="button"` **explícito en el
+  atributo**, incluso fuera de un formulario (un `<button form="otro">` envía uno
+  ajeno). Lo que sí se permite es pulsar pestañas y acordeones dentro de un `<form>`:
+  bloquear "todo lo que esté dentro de un form" dejaría fuera la mayor parte del
+  valor. **Teclear (nivel 2) está FUERA de v1** y no por el riesgo de escritura: si
+  un `keyup` dispara un autoguardado y la petición muere abortada, el explorador
+  **observa que no hubo validación** y emite un caso falso.
+- **Candados AST** (precedente `tests/llm/test_construcciones.py`): cero
+  `fill`/`type`/`press`/`select_option`/`check`/`evaluate`/`screenshot` en `app/` y
+  `ai/`; `click` **solo** dentro de `ExploreSession.pulsar_si_procede`;
+  `build_driver` no se importa por nombre en ninguna parte (un `from … import`
+  resolvería el enlace al importar y el parche del cortafuegos no lo alcanzaría);
+  ningún esquema de request con forma de URL/host.
+- **`sin_navegador_real` es la CAPA 5 del cortafuegos de tests** (`tests/firewall.py`,
+  autouse). **No es una hermana de conveniencia de `sin_api_real`**: la capa 4
+  parchea `socket.socket.connect` en *este* proceso y un navegador es **otro proceso
+  del sistema operativo**, así que para ese riesgo es la única capa que existe.
+  Parchea la **fábrica del driver**, nunca `ExploreSession`.
+- **Sin selector estable (`[name]` › `#id` › `[data-testid]`) no se pulsa.** El
+  selector estructural llega en QC5 junto a su `selector_strategy`, el campo que
+  avisa de que el ancla es frágil.
+- **QC3 NO trae** la intercepción de red (abortar todo método ≠ `GET`/`HEAD`), la
+  neutralización del `submit` ni el `storage_state`: las tres necesitan el driver
+  real y son de QC5/QC6.
 
 ---
 
@@ -856,6 +911,7 @@ tms-ai-studio/
         ├── agents/ef/            # (+ scrum/, arquitectura/, bd/, api/, qa/, base/)
         │                         # bd/ddl/:      render + validación del DDL (sin LLM)
         │                         # api/openapi/: render + validación del spec (sin LLM)
+        │                         # qa/explore/:  guard del Modo C (5 capas, sin navegador)
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml

@@ -1,4 +1,4 @@
-"""Cortafuegos de la suite: cuatro capas contra una llamada real (LLM1).
+"""Cortafuegos de la suite: cinco capas contra una llamada real (LLM1 + QC3).
 
 REGLA DE PRESUPUESTO (``CLAUDE.md`` §9): nunca se llama a una API real desde los
 tests. Hasta LLM0 esa regla la sostenía **un** ``monkeypatch`` sobre **un**
@@ -25,6 +25,17 @@ Las capas, de la más específica a la que de verdad generaliza (LLM-D12):
    webhook. Es la única capa cuyo alcance no depende de que alguien la recuerde.
 
 Las capas 1–3 dan el mensaje ÚTIL (dicen cómo arreglarlo); la 4 da la garantía.
+
+Y una quinta, que **no** es una hermana de conveniencia de las anteriores:
+
+5. **El navegador** (``blindar_navegador``, QC3). La capa 4 parchea
+   ``socket.socket.connect`` **en el proceso de Python**; un navegador de
+   Playwright es **otro proceso del sistema operativo** y sus sockets no pasan por
+   ese parche —Playwright habla con él por un canal local, que la capa 4 permite,
+   correctamente—. Es decir: **la capa 4 es ciega al navegador**. Un test que
+   arrancara Chromium y navegara a la aplicación de producción saldría a la red y
+   ninguna de las cuatro capas lo vería. Esta capa es, para ese riesgo, la única
+   que existe.
 """
 
 import importlib
@@ -261,6 +272,41 @@ def blindar_red(monkeypatch: pytest.MonkeyPatch) -> None:
 def _verificar(address: Any) -> None:
     if not es_destino_local(address):
         raise AssertionError(MENSAJE_RED.format(destino=_destino(address)))
+
+
+# --------------------------------------------------------------------------
+# Capa 5 — el navegador (Modo C del Agente QA)
+# --------------------------------------------------------------------------
+
+MENSAJE_NAVEGADOR = (
+    "Un test intentó arrancar un navegador REAL para explorar. Inyecta un doble "
+    "del driver: ExploreSession(target, driver=…) (ver "
+    "tests/agents/qa/test_explore_session.py). El Modo C se ejerce contra HTML "
+    "de fixtures: el extractor no conoce el navegador. REGLA DE PRESUPUESTO: "
+    "nunca se explora una aplicación real en tests."
+)
+
+#: Fábricas de navegador que se parchean. La primera es NUESTRA costura (la única
+#: que existe hoy); las otras dos cubren a quien importe Playwright directamente,
+#: y se parchean solo si el paquete está instalado — igual que la capa 2 con los
+#: SDK. Hoy no lo está, así que se salta sin reportarse como hueco: sin paquete no
+#: hay navegador que arrancar.
+FABRICAS_DE_NAVEGADOR: tuple[str, ...] = (
+    "ai.agents.qa.explore.driver.build_driver",
+    "playwright.async_api.async_playwright",
+    "playwright.sync_api.sync_playwright",
+)
+
+
+def blindar_navegador(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hace explotar cualquier intento de arrancar un navegador.
+
+    Se parchea la **fábrica del driver** y no ``ExploreSession``: la sesión es la
+    única clase que debería conducir un navegador, pero la garantía no puede
+    depender de que el código de mañana pase por ella.
+    """
+    for ruta in FABRICAS_DE_NAVEGADOR:
+        _parchear_si_existe(monkeypatch, ruta, MENSAJE_NAVEGADOR)
 
 
 def cobertura_de_capas(proveedor: str) -> dict[str, Optional[bool]]:

@@ -82,6 +82,24 @@ def sin_red_externa(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def sin_navegador_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Capa 5 — el navegador. NO es una hermana de conveniencia: es la única.
+
+    La capa 4 parchea ``socket.socket.connect`` **en este proceso**. Un navegador
+    de Playwright es **otro proceso del sistema operativo**: sus sockets no pasan
+    por ese parche, y el canal local con el que Playwright lo controla la capa 4
+    lo permite —correctamente—. Así que un test que arrancara Chromium y navegara
+    a la aplicación de producción **saldría a la red** y ninguna de las cuatro
+    capas lo vería.
+
+    Autouse por el mismo motivo que sus hermanas, y con más razón que ninguna: la
+    protección no puede depender de que cada test se acuerde de pedirla, y aquí no
+    hay una segunda capa detrás.
+    """
+    firewall.blindar_navegador(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
 def sin_inventario_real(monkeypatch: pytest.MonkeyPatch) -> None:
     """Impide que un test abra una conexión real al consultar el inventario.
 

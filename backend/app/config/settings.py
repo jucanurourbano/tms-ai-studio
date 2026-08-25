@@ -7,6 +7,7 @@ arrancar en desarrollo sin ``.env`` presente.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -115,6 +116,42 @@ class Settings(BaseSettings):
     # criterios x 4 tipos son 800 casos, y cada caso de más es tiempo de una
     # persona ejecutándolo. Lo que se poda deja Observation con su id.
     QA_MAX_CASES_PER_CRITERION: int = 6
+
+    # --- Modo C del Agente QA: exploración de una URL viva ---
+    # Esto conduce un navegador AUTENTICADO contra una aplicación desplegada, así
+    # que hereda las cuatro capas fail-closed de la introspección de BD y añade
+    # una quinta que aquella no necesitaba (una base de datos no redirige; una
+    # aplicación web sí). Ver ai/agents/qa/explore/.
+    #   1. Desactivado por defecto.
+    #   2. El cliente manda un ALIAS, nunca una URL: si mandara la URL, quien
+    #      pudiera lanzar exploraciones podría apuntar el navegador a cualquier
+    #      host (SSRF). Y el destino transporta la credencial de la cuenta de QA,
+    #      que por definición no viene del cliente.
+    #   3. Allowlist de hosts EXPLÍCITA: lista vacía significa "nada autorizado".
+    #   4. La credencial nunca sale (ni artefacto, ni log, ni respuesta).
+    #   5. La allowlist se re-verifica en CADA navegación.
+    # Cada destino se declara así (JSON en el .env), y `readonly_verified: true`
+    # es OBLIGATORIO: sin una cuenta de solo lectura en la aplicación explorada,
+    # lo único que separa una escritura de producción de nosotros son nuestras
+    # propias capas.
+    #   QA_EXPLORE_TARGETS='{"tms-qa": {"url": "https://tms.interno/",
+    #                                   "readonly_verified": true}}'
+    # `data_class` es "real" salvo que el host sea LOCAL (A2): explorar el entorno
+    # de desarrollo propio con semillas sintéticas no es una fuente real, y sin esa
+    # excepción —verificada por candado, no por confianza— el Modo C sería
+    # imposible de probar de punta a punta sin gastar saldo del proveedor.
+    QA_EXPLORE_ENABLED: bool = False
+    QA_EXPLORE_TARGETS: dict[str, dict[str, Any]] = {}
+    QA_EXPLORE_ALLOWED_HOSTS: list[str] = []
+    # Radio de acción. Enteros POSITIVOS: un 0 no significa "sin límite", es
+    # inválido (QA-D25.4). Un crawler sin techo contra una aplicación viva es un
+    # generador de carga, y un ejecutor de pruebas —que es otro agente— necesita
+    # corridas sin techo: no poder pedirlas es parte de la frontera.
+    QA_EXPLORE_MAX_PAGES: int = 50
+    QA_EXPLORE_MAX_DEPTH: int = 3
+    QA_EXPLORE_TIMEOUT_MS: int = 15000
+    QA_EXPLORE_TOTAL_BUDGET_S: int = 300
+    QA_EXPLORE_MAX_CLICKS_PER_PAGE: int = 8
 
     # --- Inventario de Sistemas ---
     # Tamaño máximo del dump DDL que se acepta subir (.sql). Un dump completo de
