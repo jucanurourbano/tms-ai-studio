@@ -29,7 +29,13 @@ from typing import Any, Optional
 from ai.agents.base.structured import LLMClient, run_structured_map
 from ai.tools.chunker import estimate_tokens
 
-from .common import estimated_minutes, knowledge_block, next_id, normalize_steps
+from .common import (
+    enum_evidence,
+    estimated_minutes,
+    knowledge_block,
+    next_id,
+    normalize_steps,
+)
 from .criterion_map import entry_for
 from .prompts import build_system
 from .schemas.enums import AnchorSource, BoundaryKind, DataKind, TestCaseType
@@ -176,7 +182,7 @@ def api_field_boundaries(
                     "api_field_ref": campo.get("id"),
                     "field_name": campo.get("name"),
                     "operator": "in",
-                    "value": ", ".join(campo["enum"]),
+                    "value": enum_evidence(campo["enum"]),
                     "invalid_value": "VALOR_FUERA_DEL_CATALOGO",
                     "valid_value": campo["enum"][0] if campo["enum"] else None,
                 }

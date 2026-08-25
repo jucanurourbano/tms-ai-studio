@@ -1251,3 +1251,17 @@ pasa la ejecución certificando una mentira.
 **No merece bloque propio; sí merece ir antes que QC5**, por la razón del punto 5 de
 A6: es el sitio donde el tope se escribe una vez para los dos modos. Después, QC5 lo
 importa en vez de volver a decidirlo.
+
+**Implementado.** `ENUM_MAX_OPCIONES = 25` (un enum de dominio real cabe; por
+encima ya no es un dominio, es un catálogo), `ENUM_MAX_CHARS = 1000` (el punto en
+que la celda se abre pero ya no se lee, muy anterior a los 32.767 en que se rompe)
+y `ENUM_DIGEST_MUESTRA = 3`, con `enum_digest`/`enum_evidence` en
+`ai/agents/qa/common.py` y **una** llamada cambiada (`edge_cases.py:179`). La
+huella lleva cardinalidad completa + `sha256` del conjunto **ordenado** + los
+primeros valores, y la muestra desaparece entera antes que romper el tope que la
+motivó. Dos candados de fuente sostienen el criterio 5 de A6: **nadie más declara
+esas constantes** y **nadie más calcula una huella** (vigilar el `hashlib` es
+vigilar la copia sin adivinar cómo la escribirá quien la escriba), de modo que QC5
+la importa o el test falla al escribirla.
+
+**Suite:** 1607 → 1625 (+18), **ningún test existente modificado**.
