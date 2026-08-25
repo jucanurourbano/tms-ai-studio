@@ -563,7 +563,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | **QC3** ✅ | **El guard, antes del navegador.** `QA_EXPLORE_*` en settings, alias con `readonly_verified`, allowlist, validación de esquema, revalidación por navegación, redacción, topes, política de pulsado (§3.2) evaluada sobre HTML, `ExploreSession` **con el driver inyectado**, `sin_navegador_real` autouse, candado AST (§3.3.3). **Sin una línea de Playwright.** | alias inexistente → error · allowlist vacía ⇒ nada autorizado · `302` fuera de host no se sigue y se registra · `file:`/`data:`/`javascript:` rechazados · `readonly_verified=false` → 409 · credencial ausente de artefacto, log y respuesta · `<button>` sin `type` en `<form>` **no** es pulsable · candado AST: cero `fill`/`type`/`screenshot` | — **IMPLEMENTADO** (§11) |
 | **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
 | **QC4.5** ✅ | **El extractor determinista de anclas**: vocabulario cerrado de atributos-ancla, `anchor_ref` canónico, cinco estrategias de selector con unicidad comprobada, `@enum`, y un lector de `.html` de disco para mirar la tabla con los ojos. Sin red, sin LLM, sin navegador, sin clic. | cada atributo del vocabulario produce su ancla y `value`/`disabled`/`placeholder` no · una etiqueta que no se escribe en CSS **no** ancla (fail-closed) · dos pasadas dan los mismos refs en el mismo orden · toda evidencia es subcadena exacta del HTML · **F2 fijada**: el enum se ve en crudo y no en la fixture saneada | — **IMPLEMENTADO** (§13) |
-| **QC5** | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes | **entorno**: `libnspr4` con `sudo` (§1.1) — solo para una prueba manual, no para la suite |
+| **QC5** | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes · **un `<select>` de 1.874 opciones no mete el catálogo en el prompt ni en el artefacto y el ancla sigue en pie (A6)** · ninguna `evidence` supera los 32.767 caracteres de una celda de Excel | **entorno**: `libnspr4` con `sudo` (§1.1) — solo para una prueba manual, no para la suite |
 | **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está | **entorno** (igual que QC5) |
 | **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
 | **QC8** | Frontend (§7): selector de modo, select de alias **sin campo de URL**, `evidence-class.ts`, ancla en la fila, `HubSection` "Exploración", `UI:` sin destino, columna del CSV. | Modo A renderiza idéntico · alias vacío ⇒ opción deshabilitada con motivo · `UI:` no abre panel | **⚠️ LLM5** — §9.3 |
@@ -572,11 +572,11 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 **El Modo B no está en este plan.** Está en cero (§1.2) y su plan es QA11–QA12 de la
 PARTE II. QC1 y QC2 le sirven a los dos, así que hacerlos ahora no lo estorba.
 
-## 8.bis Ajustes aprobados antes de implementar (A1–A4) + pendientes (A5)
+## 8.bis Ajustes aprobados al aprobar cada bloque (A1–A6)
 
-Cuatro ajustes al diseño de arriba, acordados al aprobar el plan. Los tres
-primeros se implementaron en QC3; el cuarto es una nota de riesgo que se deja
-escrita para que no sea una sorpresa.
+Ajustes al diseño de arriba, acordados al aprobar cada bloque. Los tres primeros
+se implementaron en QC3; A4 es una nota de riesgo, A5 está **archivada** con su
+disparador escrito, y **A6 es un criterio de QC5** acordado al cerrar QC4.5.
 
 ### A1 — El alias es una fuga, y se cierra por estructura
 
@@ -694,6 +694,68 @@ se explore un sistema **legado** que rotule con **texto dentro del control**
 ExtJS y del PHP de la casa, que es exactamente lo que el Modo C existe para
 explorar. Entonces se implementa en su forma estrecha: **dos tags más en
 `TAGS_ROTULO`**, no una regla sobre el `<td>`, con su candado de celda mixta.
+
+### A6 — El tope de tamaño de la evidencia de un enum es un CRITERIO de QC5
+
+QC4.5 emite el ancla `@enum` con dos campos que crecen con el catálogo: `value`
+(los valores aceptados unidos por `" | "`) y `evidence` (el fragmento **literal**
+del `<select>`, de `<select` a `</select>`). En una pantalla de la casa eso no es
+una lista corta. Medido con el extractor de HEAD, sobre un `<select>` con la forma
+del maestro real:
+
+| Catálogo | opciones | `value` | `evidence` |
+|---|---:|---:|---:|
+| motor de BD (enum de dominio) | 4 | 33 car. | 373 car. |
+| provincias | 196 | 1.761 car. | 15.541 car. |
+| agencias | 400 | 3.597 car. | 31.657 car. |
+| **distritos del Perú (ubigeo)** | **1.874** | **16.863 car.** | **148.103 car.** |
+
+Tres sitios donde ese número duele, y **ninguno es hipotético**:
+
+1. **El prompt.** `alcance_para_prompt` es lo único que el modelo sabe del destino
+   (A1) y QC5 le añade las anclas. UN ancla de ubigeo son **~37.000 tokens**.
+2. **El artefacto.** Se persiste en JSONB y se exporta a PDF.
+3. **El CSV.** `evidence` **ya es una columna** (`export.py:44`, «Evidencia
+   (verbatim)»). El límite de una celda de Excel son **32.767 caracteres**: el
+   `value` de ubigeo cabe, el `evidence` **no**, y el fichero que abre el analista
+   se rompe por una celda.
+
+**El tope NO puede ser un recorte del conjunto.** Un enum a medias produce un caso
+que afirma que un valor legítimo debe rechazarse, y ese caso **pasa la ejecución
+certificando una mentira** (§13.4). Recortar la lista es exactamente el error que
+el módulo se prohíbe.
+
+**Lo que sí, porque el caso no necesita el conjunto entero.** El `invalid_value` de
+un caso de enum ya es un **centinela** en el Modo A (`VALOR_FUERA_DEL_CATALOGO`,
+`edge_cases.py:180`), no un valor derivado del conjunto; y el `valid_value` sale del
+**primero**. Lo único que el conjunto completo aportaba es responder *«¿cambió el
+catálogo?»*, y para eso una **huella** es estrictamente mejor que el catálogo:
+detecta el cambio sin transportarlo. Por encima del tope, el ancla **sigue
+existiendo** y lleva `enum_digest` —cardinalidad + hash estable del conjunto
+ordenado + los primeros valores— en vez del conjunto literal.
+
+**Y de paso cierra una fuga que no es de tamaño.** Un `<select>` de clientes, de
+colaboradores o de jobs es un volcado de datos de producción con forma de enum: en
+**nuestro propio frontend**, 4 de 16 `<select>` tienen identificadores de usuario o
+nombres completos como valores. El `evidence` verbatim de uno de ésos lleva la
+plantilla de personal a un PDF exportable — el mismo riesgo que el guard evita con
+las capturas de pantalla (capa 4). La huella no lo lleva.
+
+**El criterio de QC5, explícito:**
+
+1. `ENUM_MAX_OPCIONES` y `ENUM_MAX_CHARS` son constantes del módulo, cada una **con
+   su motivo escrito al lado**, como el vocabulario de :data:`ATRIBUTOS_ANCLA`.
+2. Por encima del tope se emite `enum_digest`, **nunca** un conjunto recortado. El
+   `evidence` del ancla es entonces la etiqueta de apertura del `<select>`, no su
+   contenido.
+3. Ningún `evidence` de ningún ancla supera los **32.767** caracteres de una celda
+   de Excel. Es un test, no una recomendación.
+4. Un `<select>` de 1.874 opciones **no** mete el catálogo ni en el prompt ni en el
+   artefacto, y **sí** deja el ancla en pie: el hueco no se abre.
+5. **Aplica también al Modo A.** `api_field_boundaries` hace
+   `", ".join(campo["enum"])` sin tope (`edge_cases.py:178`), y un catálogo del
+   `DatabaseArtifact` puede ser igual de largo. El tope se escribe una vez y lo
+   comparten los dos modos, o se arregla la mitad del problema.
 
 ---
 
@@ -1079,10 +1141,30 @@ host del destino dentro de un CSV que se exporta (capa 4 / A1).
 
 El saneador vacía **todo** atributo `value` porque un `value` es un dato de
 producción. Pero el `value` de un `<option>` no es un dato: es el **conjunto de lo
-aceptado**, es decir un límite citable. Distinguirlos exige saber dentro de qué
-elemento se está —árbol y ancestros— y el candado de fixtures tiene prohibido
-construir un árbol (la regla, en §12.7). F2 es exactamente la comprobación que cae
-del lado equivocado de esa línea.
+aceptado**, es decir un límite citable.
+
+**Corrección del motivo, al cerrar QC4.5.** La primera redacción decía que
+distinguirlos exige árbol y ancestros, y que el candado de fixtures tiene prohibido
+construirlo (§12.7). Es falso: saber que se está dentro de un `<select>` es un
+contador sobre el mismo recorrido lineal, igual que `TAGS_ROTULO` ya distingue lo
+que hay dentro de un `<tbody>`. La justificación escrita era **más fuerte que el
+obstáculo real**, y eso es peor que no haber escrito ninguna: cierra la puerta con
+un candado que no existe, y el que la lea mañana ni siquiera intentará abrirla.
+
+**El obstáculo real es el discriminador.** Conservar el `value` de un `<option>`
+conserva **cualquier** lista, y un `<select>` de clientes, de colaboradores o de
+jobs es un volcado de datos de producción con forma de catálogo. Sin una regla que
+separe **catálogo de dominio** de **lista de datos**, "conserva los `value` de
+dentro de un `<select>`" mete en la fixture exactamente lo que el saneador existe
+para sacar. Es la misma distinción que necesita **C4 de QC5** —los *enums falsos*,
+cuyos valores son ULIDs o nombres de personas—, así que F2 no se resuelve antes que
+ella: se resuelven juntas o no se resuelve ninguna.
+
+**Y no abre bloque, porque no está en el camino vivo.** El saneador está entre
+*capturar* y *comitear*, no entre *explorar* y *extraer*: el Modo C real extrae del
+DOM que devuelve el navegador, con sus `value` intactos. F2 no le quita un ancla a
+ninguna exploración; le quita cobertura a las **fixtures**, que es exactamente donde
+se ve.
 
 Consecuencia, fijada con dos tests y no con una nota: **sobre HTML crudo el
 extractor ve el enum de un `<select>`; sobre la fixture saneada del mismo `<select>`
