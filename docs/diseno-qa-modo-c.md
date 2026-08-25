@@ -639,10 +639,11 @@ fragmento de DOM que respalda la evidencia, el motivo por el que una página que
 a medias). No es una desviación: es el precio de fijar un contrato antes de la
 primera observación real, y se asume explícitamente.
 
-### A5 — PENDIENTE, no implementado: un `<td>` con un control es cromo, no dato
+### A5 — ARCHIVADA: un `<td>` con un control es cromo, no dato
 
-La regla se propuso al diseñar A3 y **no aterrizó**. Se anota aquí con número para
-que no vuelva a perderse, y **queda fuera de QC4**: hoy no está implementada.
+La regla se propuso al diseñar A3, **no aterrizó**, y al ir a implementarla se vio
+que **no rescata nada en la pantalla que la motivó**. Queda **archivada, no
+pendiente**: se reabre si aparece su disparador, que está escrito abajo.
 
 **El caso, verificado contra el saneador de HEAD.** Dentro de un `<td>` sobrevive
 solo el texto *rotulado*, y ni `<button>` ni `<a>` están en `TAGS_ROTULO`. Así que
@@ -674,10 +675,23 @@ su forma segura es la estrecha: **es rótulo el texto que está DENTRO del contr
 él**. Es decir, no una regla sobre el `<td>`, sino dos tags más en `TAGS_ROTULO`
 con su candado de celda mixta.
 
-**Cuándo.** Con **QC5**, junto a `SURFACE_MAP`: es entonces cuando se sabe qué
-rótulo necesita de verdad un caso observado, y la fixture del panel de usuarios se
-captura con el explorador real. Antes sería ensanchar la dirección de fuga sin un
-consumidor que lo justifique.
+**Por qué se archiva: el caso en contra.** El ejemplo de arriba —un `<button>` con
+la palabra "Editar" dentro— **no es nuestra pantalla**. En
+`/configuracion/usuarios` el disparador de la fila es un kebab con un **icono** (sin
+texto) cuyo nombre viaja en un `aria-label`, y los ítems del menú ("Editar",
+"Eliminar", "Restablecer contraseña") se renderizan en un **Portal**, fuera de la
+tabla, donde el saneador ya los conserva porque no están en ninguna celda. Es decir:
+A5 rescata **cero** rótulos en la pantalla que la motivó. Y el `aria-label` del
+kebab tampoco es el rótulo que A5 quería salvar —es el **nombre del sujeto de la
+fila**, un dato— así que desde **F1** (§12.7) se vacía por regla, en la dirección
+contraria a la que A5 empujaba.
+
+**Su disparador, para cuando aparezca.** A5 vuelve a estar sobre la mesa el día que
+se explore un sistema **legado** que rotule con **texto dentro del control**
+(`<button>Editar</button>`, `<a>Ver ficha</a>` dentro de la celda) — el patrón de
+ExtJS y del PHP de la casa, que es exactamente lo que el Modo C existe para
+explorar. Entonces se implementa en su forma estrecha: **dos tags más en
+`TAGS_ROTULO`**, no una regla sobre el `<td>`, con su candado de celda mixta.
 
 ---
 
@@ -891,9 +905,73 @@ dice explícitamente que eso es una especificación ejecutable, no una demostrac
 **Suite:** 1395 → 1477 (+82; 77 de QC4 y 5 del candado de la regla R1), sin red,
 sin LLM, sin navegador y sin dependencias nuevas. Frontend intacto (120).
 
-**Dos afinamientos posteriores al cierre, sobre el mismo saneador** (1477 → 1495):
+**Tres afinamientos posteriores al cierre, sobre el mismo saneador** (1477 → 1533):
 el reconocimiento de un mensaje pasó de subcadena a **piezas exactas** con corte de
-herencia en la tabla (la fuga que fallaba hacia conservar), y después la frontera de
+herencia en la tabla (la fuga que fallaba hacia conservar); después la frontera de
 la marca quedó fijada en **«en la fila, en la celda o por debajo»** más la auditoría
-del vocabulario que dejó la lista en 17 piezas, con su candado (decisión 6). No
-abren bloque: QC4 sigue cerrado y QC5 sigue siendo el siguiente.
+del vocabulario que dejó la lista en 17 piezas, con su candado (decisión 6); y por
+último **F1** (§12.7), la fuga que se escondía en los atributos. No abren bloque:
+QC4 sigue cerrado y QC5 sigue siendo el siguiente.
+
+### 12.7 F1 — el texto que se escondía en un atributo
+
+**La fuga.** El saneador vaciaba el **cuerpo** de una celda de datos y no miraba sus
+**atributos**. La pasada de accesibilidad de nuestro propio panel de usuarios pone
+el nombre del sujeto de la fila justo ahí:
+
+```html
+<td><button type="button" aria-label="Acciones de Juan Perez Quispe">⋮</button></td>
+```
+
+El nombre sobrevivía al saneado —ningún patrón de dígitos lo toca— y el candado
+tampoco lo buscaba: sus tres comprobaciones eran RUC, dominio de la casa y `value`.
+Un volcado del panel con usuarios reales habría comiteado los nombres del equipo. Es
+una fuga **activa en la dirección irreversible**, así que se arregló antes de
+capturar nada.
+
+**La regla, y por qué no es una lista de nombres de atributo.** La pregunta no es
+«¿está `aria-label` en mi lista?» sino **«¿renderiza el navegador este valor?»**. Si
+sí, es texto que lee un usuario y se gobierna **exactamente como el texto de una
+celda**: dentro de un `<td>` se vacía salvo rótulo, con el mismo corte de frontera
+tabular; fuera, se conserva enmascarado. Una sola función
+(`_Saneador._gobernar_texto`) decide, y la llaman el cuerpo y los atributos, de modo
+que lo que se añada mañana hereda el régimen sin repetir la decisión.
+
+**Lo que hace estructural la identificación.** En el espacio `aria-` la
+especificación declara el tipo de valor de cada estado y propiedad, así que se
+enumera la mitad **cerrada** —tokens, booleanos, números e IDREF (`ARIA_SIN_PROSA`)—
+y **todo lo demás es prosa por defecto**. La inversión es lo que evita repetir el
+error de forma de `PIEZAS_DE_MENSAJE`: `aria-rowindextext` —prosa, y justo dentro de
+una celda— queda cubierto sin que nadie lo escribiera, y lo que ARIA añada mañana
+entra por el lado **benigno** (se vacía de más, no se comitea de menos). Fuera de
+`aria-` HTML no agrupa nada, así que ahí sí hay lista (`title`, `alt`, `placeholder`,
+`label`, `abbr`, `download`) — pero decide qué se **borra**, que es la dirección
+barata, y cada entrada lleva su caso escrito con su candado, igual que el vocabulario
+de mensajes.
+
+**`aria-describedby` no entra en ninguna de las dos, y es correcto:** su valor es una
+lista de IDREF. El texto que lee el usuario vive en el elemento apuntado, donde ya lo
+gobierna el mismo régimen. Residual declarado: si ese elemento está **fuera** de la
+celda, su texto se conserva — como todo el texto fuera de una celda, que es la
+evidencia.
+
+**El candado gana una cuarta comprobación, y es la única que necesita saber DÓNDE
+está lo que mira.** Hace falta porque **las trampas se escriben a mano y nunca pasan
+por el saneador**, y no puede ser global porque un `aria-label` con contenido fuera
+de una celda es legítimo — prohibirlo en todas partes dejaría a QC4.5 sin fixture con
+la que ejercer su cuarta estrategia de ancla. Se implementa con lo más tonto que
+sirve: una **ventana de subcadena** entre `<td` y `</td>`, sin árbol, sin ancestros y
+sin anidamiento, con la **misma** función de rótulo que usa el saneador —no una
+copia— aplicada a la etiqueta que lleva el atributo. **Residual declarado:** mira esa
+etiqueta y no sus ancestros, así que un `<td class="mensaje-error">` con un botón
+dentro salta en el candado y no en el saneador. Es la dirección segura —el candado
+puede ser más estricto que el saneador, nunca al revés— y se arregla a mano.
+
+**Segundo residual declarado:** un `placeholder` de formato **dentro** de una celda
+(una edición en línea) se pierde. Es la dirección barata —se pierde señal, no se
+comitea un dato— y el descarte queda anotado, así que quien captura lo ve.
+
+**Suite:** 1495 → 1533 (+38), ningún test existente reescrito; en
+`test_fixtures_candado.py` se añaden casos a las dos listas parametrizadas porque el
+candado pasó de tres comprobaciones a cuatro. El caso F1 exacto está fijado con
+nombre y **comprobado contra el código anterior**, donde falla.

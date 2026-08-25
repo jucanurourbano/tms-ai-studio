@@ -47,7 +47,7 @@ def test_el_candado_cubre_todo_el_arbol_y_no_solo_el_html():
     assert len(FICHEROS) >= 10
 
 
-# --- verlo fallar: las tres violaciones, introducidas a propósito ------------
+# --- verlo fallar: las cuatro violaciones, introducidas a propósito ----------
 
 
 @pytest.mark.parametrize(
@@ -60,9 +60,19 @@ def test_el_candado_cubre_todo_el_arbol_y_no_solo_el_html():
         ("value", '<input name="ruc" value="20512345">'),
         ("value", "<option value='150122'>Miraflores</option>"),
         ("value", "<input value=abierto>"),
+        (
+            "texto",
+            "<table><tbody><tr><td>"
+            '<button type="button" aria-label="Acciones de Juan Perez Quispe">⋮</button>'
+            "</td></tr></tbody></table>",
+        ),
+        ("texto", '<td><img alt="Firma de Juan Perez Quispe"></td>'),
     ],
 )
 def test_el_candado_salta_cuando_debe(clase, sucio):
+    """La cuarta clase —``texto``— es la que cierra F1, y es justo la que más falta
+    hace aquí: las trampas se escriben a mano y **nunca pasan por el saneador**, así
+    que para ellas este candado es la única capa que existe."""
     encontradas = violaciones(sucio)
     assert clase in {v.clase for v in encontradas}, f"No detectó {clase} en {sucio}"
 
@@ -102,6 +112,8 @@ def test_los_dominios_de_la_casa_no_dependen_de_que_nadie_los_declare():
         '<input maxlength="11" pattern="[0-9]{11}" minlength="11">',
         '<input data-value="algo">',
         "<p>Formato: tres letras y nueve dígitos.</p>",
+        '<button type="button" aria-label="Buscar guías">🔍</button>',
+        '<table><tbody><tr><td aria-expanded="true">Detalle</td></tr></tbody></table>',
     ],
 )
 def test_el_candado_no_muerde_lo_que_debe_conservarse(limpio):

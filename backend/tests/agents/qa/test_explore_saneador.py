@@ -410,3 +410,236 @@ def test_no_se_escribe_nada_si_lo_saneado_sigue_sucio():
 def test_un_escenario_limpio_no_revienta():
     limpio = _pagina("/", "<h1>Panel</h1>")
     assert escenario_saneado([limpio]).archivos["00_raiz.html"] == "<h1>Panel</h1>"
+
+
+# --- F1: el texto que se esconde en un atributo ------------------------------
+#
+# La fuga que cierra este bloque es la del panel de usuarios de la casa: la pasada
+# de accesibilidad mete el nombre del sujeto de la fila DENTRO de un atributo, donde
+# ni el vaciado de celdas lo veía —mira el cuerpo, no los atributos— ni el candado
+# lo buscaba. Un nombre no lo salva ningún patrón de dígitos: se comiteaba.
+
+#: El caso F1 exacto, tal cual sale de nuestro panel: icono dentro del botón y el
+#: nombre en el ``aria-label``, que es lo único que lo identifica.
+F1 = (
+    "<table><tbody>"
+    '<tr><td><button type="button" aria-label="Acciones de Juan Perez Quispe">'
+    "⋮</button></td></tr>"
+    "</tbody></table>"
+)
+
+
+def test_f1_el_nombre_del_sujeto_de_la_fila_no_sobrevive_en_un_aria_label():
+    """El caso que obliga al bloque. Contra el código anterior este test falla:
+    el ``aria-label`` salía intacto de la celda."""
+    saneado = sanear_html(F1).html
+    assert "Juan Perez Quispe" not in saneado
+    assert 'aria-label=""' in saneado, "el hueco es estructura: se conserva vacío"
+
+
+def test_f1_el_candado_lo_ve_y_no_devuelve_la_lista_vacia():
+    """La otra mitad, y la que importa para las trampas: se escriben a mano y no
+    pasan por el saneador, así que la garantía no puede vivir solo en él."""
+    encontradas = violaciones(F1)
+    assert [v.clase for v in encontradas] == ["texto"]
+    assert "aria-label" in encontradas[0].detalle
+
+
+def test_f1_lo_saneado_pasa_su_propio_candado():
+    """Si no, ``escenario_saneado`` reventaría sobre su propia salida y el bloque
+    sería inconsistente."""
+    assert violaciones(sanear_html(F1).html) == []
+
+
+def test_f1_el_descarte_no_es_silencioso():
+    """``CLAUDE.md`` §8 aplicado al atributo: el retirado dice cuál era."""
+    retirados = sanear_html(F1).retirados
+    assert any(
+        r.clase == "dato" and "aria-label" in r.detalle for r in retirados
+    ), retirados
+
+
+@pytest.mark.parametrize(
+    "atributo, valor",
+    [
+        ("aria-label", "Acciones de Juan Perez Quispe"),
+        ("aria-description", "Guía del cliente Andina S.A.C."),
+        ("title", "Comercializadora Andina S.A.C."),
+        ("alt", "Firma de Juan Perez Quispe"),
+        ("placeholder", "Juan Perez Quispe"),
+        ("label", "Andina S.A.C."),
+        ("abbr", "Andina"),
+        ("download", "guia-de-Juan-Perez.pdf"),
+    ],
+)
+def test_todo_atributo_que_el_navegador_renderiza_se_vacia_en_una_celda(
+    atributo, valor
+):
+    """El régimen es el del texto de la celda, y es el mismo para los seis
+    atributos de HTML y para la prosa de ``aria-``."""
+    sucio = f'<table><tbody><tr><td><span {atributo}="{valor}">x</span></td></tr></tbody></table>'
+    assert valor not in sanear_html(sucio).html
+
+
+# --- la regla es estructural, no una lista de nombres ------------------------
+
+
+def test_un_aria_de_prosa_que_nadie_escribio_ya_esta_cubierto():
+    """La prueba de que la regla no es una lista: ``aria-rowindextext`` es prosa
+    **y vive justo dentro de una celda**, y queda cubierto porque lo que se
+    enumera es la mitad cerrada (tokens, booleanos, números, IDREF)."""
+    sucio = (
+        "<table><tbody><tr>"
+        '<td aria-rowindextext="Guía de Juan Perez Quispe">x</td>'
+        "</tr></tbody></table>"
+    )
+    assert "Juan Perez Quispe" not in sanear_html(sucio).html
+
+
+def test_un_aria_que_la_especificacion_anada_manana_entra_por_el_lado_benigno():
+    """Un atributo ``aria-`` desconocido se trata como prosa: si lo era, no se
+    comitea; si era un token, se pierde señal. La lista abierta es la peligrosa,
+    así que la que se enumera es la otra."""
+    assert sanitize._es_texto_visible("aria-loquesea") is True
+
+
+@pytest.mark.parametrize(
+    "atributo, valor",
+    [
+        ("aria-expanded", "true"),
+        ("aria-live", "polite"),
+        ("aria-describedby", "ayuda-ruc"),
+        ("aria-colindex", "3"),
+        ("aria-invalid", "true"),
+    ],
+)
+def test_los_atributos_aria_que_no_son_prosa_sobreviven_en_la_celda(atributo, valor):
+    """Son estructura —el estado de un acordeón, la región viva, el IDREF de la
+    descripción— y sin ellos la fixture pierde el ancla de un caso."""
+    sucio = (
+        f'<table><tbody><tr><td><button type="button" {atributo}="{valor}">'
+        "x</button></td></tr></tbody></table>"
+    )
+    assert f'{atributo}="{valor}"' in sanear_html(sucio).html
+
+
+def test_aria_describedby_no_es_prosa_y_su_texto_se_gobierna_donde_vive():
+    """El valor es un IDREF: lo que el usuario lee es el texto del elemento
+    apuntado, y ahí ya lo gobierna el mismo régimen. Residual declarado: si ese
+    elemento está fuera de la celda, su texto se conserva —fuera de la celda el
+    texto es la evidencia—. (El id se elige neutro a propósito: un ``id="ayuda"``
+    casa con una pieza de mensaje y el ``<span>`` se conservaría por rótulo, que es
+    otra decisión y no la que este test fija.)"""
+    assert "aria-describedby" in sanitize.ARIA_SIN_PROSA
+    sucio = (
+        "<table><tbody><tr>"
+        '<td><input aria-describedby="d-ruc"><span id="d-ruc">Andina S.A.C.</span></td>'
+        "</tr></tbody></table>"
+    )
+    assert "Andina" not in sanear_html(sucio).html
+
+
+# --- lo que NO se puede llevar por delante -----------------------------------
+
+
+def test_un_rotulo_genuino_fuera_de_una_celda_conserva_su_aria_label():
+    """El icono sin texto es la mitad de los controles de una aplicación: si el
+    saneador se llevara su nombre accesible, la fixture perdería el rótulo del
+    control y QC4.5 se quedaría sin su cuarta estrategia de ancla."""
+    sucio = '<button type="button" aria-label="Buscar guías">🔍</button>'
+    assert 'aria-label="Buscar guías"' in sanear_html(sucio).html
+    assert violaciones(sucio) == []
+
+
+def test_los_placeholder_de_formato_sobreviven_fuera_de_la_celda():
+    """El formato esperado es el ancla de un caso de borde (QA-D2)."""
+    sucio = '<input name="emision" placeholder="DD/MM/AAAA">'
+    assert 'placeholder="DD/MM/AAAA"' in sanear_html(sucio).html
+
+
+def test_un_rotulo_dentro_de_la_celda_tambien_conserva_sus_atributos():
+    """El régimen de los atributos es el del texto, escapatoria de rótulo
+    incluida: un ``<label>`` en la celda rotula sus atributos igual que su texto,
+    y la marca del propio ``<td>`` cuenta como cuenta para el cuerpo."""
+    sucio = (
+        "<table><tbody><tr>"
+        '<td><label title="RUC del shipper">RUC</label></td>'
+        '<td class="mensaje-error" aria-label="Peso no admitido">0 kg</td>'
+        "</tr></tbody></table>"
+    )
+    saneado = sanear_html(sucio).html
+    assert 'title="RUC del shipper"' in saneado
+    assert 'aria-label="Peso no admitido"' in saneado
+
+
+def test_residual_un_placeholder_de_formato_dentro_de_una_celda_se_pierde():
+    """Declarado, no descubierto: una edición en línea dentro de la tabla pierde
+    su pista de formato. Es la dirección barata —se pierde señal, no se comitea un
+    dato— y el descarte queda anotado, así que quien captura lo ve."""
+    sucio = (
+        "<table><tbody><tr>"
+        '<td><input name="emision" placeholder="DD/MM/AAAA"></td>'
+        "</tr></tbody></table>"
+    )
+    resultado = sanear_html(sucio)
+    assert "DD/MM/AAAA" not in resultado.html
+    assert any("placeholder" in r.detalle for r in resultado.retirados)
+
+
+def test_el_enmascarado_de_digitos_sigue_valiendo_en_los_atributos_de_texto():
+    """Fuera de la celda el atributo se conserva, así que la máscara vuelve a ser
+    lo único que separa un rótulo de un identificador de negocio."""
+    sucio = '<a download="guia-20512345678.pdf" href="/g">Descargar</a>'
+    assert f"guia-{MASCARA}.pdf" in sanear_html(sucio).html
+
+
+def test_sanear_sigue_siendo_idempotente_con_atributos_de_texto():
+    una = sanear_html(F1).html
+    assert sanear_html(una).html == una
+
+
+# --- el candado no muerde lo que debe conservarse ----------------------------
+
+
+@pytest.mark.parametrize(
+    "limpio",
+    [
+        '<button type="button" aria-label="Buscar guías">🔍</button>',
+        '<input name="emision" placeholder="DD/MM/AAAA">',
+        '<table><tbody><tr><td><label title="RUC">RUC</label></td></tr></tbody></table>',
+        '<table><tbody><tr><td aria-expanded="true">x</td></tr></tbody></table>',
+        '<table><tbody><tr><td><span class="mensaje-error" title="Sin stock">0</span></td></tr></tbody></table>',
+    ],
+)
+def test_el_candado_de_texto_no_muerde_fuera_de_la_celda_ni_al_rotulo(limpio):
+    """Si mordiera, la salida del saneador no pasaría su propio candado. La
+    escapatoria de rótulo es la misma función en los dos, no una copia."""
+    assert violaciones(limpio) == []
+
+
+def test_el_candado_de_texto_dice_en_que_linea_esta():
+    texto = "<table><tbody>\n<tr>\n" + F1.split("<tbody>")[1]
+    encontradas = [v for v in violaciones(texto) if v.clase == "texto"]
+    assert [v.linea for v in encontradas] == [3]
+
+
+# --- el vocabulario de atributos renderizados también es auditable -----------
+
+#: El formato de una línea de la lista del docstring: atributo y su caso. Las
+#: flechas lo separan del vocabulario de :data:`PIEZAS_DE_MENSAJE`, que usa «—».
+LINEA_DE_ATRIBUTO = re.compile(r"^\* ``([a-z]+)`` → ", re.MULTILINE)
+
+
+def test_el_docstring_documenta_exactamente_los_atributos_renderizados():
+    """Mismo régimen que las piezas de mensaje: una lista de literales cuyo caso
+    vive en un docstring solo es auditable si los dos no pueden separarse."""
+    documentados = set(LINEA_DE_ATRIBUTO.findall(sanitize.__doc__ or ""))
+    assert documentados == set(sanitize.ATRIBUTOS_RENDERIZADOS)
+
+
+def test_la_mitad_enumerada_de_aria_es_la_cerrada():
+    """El candado de la decisión: lo que se enumera son los tokens, y la prosa es
+    el default. Si alguien invirtiera la lista, esto salta."""
+    assert "aria-label" not in sanitize.ARIA_SIN_PROSA
+    assert "aria-live" in sanitize.ARIA_SIN_PROSA
+    assert all(nombre.startswith("aria-") for nombre in sanitize.ARIA_SIN_PROSA)

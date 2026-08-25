@@ -47,6 +47,46 @@ Tres decisiones que conviene justificar porque no están en la tabla del diseño
    positivo que el ``<div class="error-boundary">`` —envuelven la tabla entera—,
    así que se les aplica el corte igual que a un ancestro cualquiera.
 
+4. **El valor de un atributo que el usuario LEE es texto, y se gobierna como
+   el texto de una celda.** El caso que lo obliga es nuestro propio panel:
+   ``<td><button aria-label="Acciones de Juan Pérez Quispe">⋮</button></td>``. La
+   pasada de accesibilidad mete el nombre del sujeto de la fila DENTRO de un
+   atributo, donde ni el vaciado de celdas lo veía ni el candado lo buscaba —el
+   nombre sobrevivía al saneado y se comiteaba—. La regla **no** es una lista de
+   nombres de atributo (ese es el error de forma que se corrigió en
+   :data:`PIEZAS_DE_MENSAJE`) sino una pregunta con respuesta estructural:
+   *¿renderiza el navegador este valor?* En el espacio ``aria-`` la responde la
+   propia especificación, que declara el tipo de valor de cada estado y propiedad;
+   así que se enumera la mitad **cerrada** —tokens, booleanos, números e IDREF
+   (:data:`ARIA_SIN_PROSA`)— y **todo lo demás en ese espacio es prosa por
+   defecto**. La inversión es lo que hace que la regla no envejezca: un
+   ``aria-rowindextext`` —prosa, y justo dentro de una celda— queda cubierto sin
+   que nadie lo haya escrito, y lo que la especificación añada mañana entra por el
+   lado benigno (se vacía de más, no se comitea de menos). Fuera de ``aria-`` HTML
+   no da ningún marcador, así que ahí sí hay una lista
+   (:data:`ATRIBUTOS_RENDERIZADOS`) — pero decide qué se **borra**, que es la
+   dirección barata, y cada entrada lleva su caso escrito abajo.
+
+**Los atributos renderizados, uno por uno** (:data:`ATRIBUTOS_RENDERIZADOS`). Aquí
+el caso no es «lo vimos en un sistema» sino «el navegador lo pinta», que es
+comprobable sin explorar nada:
+
+* ``title`` → el navegador lo pinta como *tooltip* al posar el cursor.
+* ``alt`` → sustituye a la imagen cuando no carga, y lo lee el lector de pantalla.
+* ``placeholder`` → se pinta dentro del control mientras está vacío.
+* ``label`` → es el rótulo visible de un ``<option>``/``<optgroup>``/``<track>``.
+* ``abbr`` → la forma corta del encabezado que anuncia el lector de pantalla.
+* ``download`` → el nombre de fichero que ve quien descarga
+  (``guia-########.pdf`` lleva el identificador dentro).
+
+**``aria-describedby`` no está en ninguna de las dos listas, y es correcto**: su
+valor es una lista de IDREF, no prosa. El texto de la descripción vive en el
+elemento al que apunta, y ahí ya lo gobierna el mismo régimen que a cualquier otro
+texto. Residual declarado: si ese elemento está FUERA de la celda —un
+``<span class="sr-only">`` colgado al final del documento— su texto se conserva,
+igual que se conserva todo el texto fuera de una celda, porque fuera de la celda el
+texto es la evidencia.
+
 **El vocabulario, pieza por pieza.** :data:`PIEZAS_DE_MENSAJE` tiene **17** piezas
 y la lista es auditable a propósito: cada una lleva escrito su caso, porque una
 lista de literales sin su caso al lado es indistinguible de una lista completada a
@@ -108,7 +148,8 @@ así que ensanchar la fuga en el mismo commit que la cerró no se sostenía.
 
 El candado (:func:`violaciones`) es lo que prueba que la línea quedó donde debía:
 ninguna fixture con una secuencia de 8+ dígitos, ni el dominio de la casa, ni un
-atributo ``value`` con contenido. Es el mismo criterio con el que ``redact_dsn``
+atributo ``value`` con contenido, ni un atributo de texto visible con contenido
+dentro de una celda de datos. Es el mismo criterio con el que ``redact_dsn``
 protege la introspección de INV2, aplicado al artefacto de test.
 """
 
@@ -162,6 +203,80 @@ NOMBRES_SENSIBLES = (
     "auth",
     "cookie",
     "secret",
+)
+
+#: Atributos ARIA cuyo valor **NO** es prosa. La lista está cerrada por la
+#: especificación ARIA, que declara el tipo de valor de cada estado y propiedad:
+#: aquí están todos los de tipo ``true/false``, ``tristate``, ``token``,
+#: ``token list``, ``integer``, ``number``, ``ID reference`` e
+#: ``ID reference list``.
+#:
+#: **Se enumera esta mitad y no la contraria a propósito.** La mitad de prosa es
+#: la abierta —crece con la especificación y con lo que cada framework decida
+#: rotular— y es la peligrosa: lo que no esté en ella se comitea. La mitad de
+#: tokens es la cerrada, y dejarse una entrada fuera solo cuesta vaciar un token
+#: dentro de una celda: se pierde señal, no se filtra un dato. Es la misma
+#: asimetría de :data:`NOMBRES_SENSIBLES`, resuelta al revés porque aquí lo que se
+#: enumera es la excepción.
+ARIA_SIN_PROSA = frozenset(
+    {
+        # true/false y tristate
+        "aria-atomic",
+        "aria-busy",
+        "aria-checked",
+        "aria-disabled",
+        "aria-expanded",
+        "aria-grabbed",
+        "aria-hidden",
+        "aria-modal",
+        "aria-multiline",
+        "aria-multiselectable",
+        "aria-pressed",
+        "aria-readonly",
+        "aria-required",
+        "aria-selected",
+        # token y token list
+        "aria-autocomplete",
+        "aria-current",
+        "aria-dropeffect",
+        "aria-haspopup",
+        "aria-invalid",
+        "aria-live",
+        "aria-orientation",
+        "aria-relevant",
+        "aria-sort",
+        # ID reference y ID reference list
+        "aria-activedescendant",
+        "aria-controls",
+        "aria-describedby",
+        "aria-details",
+        "aria-errormessage",
+        "aria-flowto",
+        "aria-labelledby",
+        "aria-owns",
+        # integer y number
+        "aria-colcount",
+        "aria-colindex",
+        "aria-colspan",
+        "aria-level",
+        "aria-posinset",
+        "aria-rowcount",
+        "aria-rowindex",
+        "aria-rowspan",
+        "aria-setsize",
+        "aria-valuemax",
+        "aria-valuemin",
+        "aria-valuenow",
+    }
+)
+
+#: Atributos **fuera** del espacio ``aria-`` cuyo valor el navegador renderiza.
+#: HTML no tiene un prefijo que los agrupe, así que esta mitad sí es una lista; el
+#: caso de cada entrada está en el docstring del módulo, y es comprobable sin
+#: explorar nada («el navegador lo pinta»). Decide qué se BORRA, así que casar de
+#: más solo cuesta un atributo de presentación.
+ATRIBUTOS_RENDERIZADOS = frozenset(
+    {"title", "alt", "placeholder", "label", "abbr", "download"}
 )
 
 #: Atributos cuyo valor puede ser una URL absoluta al host explorado.
@@ -268,6 +383,22 @@ PATRON_VALUE = re.compile(
     re.IGNORECASE,
 )
 
+#: La **ventana** de una celda de datos, en texto plano. Es la cosa más tonta que
+#: sirve para la cuarta comprobación del candado: una subcadena entre ``<td`` y
+#: ``</td>``, sin árbol, sin ancestros y sin anidamiento. El candado no mira el DOM
+#: —eso es justo lo que lo hace confiable sobre un ``.html``, un ``.json`` y un
+#: README— pero un ``aria-label`` con contenido FUERA de una celda es legítimo, así
+#: que sin saber dónde está no hay comprobación posible.
+PATRON_CELDA = re.compile(r"<td\b.*?</td\s*>", re.IGNORECASE | re.DOTALL)
+
+#: Una etiqueta de apertura y su bloque de atributos, dentro de esa ventana.
+PATRON_ETIQUETA = re.compile(r"<([a-z][a-z0-9:-]*)\b([^>]*)>", re.IGNORECASE)
+
+#: Un atributo con valor, en las tres formas que admite HTML.
+PATRON_ATRIBUTO = re.compile(
+    r"""([a-zA-Z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))"""
+)
+
 _DESCARTADO: Any = object()
 
 
@@ -330,6 +461,40 @@ def _piezas(*valores: Optional[str]) -> set[str]:
     return piezas
 
 
+def _es_rotulo(tag: str, attrs: dict[str, Optional[str]]) -> bool:
+    """¿Este elemento **rotula**? Su texto es evidencia, no dato.
+
+    Vive aquí, y no dentro del saneador, porque el candado tiene que reconocer un
+    rótulo exactamente igual: dos copias de esta pregunta se separan el día que
+    alguien añada una señal a una sola de ellas.
+    """
+    if tag in TAGS_ROTULO:
+        return True
+    if (attrs.get("role") or "").strip().lower() in ROLES_DE_MENSAJE:
+        return True
+    if "aria-live" in attrs:
+        return True
+    return bool(_piezas(attrs.get("class"), attrs.get("id")) & PIEZAS_DE_MENSAJE)
+
+
+def _es_texto_visible(nombre: str) -> bool:
+    """¿Renderiza el navegador el valor de este atributo?
+
+    Si la respuesta es sí, el valor es **texto que lee un usuario** y se gobierna
+    como el texto de una celda: dentro de una celda de datos se vacía, fuera se
+    conserva enmascarado. La pregunta se responde por **estructura**: en el
+    espacio ``aria-`` la especificación declara el tipo de cada atributo, así que
+    se enumera la mitad cerrada (:data:`ARIA_SIN_PROSA`) y lo demás es prosa por
+    defecto; fuera de ``aria-`` HTML no agrupa nada y queda la lista
+    :data:`ATRIBUTOS_RENDERIZADOS`, con el caso de cada entrada en el docstring
+    del módulo.
+    """
+    nombre = nombre.lower()
+    if nombre.startswith("aria-"):
+        return nombre not in ARIA_SIN_PROSA
+    return nombre in ATRIBUTOS_RENDERIZADOS
+
+
 class _Saneador(HTMLParser):
     """Reescribe el HTML conservando la forma y vaciando el contenido.
 
@@ -360,16 +525,24 @@ class _Saneador(HTMLParser):
     def _anotar(self, clase: str, detalle: str) -> None:
         self._retirados.append(Retirado(clase=clase, detalle=detalle))
 
-    # --- clasificación --------------------------------------------------------
+    # --- el texto que lee un usuario -----------------------------------------
 
-    def _es_rotulo(self, tag: str, attrs: dict[str, Optional[str]]) -> bool:
-        if tag in TAGS_ROTULO:
-            return True
-        if (attrs.get("role") or "").strip().lower() in ROLES_DE_MENSAJE:
-            return True
-        if "aria-live" in attrs:
-            return True
-        return bool(_piezas(attrs.get("class"), attrs.get("id")) & PIEZAS_DE_MENSAJE)
+    def _gobernar_texto(self, texto: str, *, origen: str, vaciar: bool) -> str:
+        """El **único** sitio donde se decide qué pasa con el texto visible.
+
+        Da igual si viene del cuerpo de una celda o del valor de un atributo que el
+        navegador renderiza: el régimen es el mismo y está escrito una sola vez.
+        Por eso gobernar un atributo nuevo es añadirlo a la pregunta de
+        :func:`_es_texto_visible`, no repetir aquí la decisión.
+        """
+        if vaciar:
+            if not texto.strip():
+                return texto
+            self._anotar(
+                "dato", f"Contenido de {origen} ({len(texto.strip())} caracteres)"
+            )
+            return _solo_espacios(texto)
+        return self._enmascarar(texto, origen=origen)
 
     # --- atributos ------------------------------------------------------------
 
@@ -393,7 +566,9 @@ class _Saneador(HTMLParser):
             self._anotar("digitos", f"Secuencia larga de dígitos en {origen}")
         return limpio
 
-    def _sanear_atributo(self, nombre: str, valor: Optional[str]) -> Any:
+    def _sanear_atributo(
+        self, nombre: str, valor: Optional[str], *, vaciar_texto: bool
+    ) -> Any:
         nombre = nombre.lower()
         if nombre.startswith("on"):
             self._anotar("manejador", f"Atributo «{nombre}»")
@@ -409,12 +584,20 @@ class _Saneador(HTMLParser):
             return None
         if nombre in ATRIBUTOS_URL:
             valor = self._acortar_url(valor)
+        # El valor que el navegador renderiza es texto que lee un usuario, así que
+        # se gobierna igual que el texto de una celda. Sin esto, la pasada de
+        # accesibilidad metía el nombre del sujeto de la fila en un `aria-label` y
+        # el vaciado de celdas —que solo miraba el cuerpo— no lo veía.
+        if _es_texto_visible(nombre):
+            return self._gobernar_texto(
+                valor, origen=f"el atributo «{nombre}»", vaciar=vaciar_texto
+            )
         return self._enmascarar(valor, origen=f"el atributo «{nombre}»")
 
-    def _apertura(self, tag: str, attrs, cierre_propio: bool) -> str:
+    def _apertura(self, tag: str, attrs, cierre_propio: bool, vaciar: bool) -> str:
         partes = [tag]
         for nombre, valor in attrs:
-            saneado = self._sanear_atributo(nombre or "", valor)
+            saneado = self._sanear_atributo(nombre or "", valor, vaciar_texto=vaciar)
             if saneado is _DESCARTADO:
                 continue
             if saneado is None:
@@ -442,10 +625,16 @@ class _Saneador(HTMLParser):
         # Un ``<tbody class="mensaje-error">`` es un envoltorio, no un mensaje: su
         # marca no cuenta ni para sí misma. La fila sí, y por eso ``<tr>`` no está
         # en este conjunto.
-        rotulo = tag not in ENVOLTORIOS_TABULARES and self._es_rotulo(tag, mapa)
+        rotulo = tag not in ENVOLTORIOS_TABULARES and _es_rotulo(tag, mapa)
+
+        # El régimen de los atributos de ESTE elemento suma su propia condición: un
+        # ``<td aria-label=…>`` ya está en la celda que abre, y un
+        # ``<label title=…>`` rotula sus propios atributos igual que su texto. Los
+        # contadores todavía no se han incrementado, así que se suman aquí.
+        vaciar = bool(self._celdas + int(celda)) and not (self._rotulos + int(rotulo))
 
         if not suprimido and self._suprimidos == 0:
-            self._piezas.append(self._apertura(tag, attrs, cierre_propio))
+            self._piezas.append(self._apertura(tag, attrs, cierre_propio, vaciar))
 
         if cierre_propio or tag in TAGS_VACIOS:
             return
@@ -490,14 +679,14 @@ class _Saneador(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._suprimidos:
             return
-        if self._celdas and not self._rotulos:
-            if data.strip():
-                self._anotar("dato", f"Texto de celda ({len(data.strip())} caracteres)")
-                self._piezas.append(_solo_espacios(data))
-            else:
-                self._piezas.append(data)
-            return
-        self._piezas.append(self._enmascarar(data, origen="el texto"))
+        en_celda = bool(self._celdas) and not self._rotulos
+        self._piezas.append(
+            self._gobernar_texto(
+                data,
+                origen="la celda" if en_celda else "el texto",
+                vaciar=en_celda,
+            )
+        )
 
     def handle_entityref(self, name: str) -> None:
         if self._suprimidos or (self._celdas and not self._rotulos):
@@ -534,12 +723,60 @@ def sanear_html(html: str, *, hosts_a_ocultar: Iterable[str] = ()) -> ResultadoS
     return saneador.resultado()
 
 
+def _atributos_de(bloque: str) -> dict[str, str]:
+    """Los atributos de una etiqueta, sin construir nada parecido a un DOM."""
+    return {
+        nombre.lower(): next(v for v in (dobles, simples, suelto) if v is not None)
+        for nombre, dobles, simples, suelto in PATRON_ATRIBUTO.findall(bloque)
+    }
+
+
+def _texto_visible_en_celdas(texto: str) -> list[Violacion]:
+    """La cuarta comprobación: un nombre metido en un atributo de una celda.
+
+    El caso es el panel de usuarios de la casa —``<td><button aria-label="Acciones
+    de …">``— y lo que lo hace peligroso es que ni el vaciado de celdas del
+    saneador lo veía (mira el cuerpo, no los atributos) ni el candado lo buscaba.
+    Hace falta aquí, y no solo en el saneador, porque **las trampas se escriben a
+    mano y nunca pasan por él**.
+
+    La escapatoria de rótulo es la del saneador —la misma :func:`_es_rotulo`, no
+    una copia— aplicada a la etiqueta que lleva el atributo. Residual declarado:
+    mira esa etiqueta, no sus ancestros, así que un ``<td class="mensaje-error">``
+    con un botón dentro salta aquí y no allí. Es la dirección segura —el candado
+    puede ser más estricto que el saneador, nunca al revés— y se arregla a mano.
+    """
+    encontradas: list[Violacion] = []
+    for celda in PATRON_CELDA.finditer(texto):
+        for etiqueta in PATRON_ETIQUETA.finditer(celda.group(0)):
+            atributos = _atributos_de(etiqueta.group(2))
+            if _es_rotulo(etiqueta.group(1).lower(), atributos):
+                continue
+            inicio = celda.start() + etiqueta.start()
+            for nombre, valor in sorted(atributos.items()):
+                if valor.strip() and _es_texto_visible(nombre):
+                    encontradas.append(
+                        Violacion(
+                            "texto",
+                            f"El atributo «{nombre}» lleva «{valor}» dentro de una "
+                            "celda de datos: lo que el usuario lee es texto, y el "
+                            "texto de una celda no se comitea.",
+                            texto.count("\n", 0, inicio) + 1,
+                        )
+                    )
+    return encontradas
+
+
 def violaciones(texto: str, *, hosts_prohibidos: Iterable[str] = ()) -> list[Violacion]:
-    """El candado sobre las fixtures. Tres comprobaciones, ni una más.
+    """El candado sobre las fixtures. Cuatro comprobaciones, ni una más.
 
     Es deliberadamente tonto —trabaja sobre el texto, no sobre el DOM— porque
     tiene que valer igual para un ``.html``, un ``manifest.json`` y un README, y
     porque un candado que hay que entender para confiar en él no es un candado.
+    Las tres primeras ni siquiera miran dónde está lo que encuentran: un RUC, el
+    dominio de la casa y un ``value`` con contenido están de más en cualquier
+    sitio. La cuarta —:func:`_texto_visible_en_celdas`— es la única que necesita
+    saberlo, y por eso usa lo más tonto que sirve: una ventana de subcadena.
     """
     prohibidos = _hosts_efectivos(hosts_prohibidos)
     encontradas: list[Violacion] = []
@@ -577,7 +814,9 @@ def violaciones(texto: str, *, hosts_prohibidos: Iterable[str] = ()) -> list[Vio
                         numero,
                     )
                 )
-    return encontradas
+    encontradas.extend(_texto_visible_en_celdas(texto or ""))
+    # Estable: dentro de una misma línea se respeta el orden en que se hallaron.
+    return sorted(encontradas, key=lambda violacion: violacion.linea)
 
 
 @dataclass(frozen=True)
