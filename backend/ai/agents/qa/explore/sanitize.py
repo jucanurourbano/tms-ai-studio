@@ -18,7 +18,7 @@ y los rótulos, se borran los datos*.
 * **Datos**: el ``value`` de cada control, el texto suelto de las celdas de datos,
   las secuencias largas de dígitos (guía, RUC, DNI), los tokens y el host real.
 
-Dos decisiones que conviene justificar porque no están en la tabla del diseño:
+Tres decisiones que conviene justificar porque no están en la tabla del diseño:
 
 1. **Los manejadores en línea (``onclick``…) se borran por el mismo motivo que
    ``<script>``**: son código, no estructura ni rótulo, y un ``onclick`` capturado
@@ -29,6 +29,15 @@ Dos decisiones que conviene justificar porque no están en la tabla del diseño:
 2. **Las URLs absolutas del host explorado se reescriben a su *path***. Si no, la
    fixture llevaría escrito el mapa de la infraestructura, que es exactamente lo
    que la capa 1 del guard mantiene fuera del prompt (A1).
+3. **Reconocer un mensaje por su ``class``/``id`` se hace por piezas exactas, y la
+   concesión no cruza hacia dentro de una tabla.** Las dos mitades arreglan la
+   misma fuga, que fallaba hacia CONSERVAR: por subcadena, ``class="terror"``
+   casaba con ``error`` y salvaba el dato de una celda, y un
+   ``class="error-boundary"`` —un envoltorio de React— alrededor de una tabla la
+   salvaba entera. Ninguna de las dos hereda nada, porque fuera de una celda el
+   texto se conserva igual: una marca por encima de la tabla no aportaba señal,
+   solo podía conservar datos de producción. El mismo corte se aplica a ``role``
+   y ``aria-live``, que comparten el contador de la concesión.
 
 El candado (:func:`violaciones`) es lo que prueba que la línea quedó donde debía:
 ninguna fixture con una secuencia de 8+ dígitos, ni el dominio de la casa, ni un
@@ -66,6 +75,15 @@ META_CONSERVADAS = frozenset({"charset", "viewport"})
 ATRIBUTOS_VACIADOS = frozenset({"value"})
 
 #: Un atributo cuyo nombre contenga cualquiera de estos trozos se borra entero.
+#:
+#: **La asimetría con** :data:`PIEZAS_DE_MENSAJE` **es deliberada, no un descuido:
+#: las dos listas empujan en direcciones opuestas.** Esta decide qué se BORRA, así
+#: que casar de más es gratis (se pierde un atributo de presentación) y casar de
+#: menos es una fuga. Por eso sigue siendo por subcadena: ``csrfmiddlewaretoken``
+#: —el nombre real del campo de Django— es UNA pieza, y con comparación exacta el
+#: token sobreviviría; lo mismo ``data-sessionid`` o ``authtoken``. La otra decide
+#: qué se CONSERVA dentro de una celda de datos, así que casar de más conserva
+#: datos de producción: ahí la comparación tiene que ser exacta.
 NOMBRES_SENSIBLES = (
     "token",
     "csrf",
@@ -104,25 +122,54 @@ TAGS_ROTULO = frozenset(
     }
 )
 
-#: Trozos de ``class``/``id`` con los que una aplicación marca un mensaje. Un
+#: Elementos de estructura tabular. Abrir cualquiera de ellos **corta la herencia**
+#: de la concesión de mensaje: solo cuenta una marca puesta en la celda o dentro
+#: de ella. Sin este corte, un ``<div class="error-boundary">`` —un envoltorio de
+#: React, no un mensaje— alrededor de una tabla conservaba la tabla entera. Y no
+#: se pierde nada: fuera de una celda el texto se conserva de todas formas, así
+#: que una marca por encima de la tabla nunca aportaba, solo podía conservar de más.
+TAGS_TABULARES = frozenset({"table", "thead", "tbody", "tfoot", "tr"})
+
+#: Piezas de ``class``/``id`` con las que una aplicación marca un mensaje. Un
 #: mensaje de error renderizado es una validación observada: sobrevive.
-MARCAS_DE_MENSAJE = (
-    "error",
-    "invalid",
-    "warning",
-    "alert",
-    "aviso",
-    "mensaje",
-    "message",
-    "help",
-    "hint",
-    "ayuda",
-    "feedback",
-    "validation",
-    "validacion",
-    "required",
-    "requerido",
+#:
+#: **Se comparan como piezas EXACTAS, nunca por subcadena.** Por subcadena,
+#: ``<td class="terror">`` casaba con ``error`` y conservaba el dato de la celda:
+#: una fuga que fallaba hacia conservar, que es la dirección mala. El valor se
+#: trocea por sus separadores (:data:`PATRON_PIEZAS`) y cada pieza se busca aquí.
+#:
+#: La lista es de piezas literales a propósito: añadir una variante es una línea y
+#: no cambia la semántica de nadie. Casar de menos solo vacía el texto de una celda
+#: —se pierde señal, no se filtra un dato—, así que el default es benigno.
+PIEZAS_DE_MENSAJE = frozenset(
+    {
+        "error",
+        "errors",
+        "errores",
+        "invalid",
+        "warning",
+        "alert",
+        "aviso",
+        "danger",
+        "destructive",
+        "mensaje",
+        "mensajes",
+        "message",
+        "help",
+        "hint",
+        "ayuda",
+        "feedback",
+        "validation",
+        "validacion",
+        "required",
+        "requerido",
+    }
 )
+
+#: Con qué se trocean ``class`` e ``id``: cualquier corrida de caracteres que no
+#: sea alfanumérica. Cubre los separadores de la casa (``-``, ``_``, ``:``, espacio)
+#: y también los de Tailwind (``md:text-destructive/50``).
+PATRON_PIEZAS = re.compile(r"[^a-z0-9]+")
 
 #: Roles ARIA que declaran un mensaje al usuario.
 ROLES_DE_MENSAJE = frozenset({"alert", "alertdialog", "status"})
@@ -189,6 +236,19 @@ def _es_de_la_casa(host: str, prohibidos: Sequence[str]) -> bool:
     return any(host == p or host.endswith("." + p) for p in prohibidos)
 
 
+def _piezas(*valores: Optional[str]) -> set[str]:
+    """Trocea cada valor por separado y devuelve la unión de sus piezas.
+
+    Por separado a propósito: si se concatenaran ``class`` e ``id`` antes de
+    trocear, dos valores inocentes podrían formar una pieza que ninguno de los
+    dos tiene.
+    """
+    piezas: set[str] = set()
+    for valor in valores:
+        piezas.update(p for p in PATRON_PIEZAS.split((valor or "").lower()) if p)
+    return piezas
+
+
 class _Saneador(HTMLParser):
     """Reescribe el HTML conservando la forma y vaciando el contenido.
 
@@ -203,7 +263,8 @@ class _Saneador(HTMLParser):
         self._hosts = hosts_prohibidos
         self._piezas: list[str] = []
         self._retirados: list[Retirado] = []
-        self._pila: list[tuple[str, bool, bool, bool]] = []
+        #: (tag, suprimido, celda, rotulo, concesión heredada que hay que restaurar)
+        self._pila: list[tuple[str, bool, bool, bool, Optional[int]]] = []
         self._suprimidos = 0
         self._celdas = 0
         self._rotulos = 0
@@ -227,8 +288,7 @@ class _Saneador(HTMLParser):
             return True
         if "aria-live" in attrs:
             return True
-        marcas = f"{attrs.get('class') or ''} {attrs.get('id') or ''}".lower()
-        return any(marca in marcas for marca in MARCAS_DE_MENSAJE)
+        return bool(_piezas(attrs.get("class"), attrs.get("id")) & PIEZAS_DE_MENSAJE)
 
     # --- atributos ------------------------------------------------------------
 
@@ -306,7 +366,15 @@ class _Saneador(HTMLParser):
         if cierre_propio or tag in TAGS_VACIOS:
             return
 
-        self._pila.append((tag, suprimido, celda, rotulo))
+        # La estructura tabular corta la herencia de la concesión de mensaje: lo
+        # que valga aquí dentro tiene que estar marcado desde la celda o por
+        # debajo. La marca del propio elemento sí cuenta, se aplica después.
+        guardado: Optional[int] = None
+        if tag in TAGS_TABULARES:
+            guardado = self._rotulos
+            self._rotulos = 0
+
+        self._pila.append((tag, suprimido, celda, rotulo, guardado))
         self._suprimidos += int(suprimido)
         self._celdas += int(celda)
         self._rotulos += int(rotulo)
@@ -323,10 +391,12 @@ class _Saneador(HTMLParser):
             # Cierre huérfano: se descarta, como haría el navegador.
             return
         while self._pila:
-            nombre, suprimido, celda, rotulo = self._pila.pop()
+            nombre, suprimido, celda, rotulo, guardado = self._pila.pop()
             self._suprimidos -= int(suprimido)
             self._celdas -= int(celda)
             self._rotulos -= int(rotulo)
+            if guardado is not None:
+                self._rotulos = guardado
             if not suprimido and self._suprimidos == 0:
                 self._piezas.append(f"</{nombre}>")
             if nombre == tag:

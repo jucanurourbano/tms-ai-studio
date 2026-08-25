@@ -184,6 +184,79 @@ def test_los_descartes_nunca_son_silenciosos(saneada):
     }
 
 
+# --- reconocer un mensaje: piezas exactas, sin herencia hacia la tabla --------
+#
+# La fuga que cierra este bloque fallaba hacia CONSERVAR, que es la dirección mala:
+# lo que sobrevive dentro de un ``<tbody>`` son datos de producción comiteados.
+
+
+def test_una_pieza_que_solo_contiene_a_la_marca_no_es_un_mensaje():
+    """``terror`` casaba con ``error`` por subcadena y salvaba el dato."""
+    sucio = (
+        '<table><tbody><tr><td class="terror">Andina S.A.C.</td></tr></tbody></table>'
+    )
+    assert "Andina" not in sanear_html(sucio).html
+
+
+def test_un_envoltorio_marcado_no_conserva_el_tbody_que_envuelve():
+    """``error-boundary`` es un envoltorio de React, no un mensaje. Y aunque
+    ``error`` sí es una de sus piezas, la concesión no cruza hacia dentro de una
+    tabla: por encima de la celda no aportaba señal, solo podía conservar datos."""
+    sucio = (
+        '<div class="error-boundary"><table><tbody>'
+        "<tr><td>Comercializadora Andina S.A.C.</td></tr>"
+        "</tbody></table></div>"
+    )
+    assert "Andina" not in sanear_html(sucio).html
+
+
+def test_el_corte_tabular_tampoco_hereda_desde_role_ni_aria_live():
+    """``role`` y ``aria-live`` comparten el contador de la concesión, así que el
+    corte los cubre igual: un panel de alerta con una tabla dentro sigue siendo
+    una tabla de datos."""
+    sucio = (
+        '<div role="alert"><table><tbody>'
+        "<tr><td>Comercializadora Andina S.A.C.</td></tr>"
+        "</tbody></table></div>"
+    )
+    assert "Andina" not in sanear_html(sucio).html
+
+
+@pytest.mark.parametrize(
+    "marca",
+    ["text-destructive", "mensaje-error", "estado-error", "mensaje-ayuda"],
+)
+def test_las_marcas_legitimas_siguen_conservando_el_mensaje(marca):
+    """Lo que la narrowing NO puede llevarse: el mensaje renderizado dentro de la
+    celda, que es la evidencia verbatim que acepta QA-D2. ``text-destructive`` es
+    la convención de Tailwind del frontend de la casa: casa por la pieza
+    ``destructive``."""
+    sucio = (
+        "<table><tbody><tr><td>"
+        f'<span class="{marca}">El RUC debe tener 11 dígitos.</span>'
+        "</td></tr></tbody></table>"
+    )
+    assert "El RUC debe tener 11 dígitos." in sanear_html(sucio).html
+
+
+def test_la_marca_puede_ir_en_la_propia_celda():
+    """El corte tabular no se lleva la marca del ``<td>`` mismo: corta la
+    herencia de los ancestros, no lo que está en la celda o por debajo."""
+    sucio = '<table><tbody><tr><td class="mensaje-error">Sin stock</td></tr></tbody></table>'
+    assert "Sin stock" in sanear_html(sucio).html
+
+
+def test_las_piezas_de_class_y_de_id_no_se_concatenan():
+    """Si se juntaran antes de trocear, dos valores inocentes formarían una pieza
+    que ninguno de los dos tiene."""
+    sucio = (
+        "<table><tbody><tr>"
+        '<td class="mens" id="aje">Comercializadora Andina S.A.C.</td>'
+        "</tr></tbody></table>"
+    )
+    assert "Andina" not in sanear_html(sucio).html
+
+
 # --- propiedades --------------------------------------------------------------
 
 
