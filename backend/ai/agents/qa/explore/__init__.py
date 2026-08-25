@@ -51,6 +51,16 @@ from ai.agents.qa.explore.navigation import (
     assert_navigation_allowed,
     evaluar_navegacion,
 )
+from ai.agents.qa.explore.sanitize import (
+    ORIGEN_DE_FIXTURE,
+    CapturaSuciaError,
+    Escenario,
+    ResultadoSaneado,
+    Violacion,
+    escenario_saneado,
+    sanear_html,
+    violaciones,
+)
 from ai.agents.qa.explore.session import (
     ExploreSession,
     PaginaObservada,
@@ -69,18 +79,23 @@ from ai.agents.qa.explore.target import (
 
 __all__ = [
     "BrowserDriver",
+    "CapturaSuciaError",
     "DriverNoDisponibleError",
     "ESQUEMAS_PERMITIDOS",
     "Elemento",
+    "Escenario",
     "ExploreSession",
     "ExploreTarget",
     "HOSTS_LOCALES",
     "LimitesExploracion",
+    "ORIGEN_DE_FIXTURE",
     "PaginaObservada",
     "RespuestaNavegacion",
+    "ResultadoSaneado",
     "SalidaBloqueada",
     "Veredicto",
     "VeredictoNavegacion",
+    "Violacion",
     "alcance_para_prompt",
     "assert_navigation_allowed",
     "assert_target_authorized",
@@ -90,9 +105,12 @@ __all__ = [
     "elementos",
     "elementos_pulsables",
     "es_pulsable",
+    "escenario_saneado",
     "evaluar_navegacion",
     "limites_efectivos",
     "origin_ref_for",
     "redact_url",
+    "sanear_html",
     "selector_de",
+    "violaciones",
 ]

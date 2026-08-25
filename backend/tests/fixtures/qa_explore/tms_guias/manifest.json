@@ -1,0 +1,20 @@
+{
+  "escenario": "tms_guias",
+  "descripcion": "Aplicación de guías de envío observada: acceso, listado y alta.",
+  "origin": "https://tms.interno",
+  "entry": "/",
+  "visit_order": ["/", "/login", "/guias", "/guias/nueva"],
+  "pages": {
+    "/": {"status": 302, "location": "/login"},
+    "/login": {"status": 200, "file": "00_login.html", "depth": 0},
+    "/guias": {"status": 200, "file": "01_guias_lista.html", "depth": 1},
+    "/guias/nueva": {"status": 200, "file": "02_guias_nueva.html", "depth": 2}
+  },
+  "clicks": {
+    "a[data-testid=\"nueva-guia\"]": {
+      "status": 200,
+      "url": "https://tms.interno/guias/nueva",
+      "file": "02_guias_nueva.html"
+    }
+  }
+}

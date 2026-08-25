@@ -1,0 +1,17 @@
+{
+  "escenario": "spa_router",
+  "descripcion": "Navegación de cliente: el formulario NO existe en el HTML servido; aparece al pulsar la pestaña (nivel 1).",
+  "origin": "https://tms.interno",
+  "entry": "/app",
+  "visit_order": ["/app"],
+  "pages": {
+    "/app": {"status": 200, "file": "00_app.html", "depth": 0}
+  },
+  "clicks": {
+    "button[data-testid=\"pestana-envios\"]": {
+      "status": 200,
+      "url": "https://tms.interno/app",
+      "file": "01_app_envios.html"
+    }
+  }
+}

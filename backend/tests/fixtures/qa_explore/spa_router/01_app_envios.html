@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Panel operativo</title></head>
+<body>
+  <h1>Panel operativo</h1>
+  <div role="tablist">
+    <button data-testid="pestana-resumen" type="button" role="tab" aria-expanded="false">Resumen</button>
+    <button data-testid="pestana-envios" type="button" role="tab" aria-expanded="true">Envíos</button>
+  </div>
+  <section id="panel-envios">
+    <h2>Envíos</h2>
+    <form id="buscar-envio" action="/app" method="get">
+      <label for="tracking">Número de seguimiento</label>
+      <input id="tracking" name="tracking" type="text" required maxlength="15" pattern="[A-Z]{3}[0-9]{9}" value="">
+      <span class="mensaje-ayuda">Formato: tres letras y nueve dígitos.</span>
+      <button data-testid="buscar" type="submit">Buscar</button>
+    </form>
+  </section>
+</body>
+</html>

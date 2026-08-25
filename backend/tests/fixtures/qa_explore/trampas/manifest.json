@@ -1,0 +1,32 @@
+{
+  "escenario": "trampas",
+  "descripcion": "Una fixture por trampa, deliberadamente hostil. Escritas a mano: el saneador borra los manejadores en línea, así que estas no se capturan.",
+  "origin": "https://tms.interno",
+  "entry": "/trampas/button-sin-type",
+  "visit_order": [
+    "/trampas/button-sin-type",
+    "/trampas/redirect",
+    "/trampas/post",
+    "/trampas/javascript"
+  ],
+  "pages": {
+    "/trampas/button-sin-type": {"status": 200, "file": "button_sin_type.html", "depth": 0},
+    "/trampas/redirect": {"status": 200, "file": "redirect_fuera_de_host.html", "depth": 0},
+    "/portal": {"status": 302, "location": "https://portal.externo.pe/acceso"},
+    "/trampas/post": {"status": 200, "file": "fetch_post_en_click.html", "depth": 0},
+    "/trampas/javascript": {"status": 200, "file": "javascript_href.html", "depth": 0}
+  },
+  "clicks": {
+    "button[data-testid=\"aprobar\"]": {
+      "method": "POST",
+      "status": 200,
+      "url": "https://tms.interno/trampas/post",
+      "file": "fetch_post_en_click_aprobado.html"
+    },
+    "button[data-testid=\"ayuda\"]": {
+      "status": 200,
+      "url": "https://tms.interno/trampas/button-sin-type",
+      "file": "button_sin_type.html"
+    }
+  }
+}

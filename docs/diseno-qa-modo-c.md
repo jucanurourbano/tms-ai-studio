@@ -560,7 +560,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | **QC1** | Contrato **`QaArtifact v1.1.0`** completo (= **QA10** de la PARTE II, sin recortar a Modo C: el contrato no se toca dos veces). `mode`, `evidence_class`, `source` como unión discriminada, `AssetAnchor`/`SurfaceAnchor` + `selector_strategy`, `TraceRow` generalizado, `coverage.scope_statement`, ids `TC-OBS-`. | round-trip de un artefacto **v1.0.0 real** que sigue validando · observación sin ancla → `ValidationError` · `criterion_ref` en modo C → `ValidationError` · `exploration` + `type=authorization` → `ValidationError` · **candado de la lista negra de campos de ejecución** (QA-D25.2) | — |
 | **QC2** | Migración **`0011`** `agent_jobs.input_params` JSONB + repositorio + `clasificar()` de `data_class` + herencia en refine. Cierra de paso el `target_system_id` huérfano de INV. | `mode=exploration` ⇒ `real` · declararla → 422 · el hijo del refine hereda `real` · `input_params` sobrevive a un job que **falla** | **⚠️ LLM2** — §9.1 |
 | **QC3** ✅ | **El guard, antes del navegador.** `QA_EXPLORE_*` en settings, alias con `readonly_verified`, allowlist, validación de esquema, revalidación por navegación, redacción, topes, política de pulsado (§3.2) evaluada sobre HTML, `ExploreSession` **con el driver inyectado**, `sin_navegador_real` autouse, candado AST (§3.3.3). **Sin una línea de Playwright.** | alias inexistente → error · allowlist vacía ⇒ nada autorizado · `302` fuera de host no se sigue y se registra · `file:`/`data:`/`javascript:` rechazados · `readonly_verified=false` → 409 · credencial ausente de artefacto, log y respuesta · `<button>` sin `type` en `<form>` **no** es pulsable · candado AST: cero `fill`/`type`/`screenshot` | — **IMPLEMENTADO** (§11) |
-| **QC4** | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni `value=` no vacío · el saneador conserva atributos de validación y borra `<tbody>` | — |
+| **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
 | **QC5** | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes | **entorno**: `libnspr4` con `sudo` (§1.1) — solo para una prueba manual, no para la suite |
 | **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está | **entorno** (igual que QC5) |
 | **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
@@ -744,3 +744,59 @@ intacta. Sin red, sin LLM, sin navegador y sin dependencias del sistema.
 ≠ `GET`/`HEAD`, la neutralización del `submit` con `add_init_script` y el
 `storage_state` del login. Las tres necesitan el driver real y son de QC5/QC6. La
 mitad de la capa 3 que sí está puesta es la que se decide leyendo el DOM.
+
+---
+
+## 12. QC4 — fixtures y saneador (cerrado)
+
+`backend/tests/fixtures/qa_explore/` con tres escenarios,
+`ai/agents/qa/explore/sanitize.py` y `scripts/capture_explore_fixture.py`. Sigue
+sin haber una línea de Playwright, y `test_qc3_no_introduce_playwright` sigue vivo.
+
+| Pieza | Qué sostiene |
+|---|---|
+| `tms_guias/` | Una aplicación observada de punta a punta: entrada con `302`, acceso, listado con tabla y alta con `required`/`maxlength`/`pattern` |
+| `spa_router/` | El motivo entero del nivel 1: el formulario **no existe** en el HTML servido y aparece al pulsar la pestaña |
+| `trampas/` | `button` sin `type`, redirección fuera de host, `POST` en el clic, `href` `javascript:` (más una descarga y un `<button form="otro">`) |
+| `manifest.json` | **Lo que sustituye al navegador**: `status`, `location`, URL final, resultado y `method` de cada clic |
+| `sanitize.py` | `sanear_html()` (A3), `violaciones()` (el candado) y `escenario_saneado()` (que aplica el candado **antes** de escribir) |
+| `capture_explore_fixture.py` | La captura manual, con autorización explícita. Hoy falla en `build_driver` diciendo que QC5 trae el driver: no finge que exploró |
+
+**Cinco decisiones que conviene no perder:**
+
+1. **El manifiesto ejerce la capa 5 sin navegar.** Con `status`, `location` y la
+   URL final, la revalidación en cada salto —incluida la de la URL con la que
+   *vuelve* el driver— se prueba entera contra HTML congelado. Sin ello, la capa 5
+   solo estaría probada con dobles escritos a mano en cada test, que es lo mismo que
+   decir que está probada contra sí misma.
+2. **A3 en una regla ejecutable**: dentro de un `<tbody>`, el texto sobrevive solo
+   si está **rotulado** —`<label>`, `<option>`, `<th>`, `<legend>`, `<caption>`, un
+   `role` de mensaje, un `aria-live` o una `class`/`id` de error o ayuda—. Todo lo
+   demás se vacía. Es lo que deja pasar un mensaje de error renderizado y las
+   opciones de un `<select>` dentro de una celda —la evidencia verbatim de QA-D2— y
+   deja fuera el nombre del cliente de la fila de al lado.
+3. **Los manejadores en línea se borran, por el mismo motivo que `<script>`**: son
+   código, no estructura ni rótulo, y arrastran rutas con identificadores reales.
+   Consecuencia declarada: la trampa del `POST` **no** sobrevive a una captura, así
+   que las trampas se escriben a mano. Es el sitio correcto para escribirlas.
+4. **El candado se prueba introduciendo la violación.** Un candado que solo se ha
+   visto pasar es indistinguible de una función que devuelve la lista vacía. Y por
+   el otro lado: se comprueba que **no** muerde lo que debe conservarse (el atributo
+   de valor vacío, un `pattern` con dígitos, un `data-value`), porque si lo hiciera,
+   la salida del propio saneador no pasaría su propio candado.
+5. **El saneador no es un oráculo de PII sobre texto libre.** Un dominio de la casa
+   o un nombre propio dentro de un párrafo sobrevive —el texto es la evidencia— y lo
+   para el candado. Por eso el candado corre **antes de escribir**
+   (`escenario_saneado()` lanza `CapturaSuciaError`) y no solo en la suite: un aviso
+   por consola se lee cuando ya está comiteado.
+
+**El residual, con fixture y test esperando a QC5.** `<button type="button">` con
+un manejador que manda un `POST` **es pulsable** para la lista blanca del DOM, y
+hace bien: leyendo el DOM no hay forma de saber qué dispara. Quien lo para es la
+mitad de red de la capa 3. El doble *modela* ese aborto —devuelve la página sin
+cambios, y la página "aprobada" existe en el escenario y no se llega a ver— para
+dejar escrita la expectativa contra la que QC5 tendrá que quedar verde. El test
+dice explícitamente que eso es una especificación ejecutable, no una demostración.
+
+**Suite:** 1395 → 1477 (+82; 77 de QC4 y 5 del candado de la regla R1), sin red,
+sin LLM, sin navegador y sin dependencias nuevas. Frontend intacto (120).

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Guías de envío</title></head>
+<body>
+  <h1>Guías de envío</h1>
+
+  <form id="filtros" action="/guias" method="get">
+    <label for="estado">Estado</label>
+    <select id="estado" name="estado">
+      <option value="">Todos</option>
+      <option value="">En tránsito</option>
+      <option value="">Entregada</option>
+      <option value="">Siniestrada</option>
+    </select>
+
+    <label for="ubigeo">Ubigeo de destino</label>
+    <input id="ubigeo" name="ubigeo" type="text" maxlength="6" pattern="[0-9]{6}" value="">
+
+    <button data-testid="exportar">Exportar</button>
+    <button data-testid="aplicar" type="button">Aplicar filtros</button>
+  </form>
+
+  <table>
+    <caption>Guías del día</caption>
+    <thead>
+      <tr><th>Guía</th><th>Shipper</th><th>Checkpoint</th><th>Ubigeo</th></tr>
+    </thead>
+    <tbody>
+      <tr><td></td><td></td>
+        <td><span class="estado-error">Sin checkpoint registrado</span></td>
+        <td></td>
+      </tr>
+      <tr><td></td><td></td>
+        <td><select name="checkpoint"><option value="">En reparto</option><option value="">Entregada</option></select></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <a data-testid="nueva-guia" href="/guias/nueva">Nueva guía</a>
+  <a data-testid="redes" href="https://x.com/urbano" target="_blank">Síguenos</a>
+</body>
+</html>

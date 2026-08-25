@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Trampa: POST en el clic</title></head>
+<body>
+  <h1>Aprobación de recupero</h1>
+  <p id="resultado">Recupero pendiente de aprobación.</p>
+  <!-- Un <button type="button"> explícito: la lista blanca del DOM lo aprueba y
+       hace bien, porque leyendo el DOM no se puede saber qué dispara. Lo que
+       manda un POST es su manejador, y quien lo para es la capa 3 en RED. -->
+  <button data-testid="aprobar" type="button">Aprobar recupero</button>
+</body>
+</html>

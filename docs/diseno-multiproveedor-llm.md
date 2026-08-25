@@ -527,6 +527,22 @@ El cliente que devuelve la fábrica sigue siendo el **real**, solo con
 la fábrica (`provider`, `model`, `data_class`) estarían comprobando el doble y
 dejarían de detectar una resolución equivocada, que es justo lo que vigilan.
 
+> **Estado de la desviación: APROBADA RETROACTIVAMENTE** (2026-08-25). Se aparta
+> de LLM-D12, que describía la capa 1 como un parche sobre `get_llm`. La raíz es
+> la **regla R1** de `CLAUDE.md` §8: *un `from modulo import simbolo` a nivel de
+> módulo resuelve el enlace al importar y ningún `monkeypatch` posterior lo
+> alcanza*. La misma raíz produjo el hallazgo de §7.2.1 (`test_claude.py`
+> construyendo un `ChatAnthropic` real sin que ninguna capa lo viera) y la forma
+> de `_driver.build_driver` en QC3 del Modo C. Desde QC4 hay candado:
+> `backend/tests/test_costuras_parcheables.py` prohíbe importar por nombre, a
+> nivel de módulo, cualquier símbolo declarado como costura parcheable.
+>
+> `get_llm` **no** entra en ese registro, y a propósito: los quince consumidores
+> lo importan por nombre y la decisión fue mover la costura, no perseguir los
+> enlaces. El registro protege las costuras que sí dependen de que el parche
+> llegue —hoy `build_driver` y `get_claude_client`—, y cuando el shim muera en
+> LLM4 (§1.6) `get_claude_client` sale de la lista con él.
+
 ### 7.2 Hallazgos de la implementación (LLM1)
 
 **La capa 4 no rompió ningún test.** Ninguno de los 1230 salía a la red: el

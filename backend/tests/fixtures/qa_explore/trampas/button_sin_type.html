@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Trampa: button sin type</title></head>
+<body>
+  <h1>Cierre de manifiesto</h1>
+  <form id="cierre" action="/manifiesto/cerrar" method="post">
+    <label for="observacion">Observación</label>
+    <input id="observacion" name="observacion" type="text" maxlength="120" value="">
+
+    <!-- En HTML, un <button> sin atributo type dentro de un <form> es
+         type="submit": pulsarlo CIERRA el manifiesto en producción. -->
+    <button data-testid="cerrar">Cerrar manifiesto</button>
+
+    <!-- Explícito: solo despliega la ayuda. Es lo único pulsable de la página. -->
+    <button data-testid="ayuda" type="button" aria-expanded="false">Ver ayuda</button>
+  </form>
+
+  <!-- Fuera del formulario, pero envía uno ajeno con el atributo form. -->
+  <button data-testid="cerrar-remoto" type="button" form="cierre">Cerrar desde fuera</button>
+</body>
+</html>

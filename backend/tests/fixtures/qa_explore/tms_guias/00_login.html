@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Acceso — Guías de envío</title></head>
+<body>
+  <h1>Acceso al sistema de guías</h1>
+  <form id="acceso" action="/login" method="post">
+    <label for="usuario">Usuario</label>
+    <input id="usuario" name="usuario" type="text" required maxlength="30" value="">
+
+    <label for="clave">Contraseña</label>
+    <input id="clave" name="clave" type="password" required minlength="8" value="">
+
+    <button data-testid="entrar" type="submit">Entrar</button>
+  </form>
+  <a data-testid="recuperar" href="/recuperar">¿Olvidaste tu contraseña?</a>
+</body>
+</html>

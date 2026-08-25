@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Trampa: redirección fuera del host</title></head>
+<body>
+  <h1>Accesos</h1>
+  <!-- Un enlace del mismo origen, autorizado por la capa 5... hasta que el
+       servidor responde 302 hacia otro host. La capa 5 revalida CADA salto. -->
+  <a data-testid="portal" href="/portal">Portal corporativo</a>
+  <a data-testid="inicio" href="/trampas/redirect">Volver al inicio</a>
+</body>
+</html>

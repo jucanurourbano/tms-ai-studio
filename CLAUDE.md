@@ -29,9 +29,10 @@ SISTEMAS + fase RECONCILE** **completo** (bloques INV0→INV6, ver §5.4): el IS
 deja de ser greenfield y reconcilia lo que propone contra lo que ya existe.
 Agente **QA** **completo** (backend + frontend; bloques QA0→QA8 implementados,
 ver §5.5 y `docs/diseno-agente-qa.md`). Del **QA9** —modos de entrada B (sistema
-del inventario) y C (exploración solo-lectura de una URL viva)— está implementado
-el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`, sin una línea de
-Playwright); el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
+del inventario) y C (exploración solo-lectura de una URL viva)— están implementados
+el **guard del Modo C** (bloque **QC3**: `ai/agents/qa/explore/`) y sus **fixtures
+y saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`), sin
+una línea de Playwright; el resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
 PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`. Siguiente
 eslabón: **Agente Backend**.
 
@@ -553,13 +554,14 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   UI sí llama al modelo real.
 - Sin migraciones de BD. Permisos sin tocar: `qa` FULL para el rol `qa`.
 
-### QA9 — modos de entrada B y C (diseñado; **solo el guard del Modo C existe**)
+### QA9 — modos de entrada B y C (diseñado; **del Modo C existen el guard y las fixtures**)
 
 > `docs/diseno-agente-qa.md` **PARTE II** (§11–§17) y `docs/diseno-qa-modo-c.md`
 > (QA-D19…QA-D25 + los ajustes A1–A4). Todo lo de arriba describe el **Modo A**
-> (desde el plan Scrum). Del resto **solo está implementado QC3, el guard**
-> (`ai/agents/qa/explore/`); el Modo B sigue en cero y el Modo C no explora nada
-> todavía.
+> (desde el plan Scrum). Del resto están implementados **QC3 (el guard)** y
+> **QC4 (fixtures y saneador)** —`ai/agents/qa/explore/` y
+> `tests/fixtures/qa_explore/`—; el Modo B sigue en cero y el Modo C no explora
+> nada todavía: no hay navegador, y por eso todo se ejerce contra HTML congelado.
 
 - **El problema que resuelve el bloque**: el Modo B (desde un sistema del
   **INVENTARIO**) y el Modo C (**exploración Playwright solo-lectura** de una URL
@@ -608,10 +610,10 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   ejerce contra **HTML de fixtures**.
 - **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ → QC1
   contrato v1.1.0 → QC2 migración `0011` + `data_class` (**después de LLM2**) →
-  **QC3 el guard ✅** → QC4 fixtures y saneador → QC5 `EXPLORE` + `SURFACE_MAP` →
-  QC6 CLI de login → QC7 grafo C + servicio + API → QC8 frontend (**no en paralelo
-  con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`, `ASSET_MAP`) sigue con el plan
-  QA11–QA12 de la PARTE II.
+  **QC3 el guard ✅** → **QC4 fixtures y saneador ✅** → QC5 `EXPLORE` +
+  `SURFACE_MAP` → QC6 CLI de login → QC7 grafo C + servicio + API → QC8 frontend
+  (**no en paralelo con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`,
+  `ASSET_MAP`) sigue con el plan QA11–QA12 de la PARTE II.
 
 #### QC3 — el guard del Modo C (implementado)
 
@@ -662,6 +664,47 @@ DOM) · `limits.py` · `driver.py` (protocolo estrecho, **cero Playwright**) ·
 - **QC3 NO trae** la intercepción de red (abortar todo método ≠ `GET`/`HEAD`), la
   neutralización del `submit` ni el `storage_state`: las tres necesitan el driver
   real y son de QC5/QC6.
+
+#### QC4 — fixtures y saneador (implementado)
+
+`backend/tests/fixtures/qa_explore/` (tres escenarios: `tms_guias`, `spa_router`,
+`trampas`) + `ai/agents/qa/explore/sanitize.py` + `scripts/capture_explore_fixture.py`.
+Sigue sin haber una línea de Playwright.
+
+- **El `manifest.json` sustituye al navegador.** Da `status`, `location`, la URL
+  final y el resultado de cada clic, así que la **capa 5** —revalidar en CADA
+  navegación— se ejerce entera sin navegar, sin servidor local y sin red. Es lo que
+  permite ejercer el 99% del Modo C en este host, donde Chromium no arranca.
+- **El saneador aplica A3: conserva la estructura y los rótulos, borra los datos.**
+  La parte que importa es lo que NO se lleva: un mensaje de error renderizado y las
+  opciones de un `<select>` **dentro de un `<tbody>`** son la validación observable
+  y la evidencia verbatim de QA-D2, así que sobreviven; lo que se vacía es el texto
+  suelto de las celdas. Además borra `<script>`/`<style>`, los comentarios, los
+  `<meta>` de sesión, los atributos con nombre sensible y **los manejadores en
+  línea** (mismo motivo que `<script>`: son código), vacía el atributo de valor sin
+  quitarlo, enmascara toda secuencia de 8+ dígitos y reescribe las URLs absolutas
+  del host explorado a su *path* — una fixture no lleva escrito el mapa de la
+  infraestructura (A1).
+- **El candado sobre las fixtures es un test, no una nota en el README**
+  (`tests/agents/qa/test_fixtures_candado.py`): recorre **todos** los ficheros del árbol
+  —`.html`, `.json` y `.md`— y exige ninguna secuencia de 8+ dígitos, ningún dominio
+  de la casa y ningún atributo de valor con contenido. Y se prueba **introduciendo
+  la violación**: un candado que solo se ha visto pasar es indistinguible de una
+  función que devuelve la lista vacía. `escenario_saneado()` lo aplica **antes** de
+  escribir y **revienta**; un aviso por consola se lee cuando ya está comiteado.
+- **El saneador no es un oráculo de PII sobre texto libre.** Un dominio de la casa
+  o un nombre propio dentro de un párrafo sobrevive al saneado —el texto es la
+  evidencia—; lo para el candado, y por eso el candado se ejecuta antes de escribir
+  y no después de comitear. Consecuencia declarada: las **trampas se escriben a
+  mano**, porque el saneador borra los manejadores en línea y la del `POST` no
+  sobreviviría a una captura.
+- **La trampa del `POST` fija un residual con test**: `<button type="button">` con
+  un manejador que manda un `POST` **es pulsable** para la lista blanca, y hace
+  bien — leyendo el DOM no hay forma de saber qué dispara. Quien lo para es la
+  **mitad de red de la capa 3**, que llega en QC5. El doble de la suite *modela* ese
+  aborto (devuelve la página sin cambios) para dejar el caso escrito: es la
+  especificación ejecutable contra la que QC5 tendrá que quedar verde, no su
+  demostración.
 
 ---
 
@@ -837,6 +880,19 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
   (carga el módulo `ReJSON` por defecto), mismo puerto `6379` y volumen
   `tms_redis_data`. Verificar con `docker exec tms_redis redis-cli MODULE LIST`
   (debe listar `ReJSON`).
+- **REGLA R1 — una costura parcheable se llama por su MÓDULO, nunca por el
+  símbolo importado.** Un `from modulo import simbolo` a nivel de módulo resuelve
+  el enlace **al importar**, y a partir de ahí ningún `monkeypatch` sobre el
+  atributo del módulo de origen lo alcanza: el importador se queda con la
+  referencia vieja y el cortafuegos no ve nada. Todo lo que deba poder parchearse
+  en tests se llama `_mod.func(...)`. Un import **dentro de una función** sí vale
+  —resuelve en cada llamada— y es la escapatoria legítima. Nos mordió dos veces:
+  `tests/orchestrator/test_claude.py` construía el `ChatAnthropic` REAL sin que
+  ninguna capa lo viera (hallado en LLM1), y `_driver.build_driver` en QC3.
+  **Candado:** `backend/tests/test_costuras_parcheables.py` (registro de costuras
+  + comprobación de que el símbolo sigue existiendo donde dice su dueño). La
+  desviación de §7.1 del diseño multiproveedor —la capa 1 envuelve `build_client`
+  de cada `ProviderSpec` en vez de sustituir `get_llm`— tiene esta misma raíz.
 - **Glosario logístico** en `backend/ai/knowledge/`, inyectado en
   `EXTRACT` / `INTERPRET` / `CRITIQUE` (y en EPICS/STORIES/CRITERIA del Scrum):
   - `checkpoint` = estado
@@ -862,6 +918,11 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
   un test que caiga en el cliente real falla con un mensaje que dice cómo
   arreglarlo, en vez de salir a la red (`tests/test_budget_guard.py` lo cubre).
 - **REGLA DE RESPALDO:** hacer **push al remoto después de CADA fase commiteada**.
+- **REGLA R2 — protocolo de cierre de bloque: cerrar → reportar → esperar
+  aprobación del siguiente.** Ningún bloque arranca sin visto bueno explícito y
+  ninguno se encadena con el siguiente sin reportar antes. LLM1 se cerró sin
+  reporte; no volvió a pasar por suerte, no por diseño, y escrito aquí deja de
+  depender de la suerte.
 
 ---
 
@@ -901,6 +962,7 @@ tms-ai-studio/
     │   ├── repositories/         # + story_assignment_repository
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
+    ├── scripts/capture_explore_fixture.py  # captura fixtures del Modo C (manual)
     ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
@@ -912,6 +974,7 @@ tms-ai-studio/
         │                         # bd/ddl/:      render + validación del DDL (sin LLM)
         │                         # api/openapi/: render + validación del spec (sin LLM)
         │                         # qa/explore/:  guard del Modo C (5 capas, sin navegador)
+        │                         #               + sanitize.py: saneador de capturas (A3)
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml
