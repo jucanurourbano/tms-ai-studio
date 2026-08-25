@@ -183,14 +183,17 @@ def test_sin_cortafuegos_la_fabrica_falla_explicando_que_no_hay_driver():
 def test_build_driver_no_se_importa_por_nombre_en_ninguna_parte():
     """Un ``from … import build_driver`` resuelve el enlace al importar y el
     parche del cortafuegos —que sustituye el atributo del módulo— no lo
-    alcanzaría. Es la misma lección que la capa 1 del cortafuegos del LLM."""
+    alcanzaría. Es la misma lección que la capa 1 del cortafuegos del LLM.
+
+    **Sin excepciones, ni para el ``__init__`` del paquete.** Un reexport no lo
+    llama nadie, pero es la línea que invita a escribir el import prohibido, y
+    una excepción en un candado es un candado con llave debajo del felpudo."""
     infractores = [
         f"{relativa}:{nodo.lineno}"
         for relativa, arbol in _fuentes()
         for nodo in ast.walk(arbol)
         if isinstance(nodo, ast.ImportFrom)
         and any(alias.name == "build_driver" for alias in nodo.names)
-        and relativa != "ai/agents/qa/explore/__init__.py"
     ]
     assert infractores == [], "Importan build_driver por nombre: " + ", ".join(
         infractores

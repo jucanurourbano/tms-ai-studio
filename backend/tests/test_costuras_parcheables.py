@@ -30,14 +30,13 @@ import pytest
 
 BACKEND = Path(__file__).resolve().parent.parent
 
-#: Símbolo parcheable → ficheros donde SÍ puede aparecer un import por nombre.
-#: Siempre su dueño, y a lo sumo el ``__init__`` que lo reexporta (que es un
-#: alias del atributo, no un enlace que alguien vaya a llamar).
+#: Símbolo parcheable → ficheros donde SÍ puede aparecer un import por nombre:
+#: **solo su dueño**. Ni siquiera el ``__init__`` del paquete lo reexporta. Un
+#: reexport no es un enlace que alguien llame, pero sí es la invitación a
+#: escribirlo, y una excepción en esta lista es una grieta en la regla que la
+#: lista existe para proteger.
 COSTURAS: dict[str, set[str]] = {
-    "build_driver": {
-        "ai/agents/qa/explore/driver.py",
-        "ai/agents/qa/explore/__init__.py",
-    },
+    "build_driver": {"ai/agents/qa/explore/driver.py"},
     "get_claude_client": {"app/dependencies/claude.py"},
 }
 

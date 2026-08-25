@@ -38,11 +38,15 @@ from ai.agents.qa.explore.clicking import (
     es_pulsable,
 )
 from ai.agents.qa.explore.dom import Elemento, elementos, selector_de
+# ``build_driver`` NO se reexporta: es una costura parcheable y la regla R1
+# prohíbe el enlace por nombre. Un ``from …explore import build_driver`` resolvería
+# el atributo al importar y el parche del cortafuegos no lo alcanzaría — y un
+# reexport es precisamente la invitación a escribir esa línea. Quien lo necesite
+# llama ``driver.build_driver(...)`` por su módulo, como hace ``session.py``.
 from ai.agents.qa.explore.driver import (
     BrowserDriver,
     DriverNoDisponibleError,
     RespuestaNavegacion,
-    build_driver,
 )
 from ai.agents.qa.explore.limits import LimitesExploracion, limites_efectivos
 from ai.agents.qa.explore.navigation import (
@@ -100,7 +104,6 @@ __all__ = [
     "assert_navigation_allowed",
     "assert_target_authorized",
     "available_targets",
-    "build_driver",
     "data_class_de_exploracion",
     "elementos",
     "elementos_pulsables",
