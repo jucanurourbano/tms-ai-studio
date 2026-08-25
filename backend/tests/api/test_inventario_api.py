@@ -408,6 +408,7 @@ async def test_subir_un_documento_extrae_conocimiento(
     import json
     import re
 
+    from ai.llm.providers.anthropic import AnthropicLLMClient
     from app.config.settings import settings as app_settings
     from tests.inventory.fixtures import (
         APLICACIONES,
@@ -444,9 +445,19 @@ async def test_subir_un_documento_extrae_conocimiento(
                 ]
             )
 
-    monkeypatch.setattr(
-        "app.dependencies.claude.get_claude_client", lambda **_kwargs: ChatFalso()
-    )
+    # El doble se inyecta en la FÁBRICA, que es donde LLM0 puso la construcción
+    # del cliente. Antes se inyectaba en ``get_claude_client`` y se llegaba al
+    # adaptador real por su camino de respaldo; ahora se construye el adaptador
+    # real con el chat falso dentro, que dice lo mismo de forma directa y además
+    # comprueba el rol y la clase de dato con que el endpoint pide el cliente.
+    # Es lo que exige la capa 1 del cortafuegos (LLM1): fuera de la fábrica no
+    # hay clientes, y el que sale de ella no puede llamar.
+    def _fabrica_falsa(agent_role, *, data_class):
+        assert agent_role == "inventory_doc"
+        assert data_class == "real"
+        return AnthropicLLMClient(client=ChatFalso())
+
+    monkeypatch.setattr("ai.llm.get_llm", _fabrica_falsa)
 
     system_id = await _crear_sistema(client, admin_token)
     r = await client.post(

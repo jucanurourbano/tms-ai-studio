@@ -86,13 +86,51 @@ cableado a Anthropic es precisamente lo que Gemini rompe.
 (`app.dependencies.claude.get_claude_client`). `tests/test_budget_guard.py` lo
 verifica. Cobertura real: exactamente un proveedor, exactamente un símbolo.
 
+> **Resuelto en LLM1**: esa capa sigue ahí (es la 3 de LLM-D12) pero ya no está
+> sola. Ver §7 y, para lo que la implementación encontró, §7.2 — incluido que la
+> cobertura de "un símbolo" era en realidad **menos** que un símbolo: dos tests
+> se le escapaban por su forma de importar.
+
 ### 1.5 Conclusión del inventario
 
 El refactor **no toca ningún nodo, ningún prompt y ningún contrato**. Toca dos
 archivos de infraestructura (`app/dependencies/claude.py`,
-`ai/agents/base/structured.py`), redirige 13 construcciones a una fábrica y
+`ai/agents/base/structured.py`), redirige 15 construcciones a una fábrica y
 generaliza el conftest. Es un cambio pequeño en superficie y grande en
 consecuencias, que es la forma que suele tener un cambio que sale mal.
+
+### 1.6 El shim muere en LLM4 (fecha asignada, no "algún día")
+
+`app/dependencies/claude.py` quedó tras LLM0 como 69 líneas de reexport. Un shim
+sin fecha de eliminación deja **dos puertas abiertas de forma permanente**, que
+es exactamente lo que este plan vino a cerrar: mientras exista, hay dos maneras
+de pedir el cliente y dos sitios donde leer la tarifa, y la segunda no es la
+correcta. Se le asigna bloque de muerte: **LLM4**.
+
+**Por qué LLM4 y no LLM6.** Al shim le quedan dos apoyos y LLM4 retira los dos:
+
+1. `estimate_cost(input, output)` lo importan los seis `assemble.py`. LLM4 lo
+   convierte en per-proveedor, así que **tiene que tocar esos seis archivos de
+   todas formas**: borrar el shim ahí no cuesta trabajo extra, y dejarlo obliga a
+   LLM5 y LLM6 a pasar por encima del mismo código con la puerta todavía puesta.
+2. `get_claude_client` era la costura del cortafuegos. **LLM1 ya la hizo
+   prescindible**: las capas 1, 2 y 4 cubren a cualquier proveedor sin nombrar
+   ese símbolo. Se conserva en LLM1 a propósito —cambiar la protección y quitarle
+   el suelo a la vez es cambiar dos cosas en el bloque que existe para garantizar
+   que no cambia ninguna— pero ya no sostiene nada por sí sola.
+
+**Lo que LLM4 borra junto con el shim** (es una sola operación, no tres):
+
+- `app/dependencies/claude.py` entero, y su entrada en `PERMITIDOS` de
+  `tests/llm/test_construcciones.py`.
+- El import invertido `ai/llm/providers/anthropic.py:123`
+  (`from app.dependencies.claude import get_claude_client`), que hoy hace que la
+  capa de proveedores dependa de `app/` **solo** para mantener viva esa costura.
+  Es una inversión del flujo de dependencias del proyecto (`api → services →
+  repositories → models`) que se aceptó con fecha, no en general.
+- La capa 3 del cortafuegos y sus dos tests, que en ese momento pasan a ser
+  redundantes de las capas 1, 2 y 4 — y una protección redundante que apunta a un
+  símbolo borrado es una protección que miente sobre lo que cubre.
 
 ---
 
@@ -473,6 +511,47 @@ inconveniente.
 sobre `PROVIDERS`**: registrar un proveedor sin cortafuegos rompe la suite. Es el
 mismo patrón que `sin_inventario_real` y `sin_navegador_real` (QA13).
 
+### 7.1 Lo que la implementación cambió del diseño (LLM1)
+
+**La capa 1 no parchea `get_llm`, envuelve `build_client`.** Parchear el nombre
+en `ai.llm.factory` no habría cubierto nada: los quince consumidores hacen
+`from ai.llm import get_llm` —seis de ellos a nivel de módulo— y ese enlace queda
+resuelto antes de que ningún fixture corra. Perseguir los quince enlaces uno por
+uno es el trabajo manual que la capa venía a evitar. En su lugar se sustituye el
+`build_client` de cada `ProviderSpec` en el registro: `get_spec` lee `PROVIDERS`
+en **cada** llamada, así que la capa alcanza a todos los enlaces sin excepción y
+sin conocer a ninguno.
+
+El cliente que devuelve la fábrica sigue siendo el **real**, solo con
+`complete_json` desactivado. Si devolviera un doble, los tests que inspeccionan
+la fábrica (`provider`, `model`, `data_class`) estarían comprobando el doble y
+dejarían de detectar una resolución equivocada, que es justo lo que vigilan.
+
+### 7.2 Hallazgos de la implementación (LLM1)
+
+**La capa 4 no rompió ningún test.** Ninguno de los 1230 salía a la red: el
+hallazgo que el diseño anticipaba no existía. Bien, pero la capa se queda — su
+valor es cubrir lo que todavía no está escrito.
+
+**Rompieron las capas 1 y 2, y los tres casos eran huecos reales:**
+
+1. `tests/orchestrator/test_claude.py` (2 tests) construía un `ChatAnthropic`
+   **real** en cada corrida de la suite **sin que ninguna capa lo viera**:
+   importa `get_claude_client` por su nombre al cargar el módulo, así que el
+   `monkeypatch` del conftest sobre el atributo del módulo nunca le alcanzaba.
+   Era literalmente el hueco que la capa 2 viene a cerrar. No había red ni coste
+   —construir no es llamar— pero la protección era ilusoria. Se resuelve con la
+   fixture `sdk_construible`, que levanta **solo** la capa 2, se pide por nombre
+   y deja las capas 1, 3 y 4 en pie.
+2. `tests/api/test_inventario_api.py` inyectaba su chat falso en
+   `get_claude_client` y llegaba al adaptador por el camino de respaldo de
+   `complete_json`. Ahora inyecta en la **fábrica** un `AnthropicLLMClient` real
+   con el chat falso dentro: dice lo mismo de forma directa, comprueba de paso
+   el `agent_role` y la `data_class` con que el endpoint pide el cliente, y
+   respeta la regla que la capa 1 impone —fuera de la fábrica no hay clientes—.
+
+Ninguno se silenció ni recibió una excepción por defecto.
+
 ---
 
 ## 8. Modelo de Gemini recomendado
@@ -561,7 +640,7 @@ Tests mockeados siempre. Commit + push por bloque (REGLA DE RESPALDO).
 
 ### LLM0 — La fábrica, con un solo proveedor ✅ **IMPLEMENTADO**
 `ai/llm/` completo (registro, `ProviderSpec`, retry por proveedor, pricing) con
-**únicamente** `anthropic` registrado. Las 13 construcciones redirigidas a
+**únicamente** `anthropic` registrado. Las 15 construcciones redirigidas a
 `get_llm(role, data_class=...)`. `ClaudeLLMClient` sobrevive como alias.
 *Nada de comportamiento cambia.*
 **Tests:** la suite entera sigue verde sin tocarse · el default resuelve a
@@ -569,13 +648,14 @@ Tests mockeados siempre. Commit + push por bloque (REGLA DE RESPALDO).
 (candado sobre `_RETRYABLE` y `retry_after_seconds`) · `get_llm` sin `data_class`
 lanza `TypeError`.
 
-### LLM1 — Cortafuegos generalizado, **antes** del proveedor nuevo
-Las cuatro capas de §7. Mismo criterio que QA13 (el guard antes del navegador):
-la protección se construye **antes** de que exista lo que hay que proteger, o se
-construye tarde.
+### LLM1 — Cortafuegos generalizado, **antes** del proveedor nuevo ✅ **IMPLEMENTADO**
+Las cuatro capas de §7, en `tests/firewall.py`. Mismo criterio que QA13 (el guard
+antes del navegador): la protección se construye **antes** de que exista lo que
+hay que proteger, o se construye tarde. Desviaciones en §7.1, hallazgos en §7.2.
 **Tests:** `test_budget_guard.py` con un test por capa + parametrizado sobre
 `PROVIDERS` · un `httpx.get` a un host externo dentro de un test falla con el
-mensaje de la REGLA DE PRESUPUESTO.
+mensaje de la REGLA DE PRESUPUESTO · los destinos locales (Postgres, Redis,
+`::1`, socket unix) pasan sin fricción · `getaddrinfo` sigue resolviendo.
 
 ### LLM2 — Clasificación de datos y política de proveedor
 `data_class` obligatorio en los tres puntos de ingesta · herencia monótona por
@@ -607,12 +687,16 @@ token bucket · `max_concurrency=1` · mapeo 429 RPM vs RPD · `pricing` a 0.0.
 · 429-RPD **no** reintenta · `run_structured_map` respeta `max_concurrency` ·
 respuesta con fence markdown se parsea por la ruta tolerante.
 
-### LLM4 — Procedencia
+### LLM4 — Procedencia · **y muere el shim** (§1.6)
 `RunProvenance` + campo opcional en los seis `*Metrics` + `provenance` en
 `agent_jobs.metrics` + `estimate_cost` por proveedor.
+Como LLM4 toca los seis `assemble.py` de todas formas, **aquí se borra
+`app/dependencies/claude.py`** junto con el import invertido de
+`ai/llm/providers/anthropic.py` y la capa 3 del cortafuegos. Ver §1.6.
 **Tests:** round-trip de los **fixtures de artefacto existentes** sin
 `provenance` (retrocompatibilidad) · un run sin proveedor determinable falla en
-vez de sellar `"desconocido"` · costo 0.0 con Gemini y el actual con Anthropic.
+vez de sellar `"desconocido"` · costo 0.0 con Gemini y el actual con Anthropic ·
+ningún import de `app.dependencies.claude` sobrevive en el árbol.
 
 ### LLM5 — Frontend
 `<ProvenanceBadge>` (nulo con Anthropic) · seis inserciones de una línea · marca

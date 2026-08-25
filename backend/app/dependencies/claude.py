@@ -3,17 +3,26 @@
 Todo lo que había aquí (constructor del cliente, ``_RETRYABLE``,
 ``retry_after_seconds``, ``estimate_cost``) se movió a
 ``ai/llm/providers/anthropic.py``, donde puede convivir con la política de otros
-proveedores sin que la de Anthropic se cuele en ellos. Este módulo sobrevive por
-dos razones concretas, no por inercia:
+proveedores sin que la de Anthropic se cuele en ellos.
 
-1. **``get_claude_client`` es la costura del cortafuegos de tests.**
-   ``tests/conftest.py`` parchea este símbolo por su ruta de importación para que
-   ningún test alcance la API real (REGLA DE PRESUPUESTO). LLM1 generaliza esa
-   protección a la fábrica y a la red; hasta entonces, mover la costura sería
-   quedarse sin ella.
+**ESTE MÓDULO SE BORRA EN LLM4** (``docs/diseno-multiproveedor-llm.md`` §1.6).
+No es un "algún día": un shim sin fecha deja dos puertas abiertas de forma
+permanente, que es justo lo que este plan vino a cerrar. LLM4 convierte
+``estimate_cost`` en per-proveedor y por tanto toca los seis ``assemble.py`` de
+todas formas; borrarlo ahí no cuesta trabajo extra y dejarlo obliga a LLM5 y LLM6
+a pasar por encima con la puerta todavía puesta.
+
+Lo que queda vivo hasta entonces, y por qué:
+
+1. **``get_claude_client``, la costura histórica del cortafuegos de tests.**
+   ``tests/conftest.py`` parchea este símbolo por su ruta de importación (capa 3
+   de LLM-D12). **LLM1 ya la hizo prescindible**: las capas 1, 2 y 4 de
+   ``tests/firewall.py`` cubren a cualquier proveedor sin nombrarla. Se conserva
+   porque quitarle el suelo a la protección en el mismo bloque que la reescribe
+   sería cambiar dos cosas a la vez.
 2. **``estimate_cost(in, out)``** lo importan los seis ``assemble.py``. Aquí
    mantiene su firma de siempre y delega en la tarifa del proveedor; pasa a ser
-   por proveedor —con su procedencia— en LLM4.
+   por proveedor —con su procedencia— en LLM4, que es cuando muere este archivo.
 
 REGLA DE PRESUPUESTO: no se llama a la API real sin autorización explícita.
 En desarrollo y tests siempre se usan mocks (ver CLAUDE.md).

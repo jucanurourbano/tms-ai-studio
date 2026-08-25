@@ -1,8 +1,9 @@
 """Fixtures compartidas de tests.
 
 Provee una base de datos async efímera (SQLite in-memory con StaticPool, para
-que la conexión persista entre sesiones) sin depender de contenedores, y un
-**cortafuegos contra la API real de Anthropic** (REGLA DE PRESUPUESTO).
+que la conexión persista entre sesiones) sin depender de contenedores, y el
+**cortafuegos contra las llamadas reales** (REGLA DE PRESUPUESTO), cuyas cuatro
+capas viven en ``tests/firewall.py``.
 """
 
 from collections.abc import AsyncIterator
@@ -18,11 +19,12 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
+from tests import firewall
 
 
 @pytest.fixture(autouse=True)
 def sin_api_real(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Impide que un test alcance la API real de Anthropic.
+    """Capa 3 — ``get_claude_client``, la costura histórica del cortafuegos.
 
     Los nodos generativos caen en ``ClaudeLLMClient`` cuando nadie les inyecta un
     mock por ``config``. Si un test nuevo se olvida de inyectarlo, el pipeline
@@ -30,18 +32,53 @@ def sin_api_real(monkeypatch: pytest.MonkeyPatch) -> None:
     PRESUPUESTO de ``CLAUDE.md``. Aquí ese descuido falla con un mensaje claro en
     vez de salir a la red.
 
+    Se conserva **sin cambios** aunque las capas 1 y 2 la cubran: es el símbolo
+    que parchean los tests que ya existen, y quitarla sería cambiar dos cosas a
+    la vez en el bloque que viene a garantizar que no se cambia ninguna.
+
     Es autouse a propósito: la protección no puede depender de que cada test se
     acuerde de pedirla.
     """
 
     def _boom(*_args, **_kwargs):
-        raise AssertionError(
-            "Un test intentó usar el cliente REAL de Anthropic. Inyecta un mock "
-            "en config['configurable']['llm'] (ver tests/mocks.py). "
-            "REGLA DE PRESUPUESTO: nunca se llama a la API real en tests."
-        )
+        raise AssertionError(firewall.MENSAJE_LLM)
 
     monkeypatch.setattr("app.dependencies.claude.get_claude_client", _boom)
+
+
+@pytest.fixture(autouse=True)
+def sin_llm_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Capas 1 y 2 — la fábrica y los constructores de cada SDK.
+
+    Generalizan la capa 3 a **cualquier** proveedor registrado: la 1 por
+    construcción (todo lo que salga de ``get_llm``), la 2 para quien se salte la
+    fábrica importando el SDK directamente.
+    """
+    firewall.blindar_fabrica(monkeypatch)
+    firewall.blindar_sdks(monkeypatch)
+
+
+@pytest.fixture
+def sdk_construible(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Levanta SOLO la capa 2 para los tests cuyo objeto es el constructor.
+
+    No es autouse y hay que pedirla por nombre: construir el cliente no abre
+    conexión ni consume tokens, y las capas 1, 3 y 4 siguen puestas — la
+    garantía de que no sale un paquete a la red no cambia. Ver
+    ``tests/firewall.py::liberar_sdks``.
+    """
+    firewall.liberar_sdks(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def sin_red_externa(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Capa 4 — la red. La única que no hay que actualizar nunca.
+
+    Cubre al proveedor que nadie ha escrito todavía, a un ``httpx`` suelto en un
+    test nuevo y a un webhook. Los destinos locales (Postgres, Redis, un
+    servidor de prueba en ``127.0.0.1``, un socket unix) pasan sin fricción.
+    """
+    firewall.blindar_red(monkeypatch)
 
 
 @pytest.fixture(autouse=True)

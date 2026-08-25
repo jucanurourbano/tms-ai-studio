@@ -1,6 +1,6 @@
 """Fábrica de clientes LLM: la única puerta por la que se instancia un proveedor.
 
-Antes de este paquete había **13 construcciones** del cliente repartidas por
+Antes de este paquete había **14 construcciones** del cliente repartidas por
 servicios y nodos, más una que se saltaba incluso el runner
 (``app/api/v1/inventario.py``, la ingesta de documentos reales). Cada una era un
 sitio donde una política nueva podía no aplicarse. Ahora todas pasan por aquí.
@@ -21,7 +21,7 @@ que hace que un guardarraíl no se dispare.
 ``TypeError`` en el arranque del job —ruidoso, inmediato, imposible de ignorar—
 y no una fuga silenciosa. Con un solo proveedor registrado el valor todavía no
 decide nada; la política que lo usa llega en LLM2, y la firma se pone hoy para
-que ese bloque no tenga que volver a tocar los 14 sitios que llaman.
+que ese bloque no tenga que volver a tocar los 15 sitios que llaman.
 """
 
 from ai.llm.base import (
