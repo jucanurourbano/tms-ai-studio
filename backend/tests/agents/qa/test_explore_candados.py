@@ -346,8 +346,14 @@ def test_ni_el_alias_ni_el_host_llegan_al_modelo(monkeypatch):
         monkeypatch,
         destinos={
             "tms-prod-urbano-aws": {
-                "url": f"https://qa:s3cr3t0@{HOST}/",
+                "url": URL_BASE,
                 "readonly_verified": True,
+                # Antes este destino llevaba la credencial en la URL para que el
+                # test pudiera comprobar que no viajaba al prompt. Desde A7 eso ya
+                # no es un destino declarable (lo rechaza el validador), así que lo
+                # secreto que se comprueba aquí es lo que sí queda: la ruta del
+                # estado de sesión.
+                "storage_state": "/var/lib/tms/qa-explorer.json",
             }
         },
     )
@@ -355,7 +361,7 @@ def test_ni_el_alias_ni_el_host_llegan_al_modelo(monkeypatch):
     proyeccion = str(alcance_para_prompt(destino, ["/guias/nueva", "/guias/lista"]))
     assert "tms-prod-urbano-aws" not in proyeccion
     assert HOST not in proyeccion
-    assert "s3cr3t0" not in proyeccion
+    assert "qa-explorer.json" not in proyeccion
     assert "/guias/nueva" in proyeccion
 
 

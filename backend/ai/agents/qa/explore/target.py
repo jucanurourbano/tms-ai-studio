@@ -31,6 +31,15 @@ tres diferencias que este módulo añade a conciencia:
   como defensa en profundidad, inaceptable como único control. Afirmarlo es una
   línea de configuración de quien despliega (``admin``, QA-D17).
 
+* **La capa 4 se cumple en la ENTRADA, no en cada salida.** ``redact_url`` tapaba
+  la credencial embebida en la URL del destino en cada superficie por la que podía
+  asomar; eso la dejaba dentro del sistema y hacía la garantía proporcional al
+  número de superficies conocidas. Desde A7 el validador **rechaza** cualquier URL
+  con *userinfo*: la sesión de la cuenta de QA se declara con ``storage_state``
+  (un fichero del servidor), no incrustada en una cadena de configuración.
+  ``redact_url`` se queda porque los enlaces que escribe la aplicación explorada
+  no los declaramos nosotros.
+
 Los destinos viven en el entorno del despliegue (``settings``/``.env``), **jamás**
 en la base de datos de la plataforma ni en un artefacto.
 """
@@ -111,6 +120,49 @@ class ExploreTarget(BaseModel):
             )
         return valor
 
+    @field_validator("url")
+    @classmethod
+    def _la_url_base_no_lleva_credencial(cls, valor: str) -> str:
+        """La credencial no se **redacta**: no se acepta.
+
+        Hasta aquí la capa 4 era una capa de *salida*: :func:`redact_url` tapaba
+        la credencial en cada superficie por la que podía asomar (el log, la
+        respuesta de la API, el ancla del artefacto). Eso deja el secreto **dentro
+        del sistema** y reparte la garantía entre tantos sitios como superficies
+        haya: basta una nueva —un ``print`` en un script, un campo más en un
+        volcado de diagnóstico— para que vuelva a salir, y el candado que la
+        vigilaba no la conoce todavía. Es el mismo patrón que F1: *redactar no es
+        no tener*.
+
+        Así que se cierra en la entrada, que es donde una prohibición se cumple
+        una sola vez: ``https://usuario:clave@host/`` **no es un destino válido**.
+        La sesión de la cuenta de QA viaja en el ``storage_state`` que deja el CLI
+        de login (QC6) —un fichero del servidor, que nunca se lista ni se
+        exporta—, y no incrustada en una cadena de configuración que el navegador
+        pondría además en la barra de direcciones, en el ``Referer`` y en el
+        historial.
+
+        Se mira el ``netloc`` **crudo** y no ``partes.username``: cualquier ``@``
+        en la parte de autoridad es *userinfo*, incluida la forma percent-encoded
+        que ``urlparse`` no interpreta como usuario.
+
+        :func:`redact_url` **sigue existiendo y sigue haciendo falta**: la URL de
+        un destino ya no puede llevar credencial, pero la de un enlace que la
+        aplicación explorada escribe en su propio DOM sí, y esa no la declaramos
+        nosotros (ver ``navigation.py``).
+        """
+        netloc = urlparse(valor or "").netloc
+        if "@" in netloc:
+            raise ValueError(
+                "La URL base del destino no puede llevar credencial embebida "
+                f"(recibido: «{redact_url(valor)}»). Una credencial en la URL "
+                "acaba en la barra de direcciones, en el «Referer» y en el "
+                "historial del navegador, y obliga a redactarla en cada "
+                "superficie nueva para siempre. La sesión de la cuenta de QA se "
+                "declara con «storage_state», que vive en el servidor."
+            )
+        return valor
+
     @model_validator(mode="after")
     def _sintetico_solo_si_el_host_es_local(self) -> "ExploreTarget":
         """A2, verificado por candado y no por confianza."""
@@ -139,7 +191,14 @@ class ExploreTarget(BaseModel):
 
     @property
     def url_publica(self) -> str:
-        """La URL base sin credencial, apta para logs y respuestas."""
+        """La URL base sin credencial, apta para logs y respuestas.
+
+        Desde que el validador rechaza el *userinfo* esta redacción es un no-op
+        **demostrable** (hay test), y se conserva a propósito: es lo que mantiene
+        obvio cuál es el sitio correcto para escribir la URL de un destino en
+        cualquier superficie nueva, sin depender de que quien la escriba recuerde
+        por qué.
+        """
         return redact_url(self.url)
 
 
@@ -153,13 +212,32 @@ def redact_url(url: str) -> str:
 
 
 def _construir(alias: str, crudo: Any) -> ExploreTarget:
-    """Valida un destino declarado. La clave del mapa manda sobre el contenido."""
+    """Valida un destino declarado. La clave del mapa manda sobre el contenido.
+
+    **Y traduce el fallo de validación a un error nuestro, con el texto redactado.**
+    Esto no es cosmética: el ``ValidationError`` de Pydantic incluye el valor de
+    entrada tal cual (``input_value='https://usuario:clave@host/'``), así que
+    stringificarlo publica exactamente lo que el validador acaba de rechazar. Lo
+    descubrió, al añadir el validador de A7, el test que ya existía para el
+    mensaje de error —el rechazo pasó a ser el del *userinfo* y el nuevo mensaje
+    filtraba la credencial que el anterior no tocaba—.
+
+    No se puede pedir a Pydantic que no incluya la entrada, y una nota que diga
+    "redacta antes de imprimir" se cumple hasta que alguien no la lee. Así que el
+    ``ValidationError`` **no sale de esta función**: quien construya un destino
+    desde la configuración del despliegue recibe un ``ValueError`` cuyo texto ya
+    pasó por :func:`redact_url`, y no hay una segunda copia del secreto circulando
+    dentro de una excepción de terceros.
+    """
     if not isinstance(crudo, dict):
         raise ValueError(
             f"El destino «{alias}» debe ser un objeto con al menos «url» y "
             "«readonly_verified»."
         )
-    return ExploreTarget.model_validate({**crudo, "alias": alias})
+    try:
+        return ExploreTarget.model_validate({**crudo, "alias": alias})
+    except ValidationError as exc:
+        raise ValueError(redact_url(str(exc))) from None
 
 
 def _hosts_permitidos() -> set[str]:
@@ -185,7 +263,9 @@ def available_targets() -> list[dict[str, str]]:
     for alias, crudo in (settings.QA_EXPLORE_TARGETS or {}).items():
         try:
             destino = _construir(alias, crudo)
-        except (ValidationError, ValueError):
+        except ValueError:
+            # ``_construir`` traduce el ``ValidationError`` de Pydantic a un
+            # ``ValueError`` redactado; aquí ya no puede llegar el otro.
             continue
         if destino.host not in permitidos or not destino.readonly_verified:
             continue
@@ -230,7 +310,7 @@ def assert_target_authorized(alias: str) -> ExploreTarget:
 
     try:
         destino = _construir(alias, crudo)
-    except (ValidationError, ValueError) as exc:
+    except ValueError as exc:
         raise ForbiddenError(
             f"El destino «{alias}» está mal declarado y no se explora: {exc}"
         ) from exc

@@ -122,21 +122,18 @@ def test_el_motivo_de_aborto_se_puede_registrar(destino):
 
 
 def test_la_credencial_no_aparece_en_el_motivo(monkeypatch):
-    """Capa 4: el motivo viaja a ``salidas_bloqueadas`` y de ahí al artefacto."""
-    configurar(
-        monkeypatch,
-        destinos={
-            "tms-qa": {
-                "url": f"https://qa:s3cr3t0@{HOST}/",
-                "readonly_verified": True,
-            }
-        },
-    )
+    """Capa 4: el motivo viaja a ``salidas_bloqueadas`` y de ahí al artefacto.
+
+    El destino ya no puede llevar credencial (la rechaza el validador desde A7),
+    pero **la URL de la petición no la declaramos nosotros**: la pide la página. Y
+    el motivo del aborto la cita, así que se redacta.
+    """
+    configurar(monkeypatch)
     objetivo = assert_target_authorized("tms-qa")
     motivo = motivo_de_aborto(
         objetivo,
         metodo="GET",
-        url=f"https://qa:s3cr3t0@otro.externo.pe/x",
+        url="https://qa:s3cr3t0@otro.externo.pe/x",
         es_navegacion=True,
     )
     assert motivo and "s3cr3t0" not in motivo

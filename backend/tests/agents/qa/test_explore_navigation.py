@@ -104,6 +104,40 @@ def test_una_url_vacia_no_navega(destino):
     assert not evaluar_navegacion(destino, "   ").permitida
 
 
+def test_el_enlace_con_credencial_embebida_no_se_sigue(destino):
+    """El segundo hallazgo de A7, un nivel por debajo del destino.
+
+    El destino ya no puede declarar credencial en su URL, pero **el enlace lo
+    escribe la aplicación explorada**, y el mismo host con una credencial ajena
+    pasaba todas las comprobaciones: mismo esquema, mismo host, mismo origen
+    —``urlparse`` no cuenta el *userinfo* en ninguno de los tres—. Seguirlo
+    mandaría una autenticación que nadie registró y metería la credencial en el
+    índice de páginas vistas de la sesión.
+    """
+    veredicto = evaluar_navegacion(destino, "https://otro:clave@tms.interno/x")
+    assert not veredicto.permitida
+    assert "credencial embebida" in veredicto.motivo
+    # Y el veredicto que se registra ya viene redactado.
+    assert "clave" not in veredicto.url
+
+
+def test_un_relativo_hacia_un_enlace_con_credencial_tampoco(destino):
+    """Resuelto desde la página actual, mismo rechazo: ``urljoin`` produce el
+    absoluto con *userinfo* igual que lo haría el navegador."""
+    veredicto = evaluar_navegacion(destino, "//otro:clave@tms.interno/x", base=URL_BASE)
+    assert not veredicto.permitida
+    assert "credencial embebida" in veredicto.motivo
+
+
+def test_la_forma_clasica_de_phishing_ya_moria_por_el_host(destino):
+    """``https://tms.interno@evil.com/`` no es tms.interno: el host de verdad es
+    lo que va DESPUÉS del ``@``, y la capa 2 ya lo rechazaba. Queda escrito para
+    que el motivo del rechazo no se confunda con el de arriba."""
+    veredicto = evaluar_navegacion(destino, "https://tms.interno@evil.com/")
+    assert not veredicto.permitida
+    assert "allowlist" in veredicto.motivo
+
+
 # --- la forma dura, para la navegación de entrada ----------------------------
 
 

@@ -7,8 +7,9 @@ solo al arrancar habría autorizado la primera navegación y ninguna de las
 siguientes — que son exactamente las que el destino elige, no nosotros.
 
 Toda navegación revalida, en este orden: la exploración sigue habilitada, el
-esquema es ``http``/``https``, el host está en la allowlist **vigente** y el
-origen es el del destino (mismo origen: esquema + host + puerto).
+esquema es ``http``/``https``, el host está en la allowlist **vigente**, la URL no
+lleva credencial embebida y el origen es el del destino (mismo origen: esquema +
+host + puerto).
 
 Lo que cae fuera **no se sigue y se registra** (``ExploreSession``); de ahí que la
 forma normal de esta capa sea un *veredicto* y no una excepción: una excepción
@@ -116,6 +117,24 @@ def evaluar_navegacion(
     if host not in permitidos:
         return VeredictoNavegacion(
             False, publica, f"El host «{host}» no está en la allowlist."
+        )
+
+    # El destino ya no puede declarar una credencial en su URL (el validador de
+    # ``ExploreTarget`` la rechaza), pero **un enlace que la aplicación explorada
+    # escribe en su propio DOM sí puede llevarla**, y ese no lo declaramos
+    # nosotros. Seguirlo tendría dos consecuencias, las dos malas: el navegador
+    # mandaría una autenticación que nadie registró, y la URL con la credencial
+    # entraría en el índice de páginas vistas de la sesión —``urlparse`` no cuenta
+    # el *userinfo* en el esquema, ni en el host, ni en el origen, así que las
+    # otras cuatro comprobaciones lo dejan pasar—.
+    #
+    # Va DESPUÉS de la allowlist a propósito: la forma clásica
+    # ``https://tms.interno@evil.com/`` ya moría ahí, porque el host de verdad es
+    # lo que va después del ``@``, y ese motivo describe mejor lo que pasó. Esto
+    # cierra la otra mitad: el mismo host, con una credencial ajena.
+    if "@" in partes.netloc:
+        return VeredictoNavegacion(
+            False, publica, "La URL lleva credencial embebida y no se sigue."
         )
 
     if _origen(absoluta) != target.origin:

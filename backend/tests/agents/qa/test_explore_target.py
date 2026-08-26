@@ -6,6 +6,7 @@ nunca lo elige quien llama a la API.
 """
 
 import pytest
+from pydantic import ValidationError
 
 from ai.agents.qa.explore.target import (
     HOSTS_LOCALES,
@@ -205,31 +206,56 @@ def test_un_data_class_inventado_no_pasa(monkeypatch):
         assert_target_authorized("tms-qa")
 
 
-# --- capa 4: la credencial nunca sale ----------------------------------------
+# --- capa 4: la credencial no se redacta, no se acepta ------------------------
 
 URL_CON_CREDENCIAL = "https://qa-explorer:s3cr3t0@tms.interno/inicio"
 
 
-def test_la_credencial_no_aparece_en_ninguna_superficie_publica(monkeypatch):
+@pytest.mark.parametrize(
+    "url",
+    [
+        URL_CON_CREDENCIAL,
+        # Solo usuario, sin contraseña: sigue siendo userinfo.
+        "https://qa-explorer@tms.interno/inicio",
+        # Percent-encoded: ``urlparse`` NO lo lee como usuario, así que un guard
+        # escrito sobre ``partes.username`` lo dejaría pasar. Por eso se mira el
+        # ``netloc`` crudo.
+        "https://qa%2Dexplorer:s3cr3t0@tms.interno/inicio",
+    ],
+)
+def test_un_destino_con_credencial_embebida_no_es_valido(url):
+    """A7. *Redactar no es no tener* — el mismo patrón que F1.
+
+    Este test se escribió **con la violación puesta** (el destino que hasta ayer
+    validaba, credencial incluida) y se vio fallar antes de que existiera el
+    validador. Un candado que solo se ha visto pasar es indistinguible de una
+    función que devuelve la lista vacía.
+    """
+    with pytest.raises(ValidationError) as error:
+        ExploreTarget(alias="tms-qa", url=url, readonly_verified=True)
+    assert "credencial embebida" in str(error.value)
+
+
+def test_el_destino_con_credencial_no_se_resuelve_ni_se_lista(monkeypatch):
+    """Por el camino real: el alias existe, y aun así no hay destino."""
     configurar(
         monkeypatch,
         destinos={"tms-qa": {"url": URL_CON_CREDENCIAL, "readonly_verified": True}},
     )
-    destino = assert_target_authorized("tms-qa")
-    superficies = [
-        destino.url_publica,
-        origin_ref_for(destino),
-        redact_url(destino.url),
-        str(available_targets()),
-        str(alcance_para_prompt(destino, ["/inicio"])),
-    ]
-    for texto in superficies:
-        assert "s3cr3t0" not in texto
-        assert "qa-explorer" not in texto
+    with pytest.raises(ForbiddenError, match="mal declarado"):
+        assert_target_authorized("tms-qa")
+    assert available_targets() == []
 
 
 def test_un_mensaje_de_error_no_filtra_la_credencial(monkeypatch):
-    """El sitio más fácil de olvidar: el mensaje que se registra en el log."""
+    """El sitio más fácil de olvidar: el mensaje que se registra en el log.
+
+    Este test ya existía y es el que **cazó el tercer hallazgo**: al añadir el
+    validador de A7 empezó a fallar, porque el ``ValidationError`` de Pydantic
+    incluye el valor de entrada tal cual y el rechazo pasó a citar la credencial
+    que antes nadie miraba. De ahí que ``_construir`` traduzca la excepción de
+    Pydantic a un ``ValueError`` ya redactado.
+    """
     configurar(
         monkeypatch,
         destinos={"tms-qa": {"url": URL_CON_CREDENCIAL}},
@@ -238,6 +264,64 @@ def test_un_mensaje_de_error_no_filtra_la_credencial(monkeypatch):
     with pytest.raises(ForbiddenError) as error:
         assert_target_authorized("tms-qa")
     assert "s3cr3t0" not in str(error.value)
+
+
+def test_el_error_de_pydantic_no_sale_de_construir(monkeypatch):
+    """El candado del tercer hallazgo, en su forma estructural.
+
+    No basta con que el mensaje de ``assert_target_authorized`` esté redactado: si
+    el ``ValidationError`` original circulara, cualquier ``except`` nuevo que lo
+    registrara volvería a publicar el secreto. Así que **no circula**.
+    """
+    from ai.agents.qa.explore import target as _target
+
+    with pytest.raises(ValueError) as error:
+        _target._construir("tms-qa", {"url": URL_CON_CREDENCIAL})
+    assert not isinstance(error.value, ValidationError)
+    assert "s3cr3t0" not in str(error.value)
+    assert "credencial embebida" in str(error.value)
+
+
+def test_la_redaccion_sigue_haciendo_falta_para_lo_que_no_declaramos():
+    """``redact_url`` no sobra: la aplicación explorada escribe sus propios
+    enlaces, y esos pueden llevar credencial aunque el destino ya no pueda.
+
+    Y sobre un destino válido la redacción es un **no-op demostrable**: eso es lo
+    que convierte ``url_publica`` en el sitio correcto por defecto en vez de en un
+    parche que hay que recordar.
+    """
+    assert redact_url(URL_CON_CREDENCIAL) == "https://***@tms.interno/inicio"
+    destino = ExploreTarget(alias="tms-qa", url=URL_BASE, readonly_verified=True)
+    assert destino.url_publica == destino.url
+
+
+def test_ninguna_superficie_publica_del_destino_muestra_la_url_cruda(monkeypatch):
+    """Lo que A7 pidió mirar: ¿hay algún sitio que imprima ``target.url``?
+
+    No lo hay —el único ``print`` del árbol, ``capture_explore_fixture.py``, usa
+    ``origin`` y ``host``—, y este test lo fija: las superficies públicas del
+    destino son alias, host, clase de datos y *paths*. Nada de credenciales, y
+    tampoco la ruta del ``storage_state``.
+    """
+    configurar(
+        monkeypatch,
+        destinos={
+            "tms-qa": {
+                "url": URL_BASE,
+                "readonly_verified": True,
+                "storage_state": "/var/lib/tms/qa-explorer.json",
+            }
+        },
+    )
+    destino = assert_target_authorized("tms-qa")
+    superficies = [
+        destino.url_publica,
+        origin_ref_for(destino),
+        str(available_targets()),
+        str(alcance_para_prompt(destino, ["/inicio"])),
+    ]
+    for texto in superficies:
+        assert "qa-explorer.json" not in texto
 
 
 def test_el_storage_state_no_se_lista(monkeypatch):

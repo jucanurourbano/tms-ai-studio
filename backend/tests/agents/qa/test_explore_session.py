@@ -271,23 +271,19 @@ async def test_un_clic_que_lleva_fuera_de_la_jaula_se_registra(destino):
 # --- capa 4 y propiedad del contexto ----------------------------------------
 
 
-async def test_la_credencial_no_llega_a_la_pagina_observada(monkeypatch):
-    configurar(
-        monkeypatch,
-        destinos={
-            "tms-qa": {
-                "url": f"https://qa:s3cr3t0@{HOST}/",
-                "readonly_verified": True,
-            }
-        },
-    )
-    destino = assert_target_authorized("tms-qa")
-    pedida = f"https://qa:s3cr3t0@{HOST}/"
-    driver = DriverFalso(paginas={pedida: pagina(pedida, HTML_LISTA)})
+async def test_la_credencial_de_un_enlace_de_la_app_no_llega_al_resumen(destino):
+    """Un destino ya no puede llevar credencial, pero **el enlace lo escribe la
+    aplicación explorada**: la capa 5 no lo sigue, y lo que se registra —que sí
+    viaja al artefacto— viene redactado.
+    """
+    driver = DriverFalso()
     s = sesion(destino, driver)
-    p = await s.abrir()
-    assert "s3cr3t0" not in p.url
-    assert "s3cr3t0" not in str(s.resumen())
+    entrada = await s.visitar(URL_BASE)
+    assert await s.visitar(f"https://qa:s3cr3t0@{HOST}/guias", desde=entrada) is None
+    assert driver.navegaciones == [URL_BASE]  # no se pidió nunca
+    resumen = str(s.resumen())
+    assert "s3cr3t0" not in resumen
+    assert "credencial embebida" in resumen
 
 
 async def test_ningun_atributo_publico_devuelve_el_driver(destino):
