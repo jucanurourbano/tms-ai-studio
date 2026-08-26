@@ -593,10 +593,12 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   la cuenta de QA—; (2) **allowlist de hosts**, vacía = nada autorizado; (3) **solo
   lectura impuesta en red: abortar todo método ≠ GET/HEAD** — "solo pulsamos enlaces"
   es intención, no *enforcement*, igual que "las consultas son SELECT" no es
-  `default_transaction_read_only=on`; (4) la credencial jamás sale y **no se guardan
-  capturas de pantalla** (una captura autenticada lleva datos reales de producción a
-  un PDF exportable); (5) **la allowlist se re-verifica en CADA navegación** — una BD
-  no redirige, una aplicación web sí. `QA_EXPLORE_ENABLED=false` por defecto.
+  `default_transaction_read_only=on`; (4) la credencial **no se redacta, no se
+  acepta** —una URL con *userinfo* no es un destino válido, ni un enlace navegable
+  (A7; ver más abajo)— y **no se guardan capturas de pantalla** (una captura
+  autenticada lleva datos reales de producción a un PDF exportable); (5) **la
+  allowlist se re-verifica en CADA navegación** — una BD no redirige, una
+  aplicación web sí. `QA_EXPLORE_ENABLED=false` por defecto.
 - **Rompe dos rachas del proyecto, a conciencia**: el contrato sube a **`QaArtifact`
   v1.1.0** (retrocompatible — `mode` con default `specification`, así que los
   artefactos ya persistidos siguen validando) y **exige la migración `0011`**
@@ -668,6 +670,21 @@ DOM) · `limits.py` · `driver.py` (protocolo estrecho, **cero Playwright**) ·
 - **Sin selector estable (`[name]` › `#id` › `[data-testid]`) no se pulsa.** El
   selector estructural llega en QC5 junto a su `selector_strategy`, el campo que
   avisa de que el ancla es frágil.
+- **A7 — la capa 4 se cumple en la ENTRADA.** `redact_url` tapaba la credencial
+  embebida en la URL del destino en cada superficie por la que podía asomar; eso la
+  deja **dentro** del sistema y hace la garantía proporcional al número de
+  superficies que alguien recordó (mismo patrón que F1: *redactar no es no tener*).
+  Desde A7 el validador **rechaza** cualquier URL con *userinfo*, mirando el
+  `netloc` crudo y no `partes.username` —la forma percent-encoded no se lee como
+  usuario—. Dos hallazgos más salieron del arreglo: **la capa 5 aceptaba
+  *userinfo*** (el destino ya no puede declararlo, pero **el enlace lo escribe la
+  aplicación explorada**, y `urlparse` no cuenta el *userinfo* ni en el esquema, ni
+  en el host, ni en el origen), y **el `ValidationError` de Pydantic incluye el
+  valor de entrada tal cual**, así que el nuevo rechazo publicaba lo que acababa de
+  rechazar — lo cazó el test que ya existía, y `_construir` traduce ahora la
+  excepción a un `ValueError` redactado para que la de terceros **no circule**.
+  `redact_url` se queda: sobre un destino es un no-op demostrable, y sigue haciendo
+  falta para las URLs que no declaramos nosotros.
 - **QC3 NO trae** la intercepción de red (abortar todo método ≠ `GET`/`HEAD`), la
   neutralización del `submit` ni el `storage_state`: las tres necesitan el driver
   real y son de QC5/QC6.
