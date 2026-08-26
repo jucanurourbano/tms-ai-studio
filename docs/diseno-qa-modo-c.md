@@ -564,7 +564,7 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
 | **QC4.5** ✅ | **El extractor determinista de anclas**: vocabulario cerrado de atributos-ancla, `anchor_ref` canónico, cinco estrategias de selector con unicidad comprobada, `@enum`, y un lector de `.html` de disco para mirar la tabla con los ojos. Sin red, sin LLM, sin navegador, sin clic. | cada atributo del vocabulario produce su ancla y `value`/`disabled`/`placeholder` no · una etiqueta que no se escribe en CSS **no** ancla (fail-closed) · dos pasadas dan los mismos refs en el mismo orden · toda evidencia es subcadena exacta del HTML · **F2 fijada**: el enum se ve en crudo y no en la fixture saneada | — **IMPLEMENTADO** (§13) |
 | **QC5** ✅ | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes · **C1 — tests de enum con HTML sintético, nunca contra fixtures** (allí hay cero enums: F2, §13.4) · **C2 — `radio`/`checkbox` entran en el vocabulario**, agrupados por `name` igual que `@enum` agrupa las `<option>` por prefijo de ruta · **C3 — el tope de A6, con huella**: por encima del tope se emite cardinalidad + hash del conjunto ordenado + primeros valores, **nunca** un conjunto recortado; un `<select>` de 1.874 opciones no mete el catálogo ni en el prompt ni en el artefacto y el ancla sigue en pie, y ninguna `evidence` supera los **32.767** caracteres de una celda de Excel · **C4 — enums falsos**: un `<select>` cuyos valores son ULIDs o nombres de persona **no** ancla como conjunto cerrado; QC5 **propone** el discriminador catálogo-de-dominio vs lista-de-datos (el mismo que bloquea F2) y no se decide antes · **C5 — anclas inestables**: ningún `anchor_ref` cambia entre corridas si no cambió la aplicación, así que un `aria-label` que interpola un id (`{storyId}`) no ancla — una suite de caracterización con refs inestables no caracteriza nada | **CERRADO** (§14). `libnspr4`/`libnss3` instalados; `playwright==1.62.0` (chromium **1234**, ya descargado). **Ninguna exploración real**, ni una vez |
-| **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está | **entorno** (igual que QC5) |
+| **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. Usuario `qa.test@urbano.com.pe`. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está · **A7.1 — `getpass` y nada más**: la contraseña se teclea, y no hay `--password`, ni variable de entorno, ni entrada en `.env` (el argumento queda en el historial del shell y en `ps aux`; la variable se hereda al navegador; el `.env` se copia entre máquinas). Incluye cerrar la puerta abierta del otro extremo: **el validador rechaza una URL base con `userinfo`**, porque `redact_url` la tapa pero no la quita, y hoy `https://qa.test:Secreta123@host/` se acepta. **Desviación declarada de QA-D21 (c)**: lo que persiste es el `storage_state`, nunca la credencial · **A7.2 — el candado es de forma y de sitio**, un test de la suite y no un `.gitignore` (que se salta con `git add -f`), probado **introduciendo la violación**: (1) ningún fichero de `git ls-files` tiene la forma de un `storage_state` (JSON con `cookies`+`origins`) ni su nombre; (2) la ruta del estado se comprueba **fuera del árbol** y `600`, porque prohibir el sitio llega antes que el `git add`; (3) por AST, `getpass` es la única fuente de la contraseña y no se pasa a nada que registre, imprima o escriba. **No busca la palabra «password»**: no existe oráculo de contraseñas sobre texto y el repo tiene hoy `tms_dev_password` en `.env.example` y `"superseguro1"` en 12 ficheros de `tests/api/`, todos legítimos. Y el candado AST **extiende su recorrido a `scripts/`**, que hoy no vigila nadie, mirando a quién se llama y no solo el nombre del método (`textwrap.fill` en `anclas_de_html.py:109` es un falso positivo medido) | **entorno** (igual que QC5) |
 | **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
 | **QC8** | Frontend (§7): selector de modo, select de alias **sin campo de URL**, `evidence-class.ts`, ancla en la fila, `HubSection` "Exploración", `UI:` sin destino, columna del CSV. | Modo A renderiza idéntico · alias vacío ⇒ opción deshabilitada con motivo · `UI:` no abre panel | **⚠️ LLM5** — §9.3 |
 | **Cierre** | Los modos disponibles sobre el mismo seed, con LLM y navegador falsos. | `scripts/seed_qa_demo.py` extendido | — |
@@ -572,11 +572,12 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 **El Modo B no está en este plan.** Está en cero (§1.2) y su plan es QA11–QA12 de la
 PARTE II. QC1 y QC2 le sirven a los dos, así que hacerlos ahora no lo estorba.
 
-## 8.bis Ajustes aprobados al aprobar cada bloque (A1–A6)
+## 8.bis Ajustes aprobados al aprobar cada bloque (A1–A7)
 
 Ajustes al diseño de arriba, acordados al aprobar cada bloque. Los tres primeros
 se implementaron en QC3; A4 es una nota de riesgo, A5 está **archivada** con su
-disparador escrito, y **A6 es un criterio de QC5** acordado al cerrar QC4.5.
+disparador escrito, **A6 fue un criterio de QC5** acordado al cerrar QC4.5 (y está
+cumplido, §14.5) y **A7 son dos criterios de QC6** acordados al cerrar QC5.
 
 ### A1 — El alias es una fuga, y se cierra por estructura
 
@@ -757,6 +758,113 @@ las capturas de pantalla (capa 4). La huella no lo lleva.
    **F3** (§13.8), que no es un criterio de QC5 sino un arreglo previo. Si QC5
    escribe su tope dentro de `explore/`, la mitad del Modo A se queda rota o acaba
    con una segunda copia de las constantes, y dos copias se separan.
+
+### A7 — La contraseña no se guarda en ninguna parte, y el candado no la busca por texto
+
+Dos criterios de QC6 acordados al cerrar QC5. El usuario explorador es
+`qa.test@urbano.com.pe` y **su contraseña la teclea una persona en la terminal**.
+
+#### A7.1 — `getpass` y nada más: ni argumento, ni variable de entorno, ni `.env`
+
+`qa_explore_login.py` pide la contraseña **interactivamente**, con `getpass`. Las
+tres alternativas están cerradas por el mismo motivo, que no es la comodidad:
+
+- **`--password` queda en el historial del shell** (`~/.bash_history`, para
+  siempre, en un fichero sin permisos especiales) **y en la lista de procesos**
+  (`ps aux` la ve mientras el CLI corre, y la ve *cualquier* usuario de la
+  máquina, no solo quien la escribió).
+- **Una variable de entorno** se hereda a todo proceso hijo y se lee entera en
+  `/proc/<pid>/environ`; si el CLI lanza un navegador, la contraseña viaja al
+  entorno del navegador sin que nadie lo haya pedido.
+- **Una entrada en `.env`** es una credencial de vida larga en un fichero que se
+  copia entre máquinas, se pega en un chat para desatascar un despliegue y acaba
+  comiteada por un `git add -A` de madrugada.
+
+Es la misma forma que ya tienen las otras dos herramientas de operación del
+proyecto —`create_admin.py` y `reset_password.py`, que piden la contraseña sin eco
+y **no** la aceptan por argumento (CLAUDE.md §6)—, así que QC6 no inventa una
+regla: hereda la de la casa.
+
+**Esto es una desviación de QA-D21, y se declara.** §4 eligió la opción (c),
+«cuenta dedicada de solo lectura, **credencial en el alias**», y aceptó como contra
+una «credencial de vida larga en `.env`». A7.1 se queda con todo lo bueno de (c)
+—mínimo privilegio en el origen, auditable como `qa-explorer`, reejecutable— y le
+quita la contra: **lo que persiste en el servidor es el `storage_state`, nunca la
+contraseña**. Lo que se pierde es que el login deje de ser desatendido, y no se
+pierde nada: §4.3 ya lo había sacado del pipeline a un CLI que una persona ejecuta.
+
+**Y el criterio no se cumple solo en el CLI, porque hoy hay una puerta abierta en
+el otro extremo.** `ExploreTarget` no tiene campo de contraseña y su
+`extra="forbid"` impide añadirla por una clave nueva, pero el validador de la URL
+base solo comprueba esquema y host, así que **esto se acepta hoy**:
+
+```python
+ExploreTarget(alias="tms-qa", url="https://qa.test:Secreta123@tms.example.com/app",
+              readonly_verified=True)          # ← aceptado en HEAD
+```
+
+`redact_url` lo tapa en logs, API y artefacto (`https://***@tms.example.com/app`),
+y ahí está la trampa: **redactar no es no tener**. La contraseña estaría en claro
+en `.env`, en `settings` y en memoria, y lo único que faltaría para filtrarla es un
+sitio que imprima `target.url` en vez de `target.url_publica`. Así que A7.1 incluye
+cerrarlo por estructura: **el validador rechaza una URL base con `userinfo`**, con
+un mensaje que dice dónde va la credencial (la teclea una persona, el CLI la
+cambia por un `storage_state`). `redact_url` **se queda** —sigue haciendo falta para
+las URLs que vienen de la página explorada, que no controlamos—; lo que deja de
+existir es la vía por la que una credencial entra en nuestra propia configuración.
+
+#### A7.2 — El candado es de forma y de sitio, no un detector de contraseñas
+
+Criterio: ningún fichero del repositorio contiene una contraseña ni un
+`storage_state`, **y es un test de la suite, no un `.gitignore`** —un `.gitignore`
+se salta con `git add -f`, y quien lo salta suele ser quien tiene prisa—. Mismo
+régimen que el candado de fixtures (§12): se prueba **introduciendo la violación**.
+
+Pero hay que decir cómo, porque la lectura literal no es implementable y fingir que
+lo es dejaría un candado que solo se ha visto pasar. **No existe un oráculo de
+«esto es una contraseña» sobre texto**, igual que el saneador no es un oráculo de
+PII (§12). Medido en HEAD, el repositorio contiene hoy, legítimamente:
+
+| Qué | Dónde | Por qué se queda |
+|---|---|---|
+| `tms_dev_password` dentro de un DSN | `.env.example` | es el marcador de una BD local de desarrollo, y el fichero existe para enseñar la forma |
+| `PASSWORD = "superseguro1"`, `"1234"`, `"equivocada"` | 12 ficheros de `tests/api/` | son los literales con los que se prueba el login, el reset y el rechazo |
+
+Un candado que busque «password» los encuentra todos y no encuentra la única cosa
+que importa. Así que el candado mira **forma** y **sitio**:
+
+1. **Ningún fichero versionado tiene la forma de un `storage_state`.** Eso sí se
+   reconoce sin adivinar: es un JSON de Playwright con `cookies` y `origins`, y sus
+   cookies llevan `name`/`value`/`domain`. Se recorre lo que devuelve `git ls-files`
+   —lo versionado, que es lo que se publica— y además se rechaza por nombre
+   (`*storage_state*`, `*.state.json`). Verificado en HEAD: **hoy no hay ninguno**,
+   así que el candado nace en verde y lo que detecte será nuevo.
+2. **El sitio del estado está fuera del árbol.** La ruta configurada en
+   `storage_state` de cada destino se resuelve y se comprueba que **no cae dentro
+   del repositorio**, con permisos `600` (§4.3 ya lo pedía; nadie lo comprobaba).
+   Un candado sobre los ficheros comiteados llega tarde por definición: prohibir el
+   *sitio* llega antes que el `git add`.
+3. **La contraseña no tiene por dónde salir del CLI**, por AST: `getpass.getpass`
+   es su única fuente; no hay argumento que la acepte; no se lee de `os.environ` ni
+   de `settings`; y no se pasa a nada que registre, imprima o escriba en disco —solo
+   al navegador—.
+
+**Y una consecuencia sobre el candado que ya existe, que hay que arreglar en QC6.**
+`PERMITIDOS_ESCRITURA` dice `ai/agents/qa/explore/login.py` y §4.3 dice
+`backend/scripts/qa_explore_login.py`. No es una contradicción si se lee bien —el
+CLI de `scripts/` es la cáscara que parsea argumentos y pide la contraseña, y el
+tecleo vive en `explore/login.py`, dentro del árbol vigilado— y **conviene que sea
+así**, porque `_fuentes()` recorre `app/` y `ai/`, y **`scripts/` no está vigilado
+por nada**. Si el tecleo viviera en `scripts/`, la frase «el CLI es el único sitio
+que teclea» sería exactamente lo que nadie comprueba. Dos cosas, entonces:
+
+- El tecleo va en `ai/agents/qa/explore/login.py`, ya nombrado en el permiso; el
+  fichero de `scripts/` no llama a un solo método del navegador.
+- El candado **extiende su recorrido a `scripts/`**. Con un detalle medido: el
+  candado casa por **nombre de método**, y `scripts/anclas_de_html.py:109` llama a
+  `textwrap.fill(...)`. Extender el recorrido tal cual lo pinta de rojo por un
+  falso positivo, así que la regla pasa a mirar **a quién** se le llama, no solo
+  cómo se llama el método. Un candado que hay que silenciar deja de ser un candado.
 
 ---
 
