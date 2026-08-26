@@ -1327,6 +1327,24 @@ peores. Así que `DUENO_DEL_CLIC` pasa a `DUENOS_DEL_CLIC` = {`session.py::pulsa
 garantizando es lo que importaba: **ningún nodo y ningún otro módulo pulsa nada**. Un
 segundo dueño nombrado se ve en la revisión; una lista de ficheros exentos, no.
 
+**Y por eso mismo, la nota que se lleva el bloque: `DUENOS_DEL_CLIC` es el sitio por
+donde este candado se afloja.** No se rompe de frente —nadie va a borrar el test—; se
+ensancha, un dueño cada vez, cada uno con su justificación razonable en el momento en
+que se escribe, hasta que la lista describe el código en vez de restringirlo. Ya hubo
+un intento por esa puerta: el `__init__.py` del paquete pedía una excepción al candado
+de `build_driver` —un reexport, que no lo llama nadie— y se le negó, porque una
+excepción en un candado es un candado con la llave debajo del felpudo (§13.6 y el
+docstring de `test_build_driver_no_se_importa_por_nombre_en_ninguna_parte`).
+
+La regla, entonces: **ampliar `DUENOS_DEL_CLIC` es una decisión con reporte, nunca de
+paso.** Pasar de uno a dos dueños fue una decisión aprobada al cerrar QC5 y está
+escrita aquí arriba; un tercero exige lo mismo —nombre, motivo y por qué no se podía
+resolver dentro de los dos que ya hay— y no cabe en un commit que hace otra cosa. Lo
+mismo vale para sus hermanos, que son la misma clase de lista: `PERMITIDOS_ESCRITURA`,
+`METODOS_PROHIBIDOS`, la lista de imports de `extract.py` y los dueños de
+`sin_navegador_real`. Un candado con una lista de exentos que crece sin reporte
+termina de comentario.
+
 ### 14.4 `sin_navegador_real` pasa a proteger de un riesgo presente
 
 Hasta aquí, dos de las tres entradas de la capa 5 se saltaban en silencio: sin el

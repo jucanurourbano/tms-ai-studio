@@ -73,6 +73,14 @@ PERMITIDOS_ESCRITURA = {"ai/agents/qa/explore/login.py"}
 #: Lo que el candado sigue garantizando, que es lo que importa: **ningún nodo, ni
 #: ningún otro módulo, pulsa nada**. Un segundo dueño nombrado se ve en la revisión;
 #: una lista de ficheros exentos, no.
+#:
+#: **Y esta lista es el sitio por donde este candado se afloja.** No se rompe de
+#: frente: se ensancha, un dueño cada vez, cada uno razonable por separado, hasta que
+#: describe el código en vez de restringirlo. Ya hubo un intento por esa puerta —el
+#: ``__init__`` del paquete pidiendo excepción al candado de ``build_driver``— y se le
+#: negó. Así que: **añadir un dueño aquí es una decisión con reporte, nunca de paso**
+#: (``docs/diseno-qa-modo-c.md`` §14.3). Si estás editando esta lista de camino a otra
+#: cosa, para.
 DUENOS_DEL_CLIC = {
     ("ai/agents/qa/explore/session.py", "pulsar_si_procede"),
     ("ai/agents/qa/explore/driver.py", "click"),
