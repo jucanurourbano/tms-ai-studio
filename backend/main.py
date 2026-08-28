@@ -13,11 +13,17 @@ from app.api.v1.router import api_router
 from app.config.settings import settings
 from app.core.logger import logger
 from app.middlewares.exceptions import register_exception_handlers
+from app.services.spend_sink import install_db_sink
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Ciclo de vida de la aplicación (arranque / apagado)."""
+    # El libro mayor de gasto se instala aquí y en ningún otro sitio. Mientras no
+    # esté instalado, el sumidero por defecto NIEGA toda llamada al modelo
+    # (GAS-D7): un despliegue mal configurado deja de funcionar en vez de gastar
+    # sin medir. Es el orden correcto del error.
+    install_db_sink()
     logger.info(
         "Aplicación %s inicializada (env=%s, modelo=%s)",
         settings.APP_NAME,

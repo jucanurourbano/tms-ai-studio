@@ -87,7 +87,7 @@ async def node_extract(state: EFState, config: RunnableConfig) -> dict:
         # Mientras la clasificación de fuentes no exista (LLM2) se declara
         # `real`: el valor conservador, el que NO autoriza a un proveedor de
         # pruebas.
-        llm = get_llm("ef", data_class="real")
+        llm = get_llm("ef", data_class="real", job_id=state.get("job_id"))
 
     chunks = (state.get("chunks") or {}).get("chunks", [])
     results, skipped, tokens = await run_extract(

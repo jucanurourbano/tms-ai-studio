@@ -33,6 +33,7 @@ from app.services.arquitectura_service import ArquitecturaService
 from app.services.bd_service import BdModelingService
 from app.services.ef_service import EFAnalysisService
 from app.services.scrum_service import ScrumPlanningService
+from app.services.spend_sink import preflight_mensual
 
 
 async def run_api_pipeline(
@@ -86,7 +87,7 @@ async def run_api_pipeline(
         # Mientras la clasificación de fuentes no exista (LLM2) se declara
         # `real`: el valor conservador, el que NO autoriza a un proveedor de
         # pruebas a ver este contenido.
-        llm=get_llm("api", data_class="real"),
+        llm=get_llm("api", data_class="real", job_id=job_id),
         initial_state=state,
     )
 
@@ -120,6 +121,12 @@ class ApiSpecService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea una especificación de API desde un modelo de datos **listo**."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         chain = await self._load_chain(bd_job_id)
 
         summary = await self.bd.validation_summary(bd_job_id)
@@ -398,6 +405,12 @@ class ApiSpecService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job hijo reinyectando las respuestas como contexto autoritativo."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         parent = await self.repo.get_job(parent_job_id)
         if parent is None or parent.agent_type != AgentType.API:
             raise IngestError(f"No existe un job de API con id {parent_job_id}.")

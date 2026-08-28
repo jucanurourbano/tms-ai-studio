@@ -22,7 +22,21 @@ que hace que un guardarraíl no se dispare.
 y no una fuga silenciosa. Con un solo proveedor registrado el valor todavía no
 decide nada; la política que lo usa llega en LLM2, y la firma se pone hoy para
 que ese bloque no tenga que volver a tocar los 15 sitios que llaman.
+
+``job_id`` es **keyword-only y sin default** por el mismo criterio, y desde GAS1:
+es la clave con la que el freno del job sabe cuánto lleva gastado esa corrida.
+Un default invisible convertiría un olvido en un job sin freno. Quien no tiene
+job —la ingesta de documentos del inventario— pasa ``None`` **explícito**, y su
+gasto se anota igual: si no contara, el mes tendría una fuga.
+
+**Todo lo que sale de aquí sale MEDIDO.** El envoltorio se aplica en la fábrica y
+no en cada proveedor (GAS-D2): mismo patrón que la capa 1 del cortafuegos de
+tests, y por la misma razón —registrar un proveedor nuevo hereda la medición y el
+freno sin que nadie se acuerde—. Hay un candado parametrizado sobre ``PROVIDERS``
+que lo comprueba.
 """
+
+from typing import Optional
 
 from ai.llm.base import (
     DATA_CLASSES,
@@ -31,6 +45,7 @@ from ai.llm.base import (
     LLMClient,
     ProviderConfigError,
 )
+from ai.llm.metering import MeteredLLMClient
 from ai.llm.registry import get_spec
 from app.config.settings import settings
 
@@ -54,11 +69,14 @@ def resolve_model(provider: str) -> str:
     return override or get_spec(provider).default_model()
 
 
-def get_llm(agent_role: str, *, data_class: DataClass) -> LLMClient:
-    """Devuelve el ``LLMClient`` del proveedor que corresponda a ``agent_role``.
+def get_llm(
+    agent_role: str, *, data_class: DataClass, job_id: Optional[str]
+) -> LLMClient:
+    """Devuelve el ``LLMClient`` **medido** del proveedor de ``agent_role``.
 
-    Devuelve un cliente **completo** (con su política de reintentos y su tarifa
-    dentro), nunca el cliente crudo del SDK: ver ``ai/llm/base.py``.
+    Devuelve un cliente **completo** (con su política de reintentos, su tarifa y
+    —desde GAS1— su libro mayor y su freno dentro), nunca el cliente crudo del
+    SDK: ver ``ai/llm/base.py``.
     """
     if data_class not in DATA_CLASSES:
         validas = ", ".join(DATA_CLASSES)
@@ -67,4 +85,5 @@ def get_llm(agent_role: str, *, data_class: DataClass) -> LLMClient:
         )
     provider = resolve_provider(agent_role)
     spec = get_spec(provider)
-    return spec.build_client(model=resolve_model(provider), data_class=data_class)
+    cliente = spec.build_client(model=resolve_model(provider), data_class=data_class)
+    return MeteredLLMClient(cliente, agent_role=agent_role, job_id=job_id)

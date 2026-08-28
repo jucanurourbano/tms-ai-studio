@@ -116,5 +116,5 @@ def test_el_costo_estimado_da_el_mismo_numero_que_antes():
     from ai.llm import get_llm
 
     # El cliente que devuelve la fábrica lleva la tarifa dentro: mismo número.
-    llm = get_llm("ef", data_class="real")
+    llm = get_llm("ef", data_class="real", job_id=None)
     assert llm.estimate_cost(1234, 567) == estimate_cost(1234, 567)

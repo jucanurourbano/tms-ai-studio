@@ -107,7 +107,17 @@ def _amordazar(spec):
         # Atributo de instancia: sombrea el método sin tocar la clase, así que
         # el cliente conserva todo lo demás intacto y no hay estado global que
         # restaurar más allá del propio registro.
-        cliente.complete_json = _boom
+        #
+        # Se tapan las DOS bocas, y la segunda es la que importa desde GAS1:
+        # `get_llm` envuelve ahora este cliente en `MeteredLLMClient`, que llama
+        # al protocolo INTERNO `complete(...)`. Tapando solo `complete_json`
+        # —la boca pública, que es la que este cortafuegos tapaba desde LLM1— el
+        # envoltorio pasaría de largo y saldría a la red. Es exactamente la
+        # forma del fallo de la REGLA R1: la capa seguía puesta y había dejado
+        # de cubrir, sin que nada lo dijera. Hay test de que cubre las dos.
+        for boca in ("complete_json", "complete"):
+            if hasattr(cliente, boca):
+                setattr(cliente, boca, _boom)
         return cliente
 
     return _build
@@ -307,6 +317,96 @@ def blindar_navegador(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for ruta in FABRICAS_DE_NAVEGADOR:
         _parchear_si_existe(monkeypatch, ruta, MENSAJE_NAVEGADOR)
+
+
+# --------------------------------------------------------------------------
+# Capa 6 — el libro mayor de gasto (GAS1)
+# --------------------------------------------------------------------------
+
+MENSAJE_LIBRO_MAYOR = (
+    "Un test intentó anotar gasto en el libro mayor REAL. Usa el sumidero de "
+    "pruebas (fixture `libro_mayor`) o instala el tuyo con "
+    "ai.llm.budget.install_sink(...). El gasto de la suite no puede tocar la "
+    "base de datos de la plataforma."
+)
+
+
+class LibroMayorDePruebas:
+    """Sumidero en memoria: cuenta lo mismo que el real y no toca la base.
+
+    Existe por dos motivos distintos, y conviene no confundirlos:
+
+    1. **Que ningún test escriba una fila de gasto de verdad.** El sumidero real
+       abre una sesión contra Postgres; en la suite eso sería lento, dependiente
+       de que haya contenedor levantado y con totales que cambian según lo que
+       haya en la base local — justo lo que un test no debe tener.
+    2. **Que el resto de la suite siga pudiendo llamar al doble del LLM.** Desde
+       GAS1 el freno comprueba el tope ANTES de delegar, y el sumidero por
+       defecto NIEGA (GAS-D7). Sin instalar uno, cada test que pasa por
+       `get_llm` fallaría por presupuesto en vez de por lo que estaba probando.
+
+    Que el fail-closed siga siendo de verdad lo comprueba un test que **quita**
+    este sumidero y verifica que entonces la llamada se niega.
+    """
+
+    def __init__(self) -> None:
+        self.filas: list = []
+
+    async def totales(self, *, desde, hasta, job_id):
+        from decimal import Decimal
+
+        from ai.llm.budget import Totales
+
+        mes = sum(
+            (f.cost_usd for f in self.filas if desde <= self._cuando(f) < hasta),
+            Decimal("0"),
+        )
+        job = sum(
+            (f.cost_usd for f in self.filas if job_id and f.job_id == job_id),
+            Decimal("0"),
+        )
+        return Totales(mes_usd=mes, job_usd=job)
+
+    async def anotar(self, fila) -> None:
+        self.filas.append(fila)
+
+    @staticmethod
+    def _cuando(fila):
+        from datetime import datetime, timezone
+
+        return fila.created_at or datetime.now(timezone.utc)
+
+
+def blindar_libro_mayor(monkeypatch: pytest.MonkeyPatch) -> "LibroMayorDePruebas":
+    """Instala el libro mayor en memoria y devuelve sus filas para inspección.
+
+    Se parchea el atributo del módulo y no se llama a ``install_sink``: así el
+    ``monkeypatch`` lo restaura al terminar el test y no queda estado global
+    entre tests, que con un sumidero que ACUMULA sería una fuga entre casos.
+    """
+    libro = LibroMayorDePruebas()
+    monkeypatch.setattr("ai.llm.budget._SINK", libro)
+    return libro
+
+
+def blindar_repositorio_de_gasto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hace explotar la escritura en la tabla real de gasto.
+
+    Hermana de la capa 2: cubre a quien se salte el sumidero y use el
+    repositorio directamente. No cubre al test que construya el ``LlmSpend`` a
+    mano contra la sesión de pruebas —eso es SQLite en memoria y es legítimo:
+    los tests del propio repositorio lo hacen—.
+    """
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError(MENSAJE_LIBRO_MAYOR)
+
+    monkeypatch.setattr(
+        "app.services.spend_sink.DatabaseSpendSink.anotar", _boom, raising=False
+    )
+    monkeypatch.setattr(
+        "app.services.spend_sink.DatabaseSpendSink.totales", _boom, raising=False
+    )
 
 
 def cobertura_de_capas(proveedor: str) -> dict[str, Optional[bool]]:

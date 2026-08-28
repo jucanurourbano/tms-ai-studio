@@ -38,6 +38,11 @@ BACKEND = Path(__file__).resolve().parent.parent
 COSTURAS: dict[str, set[str]] = {
     "build_driver": {"ai/agents/qa/explore/driver.py"},
     "get_claude_client": {"app/dependencies/claude.py"},
+    # GAS1: el sumidero del libro mayor se instala en el ``lifespan`` y se
+    # sustituye en cada test. Si ``MeteredLLMClient`` lo importara por su nombre,
+    # el enlace quedaría congelado en el sumidero que NIEGA —el que hay al
+    # importar— y ni el sumidero real ni el de pruebas lo alcanzarían nunca.
+    "current_sink": {"ai/llm/budget.py"},
 }
 
 

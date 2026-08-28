@@ -35,6 +35,7 @@ from app.repositories.agent_job_repository import AgentJobRepository
 from app.services.api_service import ApiSpecService
 from app.services.ef_service import EFAnalysisService
 from app.services.scrum_service import ScrumPlanningService
+from app.services.spend_sink import preflight_mensual
 
 
 async def run_qa_pipeline(
@@ -85,7 +86,7 @@ async def run_qa_pipeline(
         # Mientras la clasificación de fuentes no exista (LLM2) se declara
         # `real`: el valor conservador, el que NO autoriza a un proveedor de
         # pruebas a ver este contenido.
-        llm=get_llm("qa", data_class="real"),
+        llm=get_llm("qa", data_class="real", job_id=job_id),
         initial_state=state,
     )
 
@@ -119,6 +120,12 @@ class QaTestDesignService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un plan de pruebas desde un plan Scrum **listo**."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         chain = await self._load_chain(scrum_job_id)
 
         summary = await self.scrum.validation_summary(scrum_job_id)
@@ -443,6 +450,12 @@ class QaTestDesignService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job hijo reinyectando las respuestas como contexto autoritativo."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         parent = await self.repo.get_job(parent_job_id)
         if parent is None or parent.agent_type != AgentType.QA:
             raise IngestError(f"No existe un plan de pruebas con id {parent_job_id}.")

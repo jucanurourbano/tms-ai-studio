@@ -128,6 +128,32 @@ def sin_inventario_real(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("ai.inventory.nodes.load_target_inventory", _sin_inventario)
 
 
+@pytest.fixture(autouse=True)
+def libro_mayor(monkeypatch: pytest.MonkeyPatch):
+    """Capa 6 — el libro mayor de gasto (GAS1). Devuelve el sumidero en memoria.
+
+    Dos cosas a la vez, y las dos hacen falta:
+
+    * **Ningún test escribe una fila de gasto real.** El sumidero de verdad abre
+      una sesión contra Postgres.
+    * **El resto de la suite sigue pudiendo llamar al doble del LLM.** El freno
+      comprueba el tope ANTES de delegar y el sumidero por defecto NIEGA
+      (GAS-D7), así que sin esto cada test que pase por ``get_llm`` fallaría por
+      presupuesto en vez de por lo que estaba probando.
+
+    Que el fail-closed siga siendo de verdad lo comprueba
+    ``tests/llm/test_gasto.py``, que **quita** este sumidero y verifica que
+    entonces la llamada se niega: un candado que solo se ha visto pasar es
+    indistinguible de una función que devuelve la lista vacía.
+
+    Autouse por el mismo motivo que sus hermanas: la protección no puede
+    depender de que cada test se acuerde de pedirla. Los tests que necesitan
+    inspeccionar el gasto piden la fixture por su nombre y leen ``.filas``.
+    """
+    firewall.blindar_repositorio_de_gasto(monkeypatch)
+    return firewall.blindar_libro_mayor(monkeypatch)
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
     """Engine SQLite async in-memory con el esquema creado."""

@@ -16,6 +16,7 @@ from anthropic import APIConnectionError, InternalServerError, RateLimitError
 
 from ai.agents.base.structured import message_text
 from ai.llm.base import DataClass, ProviderSpec
+from ai.llm.metering import Completion, usage_desde_mensaje
 from ai.llm.pricing import compute_cost
 from ai.llm.retry import call_with_retry
 from app.config.settings import settings
@@ -115,7 +116,14 @@ class AnthropicLLMClient:
         """Costo en USD de esta llamada, con la tarifa de ESTE proveedor."""
         return compute_cost(input_tokens, output_tokens, price_per_mtok(self.model))
 
-    async def complete_json(self, *, system: str, user: str) -> str:
+    async def complete(self, *, system: str, user: str) -> Completion:
+        """Protocolo INTERNO (GAS-D2): el texto **y** el consumo de la llamada.
+
+        ``AIMessage.usage_metadata`` estaba ahí desde siempre y se tiraba a la
+        basura una línea después de recibirlo, que es la razón por la que el
+        costo del proyecto era una estimación (``len // 4``) subcontando entre
+        2,4x y 3,1x. Leerlo cuesta exactamente esto.
+        """
         # El cliente se resuelve a través de ``app.dependencies.claude`` a
         # propósito: ese símbolo es la costura que parchea el cortafuegos de
         # tests (REGLA DE PRESUPUESTO). Saltársela dejaría la suite sin
@@ -125,13 +133,25 @@ class AnthropicLLMClient:
         overrides = {"model": self._model} if self._model else {}
         client = self._client or get_claude_client(**overrides)
 
-        async def _call() -> str:
+        async def _call() -> Completion:
             msg = await client.ainvoke([("system", system), ("user", user)])
             # ``content`` puede ser string o lista de bloques (thinking+text) en
             # langchain-anthropic 1.x: extraer SIEMPRE el texto, nunca str(lista).
-            return message_text(msg.content)
+            return Completion(
+                text=message_text(msg.content), usage=usage_desde_mensaje(msg)
+            )
 
         return await call_with_retry(_call, spec=SPEC)
+
+    async def complete_json(self, *, system: str, user: str) -> str:
+        """La cara pública, intacta: los ~30 nodos generativos siguen viendo esto.
+
+        Quien pase por la fábrica recibe este cliente envuelto en
+        ``MeteredLLMClient``, que es quien comprueba el tope y anota la fila. Este
+        método sigue existiendo para quien construya el proveedor a mano —los
+        tests que le inyectan un chat falso— y para no cambiar el protocolo.
+        """
+        return (await self.complete(system=system, user=user)).text
 
 
 def _build_client(*, model: str, data_class: DataClass) -> AnthropicLLMClient:

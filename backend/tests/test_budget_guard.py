@@ -52,7 +52,7 @@ def test_el_cortafuegos_nombra_como_arreglarlo():
 
 
 async def test_el_cliente_que_devuelve_la_fabrica_no_puede_llamar():
-    llm = get_llm("ef", data_class="real")
+    llm = get_llm("ef", data_class="real", job_id="JOB-FICTICIO")
     with pytest.raises(AssertionError, match="REGLA DE PRESUPUESTO"):
         await llm.complete_json(system="s", user="u")
 
@@ -64,7 +64,7 @@ def test_la_capa_de_la_fabrica_no_falsea_al_cliente():
     estarían comprobando el doble y no el proveedor — y dejarían de detectar una
     resolución equivocada, que es justo lo que vigilan.
     """
-    llm = get_llm("bd", data_class="sintetico")
+    llm = get_llm("bd", data_class="sintetico", job_id="JOB-FICTICIO")
     assert llm.provider == "anthropic"
     assert llm.model == settings.CLAUDE_MODEL
     assert llm.data_class == "sintetico"
@@ -183,7 +183,7 @@ def test_toda_capa_cubre_a_todo_proveedor_registrado(proveedor, monkeypatch):
 
     monkeypatch.setattr(settings, "LLM_PROVIDER", proveedor)
     monkeypatch.setattr(settings, "LLM_ROLE_OVERRIDES", {})
-    llm = get_llm("ef", data_class="sintetico")
+    llm = get_llm("ef", data_class="sintetico", job_id="JOB-FICTICIO")
     assert llm.provider == proveedor
 
     async def _llamar():

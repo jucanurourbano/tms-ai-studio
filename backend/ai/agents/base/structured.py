@@ -8,6 +8,7 @@ Extrae el patrón embebido en ``ai/agents/ef/extract.py`` a una base compartida:
 - ``complete_structured``: una llamada con loop de reparación ante schema inválido.
 - ``run_structured_map``: map (ítem × tarea) con concurrencia limitada y cuarentena
   de los ítems irreparables (nunca tumba el job).
+- ``for_stage``: etiqueta el cliente con el nodo para atribuir su gasto (GAS-D10).
 """
 
 import asyncio
@@ -120,6 +121,24 @@ async def complete_structured(
     return None, last_error
 
 
+def for_stage(llm: Any, stage: str) -> Any:
+    """Etiqueta el cliente con el nodo, si sabe hacerlo (GAS-D10).
+
+    Para decir "``EDGE_CASES`` costaba X y ahora cuesta Y" la fila del libro
+    mayor necesita el nodo, y el cliente solo conoce el agente. ``stage`` ya
+    llegaba hasta aquí —se usaba para el motivo de la cuarentena—, así que
+    etiquetar en este punto cubre **todos** los nodos de tipo *map* del sistema
+    con una sola edición.
+
+    Se pide con ``getattr`` y se tolera su ausencia: los mocks de la suite no lo
+    tienen y no deben tenerlo. Es una **etiqueta**, no dinero, así que tolerarla
+    ausente no es fail-open — la fila se anota igual, con ``stage`` en ``NULL``, y
+    el hueco se ve en la consulta en vez de adivinarse.
+    """
+    etiquetar = getattr(llm, "for_stage", None)
+    return etiquetar(stage) if callable(etiquetar) else llm
+
+
 async def run_structured_map(
     llm: LLMClient,
     items: list[dict],
@@ -146,13 +165,18 @@ async def run_structured_map(
     skipped: list[dict] = []
     tokens = {"input": 0, "output": 0}
     semaphore = asyncio.Semaphore(concurrency)
+    etiquetado = for_stage(llm, stage)
 
     async def worker(item: dict) -> None:
         system = build_system(item)
         user = build_user(item)
         async with semaphore:
             model, error = await complete_structured(
-                llm, system=system, user=user, schema=schema, max_repairs=max_repairs
+                etiquetado,
+                system=system,
+                user=user,
+                schema=schema,
+                max_repairs=max_repairs,
             )
         tokens["input"] += estimate_tokens(system + user)
         if model is None:

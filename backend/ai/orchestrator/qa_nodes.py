@@ -5,6 +5,7 @@ los otros nueve son deterministas, y eso es lo que hace el plan auditable: la
 cobertura y el esfuerzo se recomputan leyendo el artefacto y dan el mismo número.
 """
 
+import time
 from datetime import date
 
 from langchain_core.runnables import RunnableConfig
@@ -41,7 +42,17 @@ def _llm(config: RunnableConfig):
     # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
     # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
     # el valor conservador, el que NO autoriza a un proveedor de pruebas.
-    return get_llm("qa", data_class="real")
+    #
+    # `job_id` también es keyword-only y sin default (GAS1): es la clave del
+    # freno por corrida. Se toma del `thread_id`, que el runner fija AL job_id
+    # para el checkpointer, así que es el mismo valor y no una segunda fuente que
+    # pueda desalinearse. Esta rama solo se recorre en runtime real —en tests el
+    # LLM llega inyectado por `config`—, donde el runner siempre lo pone.
+    return get_llm(
+        "qa",
+        data_class="real",
+        job_id=(config or {}).get("configurable", {}).get("thread_id"),
+    )
 
 
 def _today(config: RunnableConfig) -> str:
@@ -84,6 +95,14 @@ async def node_load_sources(state: QaState) -> dict:
     # un semáforo que no obedece a su configuración.
     overrides = dict(state.get("target_overrides") or {})
     return {
+        # H2: los otros CINCO agentes fijan `started_at` en su primer nodo y este
+        # no lo hacía en ninguno, así que las dos corridas reales de QA reportan
+        # una duración de 56 AÑOS. El `state.get("started_at", time.time())` del
+        # ensamblador no salvaba nada porque la clave llega presente con `0.0`:
+        # el default nunca entra, el fallback estaba escrito para el caso que no
+        # ocurre. La duración es el otro eje de "qué me costó esto", y medir el
+        # antes/después de un recorte con un reloj roto no sirve.
+        "started_at": time.time(),
         "sources": sources,
         "target": resolve_target(
             coverage_threshold=overrides.get(

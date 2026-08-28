@@ -21,6 +21,7 @@ from app.models.ef import (
     ValidationTargetType,
 )
 from app.repositories.ef_repository import EFRepository
+from app.services.spend_sink import preflight_mensual
 
 _MIN_TEXT = 100
 
@@ -66,12 +67,12 @@ async def run_ef_pipeline(
         # Mientras la clasificación de fuentes no exista (LLM2) se declara
         # `real`: el valor conservador, el que NO autoriza a un proveedor de
         # pruebas a ver este contenido.
-        llm=get_llm("ef", data_class="real"),
+        llm=get_llm("ef", data_class="real", job_id=job_id),
         initial_state=state,
         # CRITIQUE necesita su propio cliente para el pase semántico (ambigüedades
         # / faltantes). Sin esto QUESTION_GEN se queda en 0 preguntas aunque el
         # texto tenga vacíos claros (mismo patrón que el Agente Scrum).
-        extra_config={"critique_llm": get_llm("ef", data_class="real")},
+        extra_config={"critique_llm": get_llm("ef", data_class="real", job_id=job_id)},
     )
 
 
@@ -94,6 +95,12 @@ class EFAnalysisService:
         actor_id: Optional[str] = None,
     ) -> tuple[EFJob, bool]:
         """Crea (o reutiliza por hash) un análisis. Devuelve (job, cached)."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         content_hash = compute_hash(content)
 
         # Idempotencia: si ya hay un job completado para este hash, se reutiliza.
@@ -219,6 +226,12 @@ class EFAnalysisService:
         actor_id: Optional[str] = None,
     ) -> EFJob:
         """Crea un job hijo reinyectando las respuestas como contexto autoritativo."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         parent = await self.repo.get_job(parent_job_id)
         if parent is None:
             raise IngestError(f"Job padre no encontrado: {parent_job_id}")

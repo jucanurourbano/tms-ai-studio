@@ -287,7 +287,12 @@ async def upload_document(
     # de evadir la política del proveedor, el chat crudo NO tiene
     # ``complete_json``. Ahora entra por la misma puerta que todos los demás.
     conocimiento = await extract_knowledge(
-        get_llm("inventory_doc", data_class="real"),
+        # `job_id=None` EXPLICITO: la ingesta de documentos no crea un job
+        # de agente, así que no hay freno por corrida que aplicarle — solo
+        # responde ante el techo del mes. Su gasto se anota igual: si no
+        # contara, el mes tendría una fuga por el único sitio que ingiere
+        # documentos reales de Urbano.
+        get_llm("inventory_doc", data_class="real", job_id=None),
         fragmentos,
         concurrency=settings.INVENTORY_EXTRACT_CONCURRENCY,
     )

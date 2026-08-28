@@ -27,6 +27,7 @@ from .inventory import (
     InventorySystemStatus,
     InventoryValidationStatus,
 )
+from .spend import USAGE_SOURCES, LlmSpend
 from .user import Specialty, User, UserModuleGrant, UserRole
 
 __all__ = [
@@ -49,9 +50,11 @@ __all__ = [
     "InventorySystemStatus",
     "InventoryValidationStatus",
     "JobStatus",
+    "LlmSpend",
     "SprintAssignment",
     "Specialty",
     "StoryAssignment",
+    "USAGE_SOURCES",
     "User",
     "UserModuleGrant",
     "UserRole",

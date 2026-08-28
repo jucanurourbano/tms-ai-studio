@@ -1058,7 +1058,7 @@ export function QaResultView({ job }: { job: QaJobDetail }) {
                 <Stat
                   icon={<DollarSign />}
                   value={`$${a.metrics.cost.toFixed(4)}`}
-                  label="costo"
+                  label="costo estimado"
                 />
               </StatRow>
               <div className="md:ml-auto md:border-l md:border-border/70 md:pl-8">

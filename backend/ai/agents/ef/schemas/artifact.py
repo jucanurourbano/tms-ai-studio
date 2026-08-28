@@ -7,7 +7,7 @@ Todo ítem trazable lleva ``id`` y, donde aplique, ``source_ref``, ``evidence``
 (verbatim), ``confidence`` y ``origin`` (``stated`` | ``derived``).
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -264,11 +264,31 @@ class Question(TracedItem):
 
 
 class TokenMetrics(_Strict):
-    """Desglose de tokens (necesario para calcular costo in/out)."""
+    """Desglose de tokens (necesario para calcular costo in/out).
+
+    Lo usan los SEIS agentes del ISDF, así que ``source`` etiqueta de una vez el
+    origen de estas cifras **y el de ``Metrics.cost``**, que es una función pura
+    de ellas.
+
+    Hoy vale siempre ``"estimado"``: los nodos cuentan con ``estimate_tokens``
+    (``len // 4``), que subcuenta entre 2,4x y 3,1x por tres causas acumulativas
+    —el loop de reparación factura hasta 3 veces y se apunta 1, los tokens de
+    razonamiento no aparecen en el JSON volcado, y ``len // 4`` es tosco sobre
+    JSON en español—. Desde GAS1 la cifra **real** existe y vive en
+    ``job.metrics.real``, leída del libro mayor; hacer verdadera **ésta** exige
+    que los ~20 nodos dejen de estimar, y tiene dueño escrito: LLM4.
+
+    La etiqueta se pone ahora y no entonces porque un número bajo sin marca que
+    llega a gerencia no es honesto, y un número etiquetado como estimado sí. Es
+    un campo con default, así que los artefactos ya persistidos siguen validando.
+    """
 
     input: int = 0
     output: int = 0
     total: int = 0
+    #: ``"estimado"`` mientras la cifra la produzca ``estimate_tokens``;
+    #: ``"medido"`` el día que la produzca el ``usage`` del proveedor (LLM4).
+    source: Literal["estimado", "medido"] = "estimado"
 
 
 class SkippedItem(_Strict):

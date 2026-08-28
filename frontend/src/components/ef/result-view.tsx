@@ -962,7 +962,7 @@ export function ResultView({ job }: { job: JobDetail }) {
               label: "cobertura",
               value: `${Math.round(a.metrics.coverage * 100)}%`,
             },
-            { label: "costo", value: `$${a.metrics.cost.toFixed(4)}` },
+            { label: "costo estimado", value: `$${a.metrics.cost.toFixed(4)}` },
           ]}
         />
         <PrintFooter title="Análisis de Especificación Funcional" />
@@ -1123,7 +1123,7 @@ export function ResultView({ job }: { job: JobDetail }) {
               <Stat
                 icon={<DollarSign />}
                 value={`$${a.metrics.cost.toFixed(4)}`}
-                label="costo"
+                label="costo estimado"
               />
               <Stat
                 icon={<Clock />}

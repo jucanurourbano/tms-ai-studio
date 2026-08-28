@@ -270,3 +270,53 @@ def test_el_artefacto_ensamblado_hace_round_trip():
     )
     datos = artefacto.model_dump(mode="json")
     assert QaArtifact.model_validate(datos).model_dump(mode="json") == datos
+
+
+# --- H2: el reloj de QA -------------------------------------------------------
+
+
+async def test_la_duracion_del_plan_es_un_numero_de_segundos_plausible():
+    """H2. Las dos corridas reales de QA reportan **56 años** de duración.
+
+    Los otros cinco agentes fijan ``started_at`` en su primer nodo; ``qa_nodes``
+    no lo hacía en ninguno, así que el ensamblador restaba contra ``0.0`` y
+    obtenía el *epoch* entero. El ``state.get("started_at", time.time())`` no
+    salvaba nada porque la clave **llega presente** con ``0.0`` —este mismo
+    arnés la pasa así—: el default nunca entra, el fallback estaba escrito para
+    el caso que no ocurre.
+
+    Entra con el control de gasto porque la duración es el otro eje de "qué me
+    costó esto", y medir el antes/después de un recorte con un reloj roto no
+    sirve.
+    """
+    salida = await _corre()
+    duracion = salida["artifact"]["metrics"]["duration"]
+    assert 0.0 <= duracion < 300.0, (
+        f"La duración del plan es {duracion} s. Si es del orden de 1e9, "
+        "`started_at` volvió a quedarse sin fijar en LOAD_SOURCES."
+    )
+
+
+async def test_el_primer_nodo_fija_el_reloj_aunque_llegue_en_cero():
+    """El arreglo, visto sobre la causa: LOAD_SOURCES pisa el ``0.0`` de entrada.
+
+    Comprobar solo la duración dejaría pasar un arreglo hecho en el ensamblador
+    (un `if not started_at`), que taparía el síntoma en QA y dejaría a los otros
+    cinco agentes con el mismo fallback escrito para el caso que no ocurre.
+    """
+    import time
+
+    from ai.agents.qa.schemas.examples import example_artifact  # noqa: F401
+    from ai.orchestrator.qa_nodes import node_load_sources
+
+    antes = time.time()
+    salida = await node_load_sources(
+        {
+            "scrum_ready": True,
+            "scrum_job_id": "01SC",
+            "scrum_artifact": scrum_example().model_dump(mode="json"),
+            "ef_artifact": ef_example().model_dump(mode="json"),
+            "started_at": 0.0,
+        }
+    )
+    assert antes <= salida["started_at"] <= time.time()

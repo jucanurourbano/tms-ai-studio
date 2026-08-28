@@ -143,13 +143,59 @@ class AgentJobRepository:
         return job
 
     async def update_job_metrics(self, job_id: str, metrics: dict) -> AgentJob:
-        """Persiste las métricas reales de la corrida."""
+        """Persiste las métricas de la corrida y funde el libro mayor (GAS-D9).
+
+        Un solo sitio, y por eso lo heredan los seis agentes **y la ruta de
+        ``FAILED``**: es el único método que ya recibe el ``job_id`` y por tanto
+        puede consultar cuánto costó de verdad.
+
+        Lo que llega en ``metrics`` es la **estimación** del ensamblador y se
+        conserva intacta: el artefacto es la salida del agente y no se muta desde
+        fuera. La verdad se añade al lado, en ``metrics["real"]``. Que el PDF
+        exportado siga llevando la estimación es una deuda **con dueño escrito**
+        (LLM4, que ya toca los seis ``assemble.py``), no una mentira silenciosa
+        — por eso el bloque lleva su propia marca de procedencia.
+        """
         job = await self.session.get(AgentJob, job_id)
         if job is None:
             raise ValueError(f"Job no encontrado: {job_id}")
-        job.metrics = metrics
+        job.metrics = self._con_gasto_real(
+            dict(metrics or {}), await self._real(job_id)
+        )
         await self.session.flush()
         return job
+
+    async def _real(self, job_id: str) -> Optional[dict]:
+        """Lo que el libro mayor sabe de este job, o ``None`` si no sabe nada."""
+        from app.repositories.llm_spend_repository import LlmSpendRepository
+
+        return await LlmSpendRepository(self.session).resumen_del_job(job_id)
+
+    @staticmethod
+    def _con_gasto_real(metrics: dict, real: Optional[dict]) -> dict:
+        """Añade el bloque ``real`` sin tocar la estimación que ya venía.
+
+        ``ratio_sobre_estimado`` convierte en una columna medida por corrida el
+        2,4-3,1x que hasta ahora era folclore del proyecto. Es ``None`` cuando la
+        estimación es 0 —el caso de los jobs que morían antes de ``ASSEMBLE``—:
+        dividir ahí no da "infinito interesante", da una excepción.
+        """
+        if real is None:
+            return metrics
+        estimado = metrics.get("cost")
+        try:
+            ratio = round(float(real["cost_usd"]) / float(estimado), 2)
+        except (TypeError, ValueError, ZeroDivisionError):
+            ratio = None
+        metrics["real"] = {
+            **real,
+            "ratio_sobre_estimado": ratio,
+            # La cifra de arriba (`metrics.cost`) sigue siendo una ESTIMACION y
+            # tiene que decirlo allí donde se lea, no solo en el diseño: un
+            # número bajo sin marca que llega a gerencia no es honesto.
+            "estimacion_sigue_en": "metrics.cost (estimada; la real es esta)",
+        }
+        return metrics
 
     async def list_jobs(
         self,

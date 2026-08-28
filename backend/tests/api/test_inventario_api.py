@@ -452,9 +452,14 @@ async def test_subir_un_documento_extrae_conocimiento(
     # comprueba el rol y la clase de dato con que el endpoint pide el cliente.
     # Es lo que exige la capa 1 del cortafuegos (LLM1): fuera de la fábrica no
     # hay clientes, y el que sale de ella no puede llamar.
-    def _fabrica_falsa(agent_role, *, data_class):
+    def _fabrica_falsa(agent_role, *, data_class, job_id):
         assert agent_role == "inventory_doc"
         assert data_class == "real"
+        # La ingesta de documentos NO tiene job, y lo dice explícitamente: su
+        # gasto responde solo ante el techo del mes, pero se anota igual — si no
+        # contara, el mes tendría una fuga por el único sitio que ingiere
+        # documentos reales de Urbano (GAS1).
+        assert job_id is None
         return AnthropicLLMClient(client=ChatFalso())
 
     monkeypatch.setattr("ai.llm.get_llm", _fabrica_falsa)

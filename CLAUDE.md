@@ -36,8 +36,26 @@ saneador** (bloque **QC4**: `tests/fixtures/qa_explore/` + `sanitize.py`), el
 **navegador con su capa 3 de red** (bloque **QC5**: `driver.py` + `network.py`,
 Playwright pinneado); **ninguna exploración real todavía**, la suite entera corre
 contra HTML de fixtures y sintético. El resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
-PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`. Siguiente
-eslabón: **Agente Backend**.
+PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`.
+
+**💰 CONTROL DE GASTO (GAS1) implementado (2026-08-28).** Toda llamada al modelo
+pasa ahora por un libro mayor (`llm_spend`, migración `0011`) y un **freno duro**
+que comprueba el tope **antes** de gastar; sin libro mayor legible **no se
+llama**. Es el instrumento con el que se van a medir el proveedor local y los
+recortes de nodos, y de paso cierra dos agujeros medidos: los jobs `FAILED`
+reportaban \$0 habiendo gastado (un cuarto del historial) y QA reportaba
+duraciones de **56 años**. Ver §5.7 y `docs/diseno-control-de-gasto.md`.
+
+**⏸️ CAMBIO DE PRIORIDAD (2026-08-27).** Los bloques restantes del Modo C
+(**QC1, QC2, QC6, QC7, QC8**) quedan **APLAZADOS, no cancelados**: pegar un link
+y sacar casos ya es producto de mercado (TestCollab, CoTester, CloudQA) y encima
+por visión, no por DOM — es la parte más *commodity* del proyecto. La ventaja
+real es la **cadena ISDF completa** trazada a las `BR-`/`VAL-` de Procesos, y
+lleva semanas congelada por falta de saldo de API. Prioridad nueva: un
+**proveedor LLM local (Ollama)** que permita validarla con corridas reales, sin
+gastar y sin que ningún dato de Urbano salga de la máquina — ver §5.6 y
+`docs/diseno-llm-local-ollama.md`. Lo ya construido del Modo C **no se toca**.
+Siguiente eslabón del ISDF, cuando la cadena esté validada: **Agente Backend**.
 
 ---
 
@@ -616,13 +634,15 @@ LOAD_SOURCES → CRITERION_MAP → TEST_DESIGN → EDGE_CASES → AUTH_CASES
   cambiarlo sin comprobar `playwright/driver/package/browsers.json` obliga a bajar un
   Chromium nuevo. Aun así **la suite no arranca ningún navegador**: el Modo C se
   ejerce contra HTML de fixtures y sintético, y `sin_navegador_real` lo impone.
-- **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ → QC1
-  contrato v1.1.0 → QC2 migración `0011` + `data_class` (**después de LLM2**) →
+- **Bloques** (renumerados en `docs/diseno-qa-modo-c.md`): QC0 diseño ✅ →
   **QC3 el guard ✅** → **QC4 fixtures y saneador ✅** → **QC4.5 el extractor de
-  anclas ✅** → **QC5 navegador + capa 3 de red + conjuntos cerrados ✅** → QC6 CLI de
-  login → QC7 grafo C + `SURFACE_MAP` + servicio + API → QC8 frontend
-  (**no en paralelo con LLM5**) → cierre. El Modo B (`LOAD_INVENTORY`,
-  `ASSET_MAP`) sigue con el plan QA11–QA12 de la PARTE II.
+  anclas ✅** → **QC5 navegador + capa 3 de red + conjuntos cerrados ✅**.
+  **⏸️ APLAZADOS** (`docs/diseno-qa-modo-c.md` §0.bis): QC1 contrato v1.1.0 ·
+  QC2 migración `0011` + `data_class` · QC6 CLI de login · QC7 grafo C +
+  `SURFACE_MAP` + servicio + API · QC8 frontend. El aplazamiento **desactiva la
+  colisión QC2 ⇄ LLM2**, que era la que ordenaba los dos frentes. El Modo B
+  (`LOAD_INVENTORY`, `ASSET_MAP`) sigue en cero con el plan QA11–QA12 de la
+  PARTE II.
 
 #### QC3 — el guard del Modo C (implementado)
 
@@ -837,6 +857,179 @@ dan de comer— fabricada en Python **antes** de gastar un token.
 
 ---
 
+## 5.6 Proveedor LLM LOCAL — Ollama (PRIORIDAD ACTUAL; diseñado, sin implementar)
+
+> Viabilidad medida, diseño y plan en **`docs/diseno-llm-local-ollama.md`**.
+> Se apoya en la fábrica `ai/llm/` (LLM0 ✅) y en el cortafuegos de 5 capas
+> (LLM1 ✅). **Ningún bloque autorizado** (REGLA R2).
+
+**Para qué.** Validar la cadena EF → Scrum → Arquitectura → BD → API → QA con
+corridas **reales** sin gastar un centavo y sin que ningún dato de Urbano salga
+de la máquina. Es lo que desbloquea la ventaja competitiva del proyecto, hoy
+congelada por falta de saldo de API.
+
+**Viabilidad (medida el 2026-08-27): VIABLE con un límite duro.**
+- Ollama **NO está instalado** todavía; `OLL0` lo instala y mide.
+- WSL2: **11.19 GiB** de RAM (host 23 GiB, sin `.wslconfig` ⇒ 50%), **8 núcleos
+  Zen5 con AVX-512 completo**, DDR5-5600 dual channel (89.6 GB/s teóricos).
+- **Sin GPU utilizable**: `/dev/kfd` ausente ⇒ no hay ROCm; Ollama no trae
+  Vulkan. **Inferencia CPU pura.** La iGPU 860M no es la palanca que parece
+  (comparte el mismo bus de memoria). La palanca real es `.wslconfig`.
+- **Techo: 8B Q4 a 16K de contexto** (o 4B a 32K). 14B solo con
+  `.wslconfig memory=16GB`. `KV_CACHE_TYPE=q8_0` es **requisito**, no ajuste.
+- `httpx` puro (ya en `requirements.txt`), **cero dependencias nuevas** — mismo
+  criterio con el que se rechazó `langchain-google-genai` (LLM-D14).
+
+**EL HALLAZGO, que vale aunque el proveedor local se descarte:** el chunker acota
+`EXTRACT` (4 096 tokens por trozo) pero **NADA acota `CRITIQUE`** — recibe el
+modelo consolidado **entero** (`critique.py:110`), así que su entrada crece con
+el documento y no tiene techo. Medido: un documento fuente de **1 760 bytes**
+produce **~8 100 tokens de entrada en UNA llamada**. Un documento de Procesos
+normal (10–20 KB) sitúa a `CRITIQUE` en 20 000–90 000 tokens. Contra Claude
+(200K) es invisible; contra un modelo local es el límite que manda. **Y Ollama
+trunca en silencio** — misma clase de fallo que `sqlglot` degradando a `Command`
+(INV2) y que *redactar en vez de rechazar* (A7): **truncar no es fallar**.
+
+**Decisiones (OLL-D1…D5):**
+- **D1** Un `ProviderSpec` y nada más. **`format` (gramática) NO se usa**:
+  LLM-D4 se reafirma con argumento más fuerte —si el local decodifica por
+  gramática y Claude no, no se compara el modelo, se comparan dos pipelines—. La
+  **tasa de reparación pasa a ser la métrica principal** del experimento.
+  `max_concurrency=1`, `OLLAMA_TIMEOUT=1200` (una salida de 8 192 tokens a
+  ~10 tok/s tarda ~14 min: los 180 s de Anthropic la matarían siempre),
+  `num_ctx` explícito **con canario de truncamiento antes de llamar**, precio 0.0.
+- **D2 (la que hace útil todo esto)** Un proveedor local **SÍ admite
+  `data_class="real"`**. La regla de LLM-D9 está escrita sobre un **nombre**
+  (`provider != "anthropic"`) y debe estarlo sobre una **propiedad**:
+  `ProviderSpec.data_residency` ∈ `local` | `tercero_confiable` | `tercero`, y
+  solo `tercero` exige datos sintéticos. **Es más estricto, no más laxo**:
+  registrar un proveedor sin declarar dónde acaban los datos pasa a ser
+  imposible. LLM-D10 se relaja **solo** para `local` (el `tech_stack.yaml` real
+  se manda; el sintético sigue haciendo falta para Gemini). La capa 5
+  (`APP_ENV=production` ⇒ no arranca) **se mantiene intacta**.
+- **D3** Cortafuegos: **NO hace falta una capa nueva**. La capa 4 permite todo
+  loopback —y Ollama vive en `127.0.0.1:11434`—, pero **no es ciega** como lo era
+  con el navegador: la ve y la deja pasar por una regla nuestra que se quedó
+  corta. Se **estrecha la capa 4** por puerto (lector único desde `settings`) y
+  se declara la costura en la capa 2 (`build_http_client`, llamada por módulo,
+  **REGLA R1** — tercer tropiezo con lo mismo). *Apilar una capa sobre una regla
+  equivocada deja la regla equivocada debajo.*
+- **D4** Procedencia: **mismo régimen que LLM4, sin excepción** →
+  `banco_de_pruebas`. Es el contraste exacto de D2 y son **ejes ortogonales**:
+  *local* responde **dónde están los datos**, no **si el resultado sirve**.
+  `RunProvenance` guarda el id **con tag** y gana `data_residency`.
+- **D5** Se prueba primero el **EF**, y no por ser el primero: es el único con
+  corridas reales contra Claude registradas (3 artefactos en `agent_artifacts`
+  con sus `metrics`) y **el A/B es reproducible byte a byte** —el documento
+  fuente sigue en disco—. Se compara por magnitudes deterministas, sin LLM juez;
+  la fila que decide es **`evidence` verbatim presente en el fuente**, que es el
+  anti-invención y se comprueba con una búsqueda de subcadena.
+
+**Bloques:** **OLL0** banco de medición **fuera del repositorio** (instala, mide
+tok/s, RSS real, canario de truncamiento y tasa de reparación; **si el 8B repara
+mal, el plan se detiene aquí y esa es la conclusión**) → **OLL1**
+`data_residency` + cortafuegos **antes del proveedor** (mismo criterio que LLM1 y
+QC3) → **OLL2** el proveedor (`httpx` + `MockTransport`; tapa el hueco del
+semáforo propio de `run_extract`, que no pasa por `run_structured_map`) →
+**OLL3** procedencia (depende de LLM4) → **OLL4** la corrida real y el veredicto
+(**se autoriza aparte**).
+
+**⚠️ El choque que hay que resolver ANTES de construir: LLM2.** Está
+especificado sobre `provider != "anthropic"`; **no ha empezado**, así que debe
+implementar la regla **ya en su forma final** sobre `data_residency`. Si no, la
+política de datos —lo más delicado del diseño— se escribe dos veces. Orden:
+**LLM2 (reformado) → OLL1 → OLL2 → OLL4**, con **OLL0 en paralelo desde ya**
+porque no toca el repositorio. **LLM3 (Gemini) pierde su justificación
+principal** —el *free tier* era para poder probar sin gastar, y el local lo hace
+mejor y además admite datos reales—; conserva calidad y velocidad. **No se
+decide aquí**: se revisa a la luz de OLL4.
+
+**Candidata de PRODUCTO (no de este plan):** de TestCollab se toma **una** idea —
+una **bandeja de propuestas** (`pendiente`/`aceptado`/`rechazado`, edición en
+línea, **nada se crea hasta que un humano acepta**), que es la misma forma que
+las validaciones y las asignaciones: vive fuera del artefacto y no lo muta. **NO
+se copia su entrada por URL libre**: nuestra allowlist de destinos
+preautorizados es superior (una URL del cliente es SSRF) y se queda.
+
+---
+
+## 5.7 CONTROL DE GASTO — libro mayor y freno duro (GAS1 implementado)
+
+> Diseño completo en **`docs/diseno-control-de-gasto.md`**. **GAS1 cerrado**;
+> **GAS2 sin autorizar** (REGLA R2). Va **antes** que OLL0…OLL4 porque es el
+> **instrumento con el que se miden**: sin él, "110 llamadas → 1" es una
+> afirmación; con él, una medición.
+
+**Lo que cambia en runtime, y hay que saberlo antes de tocar nada:** desde GAS1
+**toda** llamada al modelo pasa por `MeteredLLMClient` —lo aplica `get_llm`, no
+cada proveedor, con candado parametrizado sobre `PROVIDERS`—, que **comprueba el
+tope, delega y anota la fila, en ese orden**. Sin libro mayor legible, **la
+llamada se niega** (GAS-D7): un despliegue que se olvide de `install_db_sink()`
+en el `lifespan` deja de funcionar en vez de gastar sin medir.
+
+- **Tres números, y solo dos frenan** (GAS-D6): `LLM_JOB_CAP_USD` = 5 (el que más
+  veces va a actuar: un techo mensual no impide que **una** corrida se coma el mes
+  en una tarde), `LLM_MONTHLY_CAP_USD` = 100, y `LLM_MONTHLY_TARGET_USD` = 30 que
+  **no bloquea nunca**. Toda cifra se compara contra 25–30, no contra 100. **No
+  hay bandera para apagar el freno**: es la bandera que alguien deja apagada.
+- **El mensaje del freno permite subir el tope a conciencia** (GAS-D11): dice el
+  tope, **cuánto llevaba gastado**, **cuánto pedía la llamada que lo cruzó** y el
+  margen reservado, y nombra la variable de entorno. Primero frena el del job y
+  después el del mes: un job desbocado anunciado como "se acabó el mes" mandaría a
+  revisar el sitio equivocado.
+- **El tope se comprueba con MARGEN** (GAS-D5), no al filo: con concurrencia hay
+  varias llamadas en vuelo que leen "por debajo" y lo cruzan juntas. Se niega
+  cuando `gastado + margen > tope`. El precio —~3,4% del techo mensual
+  inutilizable— se declara en vez de descubrirse.
+- **`usage` ausente NO es `usage` cero** (GAS-D4). Tercera vez que el proyecto se
+  topa con la misma forma (`sqlglot` degradando a `Command`, *redactar en vez de
+  rechazar*, Ollama truncando en silencio): **la ausencia de un dato no es el
+  valor 0 de ese dato**. Anotar 0 dejaría el tope ciego, que es lo único peor que
+  pararse. La fila va con la estimación **marcada** y se informa qué fracción del
+  mes es estimada.
+- **La caché ya viene sumada en `input_tokens`** (GAS-D3), así que aplicarle la
+  tarifa plana cobraría 10x de más las lecturas y 20% de menos las escrituras. Hoy
+  el caching no está activado y la fórmula se reduce **byte a byte** a la anterior
+  —hay test—; se escribe igual para que activar `cache_control` mañana no haga que
+  el tope empiece a mentir. `reasoning` es **subconjunto** de `output` y **nunca**
+  se suma.
+- **A mitad de corrida** (§6.bis del diseño): quedan las filas del gasto real, **no
+  queda artefacto** —`persist` solo lo invoca el nodo `PERSIST`, el último— y el
+  job queda `FAILED` con el motivo y `metrics.real`. **El semáforo del siguiente
+  agente no puede leer mal nada porque no hay nada que leer**: es ausencia de
+  dato, no una comprobación que se pueda olvidar. La condición que lo sostiene y
+  que hay que proteger: un `BudgetExceededError` **no puede confundirse con un
+  ítem en cuarentena** —caería en `ASSEMBLE` produciendo un artefacto que parece
+  entero y le faltan 70 casos—. Tres tests lo fijan uno a uno.
+- **La verdad vive en `job.metrics.real`** (GAS-D9), fundida en
+  `update_job_metrics` —un sitio, seis agentes **y la ruta de `FAILED`**—, con
+  `ratio_sobre_estimado` que convierte el 2,4–3,1x de folclore en una columna
+  medida. **`artifact.metrics.cost` sigue siendo la estimación**, con dueño
+  escrito (**LLM4**) y, desde GAS1, **etiquetada como tal**: `TokenMetrics.source`
+  en los seis artefactos y "costo estimado" en las siete vistas del frontend.
+- **`get_llm(rol, *, data_class, job_id)`**: `job_id` es keyword-only y **sin
+  default**, como `data_class`. La ingesta de documentos del inventario pasa
+  `None` **explícito** y su gasto **se anota igual** — si no contara, el mes
+  tendría una fuga por el único sitio que ingiere documentos reales de Urbano.
+- **H2 arreglado**: `qa_nodes` no fijaba `started_at` en ningún nodo y las dos
+  corridas reales de QA reportaban **56 años**. El `state.get(..., time.time())`
+  del ensamblador no salvaba nada porque la clave llega presente con `0.0`.
+- **Capa 6 del cortafuegos de tests** (`tests/firewall.py`): libro mayor en
+  memoria, autouse. Y la **capa 1 pasa a tapar las dos bocas** del cliente
+  (`complete_json` **y** `complete`): al envolver, el envoltorio llama al
+  protocolo interno, así que la mordaza de LLM1 habría dejado de cubrir sin que
+  nada lo dijera.
+- Migración **`0011_libro_mayor_de_gasto`** (`llm_spend`; `cost_usd` es
+  `NUMERIC(12,6)`, no `float`: es dinero que se suma miles de veces contra un
+  umbral). El `0011` estaba apartado para QC2, que quedó aplazado; si QC2 se
+  reanuda, toma el `0012`.
+
+**Lo que GAS1 NO hace:** no acota `CRITIQUE` (lo **mide y lo frena**; el techo de
+entrada es el canario de OLL2), no arregla el número del artefacto (LLM4), no
+toca la matriz de permisos y no expone todavía `GET /gasto/mensual` (GAS2).
+
+---
+
 ## 6. Autenticación y usuarios
 
 Autenticación **real** por `email` + contraseña con **JWT**; protege toda la API
@@ -1046,6 +1239,10 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
   La regla está **protegida por un cortafuegos autouse** en `tests/conftest.py`:
   un test que caiga en el cliente real falla con un mensaje que dice cómo
   arreglarlo, en vez de salir a la red (`tests/test_budget_guard.py` lo cubre).
+  **Desde GAS1 la regla tiene además un freno en runtime** (§5.7): todo lo que
+  sale de `get_llm` comprueba el tope antes de gastar y anota la fila después, y
+  sin libro mayor legible **no llama**. La regla decía qué no hacer; el freno lo
+  impide.
 - **REGLA DE RESPALDO:** hacer **push al remoto después de CADA fase commiteada**.
 - **REGLA R2 — protocolo de cierre de bloque: cerrar → reportar → esperar
   aprobación del siguiente.** Ningún bloque arranca sin visto bueno explícito y
@@ -1073,7 +1270,11 @@ tms-ai-studio/
 ├── CLAUDE.md                 # este archivo
 ├── docs/
 │   ├── setup-entorno.md
-│   └── diseno-agente-scrum.md
+│   ├── diseno-agente-{scrum,arquitectura,bd,api,qa}.md
+│   ├── diseno-qa-modo-c.md          # ⏸️ QC1/2/6/7/8 APLAZADOS (§0.bis)
+│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 sin autorizar (§5.7)
+│   ├── diseno-multiproveedor-llm.md # LLM0 ✅ LLM1 ✅ · LLM2 a reformar (§5.6)
+│   └── diseno-llm-local-ollama.md   # ⭐ PRIORIDAD ACTUAL (§5.6)
 ├── frontend/                 # Next.js (cliente puro de la API)
 │   └── src/components/artifact/   # centro de comando: hub-card, artifact-panel,
 │                                  # artifact-print-doc, artifact-nav, primitives
@@ -1087,8 +1288,9 @@ tms-ai-studio/
     │   ├── errors.py             # errores de app (auth/permisos → ApiResponse)
     │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura,bd,apis,qa}.py
     │   ├── dependencies/         # current_user (401) + permissions (403)
-    │   ├── middlewares/  models/    # models: agent, user (+ grants)
-    │   ├── repositories/         # + story_assignment_repository
+    │   ├── middlewares/  models/    # models: agent, user (+ grants), spend
+    │   ├── services/spend_sink.py # libro mayor real + preflight del mes (GAS1)
+    │   ├── repositories/         # + story_assignment, llm_spend (libro mayor)
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)
     ├── scripts/capture_explore_fixture.py  # captura fixtures del Modo C (manual)
@@ -1108,6 +1310,8 @@ tms-ai-studio/
         │                         #               + extract.py:  anclas deterministas (QC4.5+QC5)
         │                         #               + network.py:  capa 3 en red (QC5)
         │                         #               + driver.py:   Playwright, la única cáscara
+        ├── llm/                  # fábrica multiproveedor + metering.py (medición)
+        │                         # + budget.py (el freno y el sumidero, GAS1)
         ├── memory/
         ├── knowledge/            # glosario, tech_stack.yaml, db_conventions.yaml,
         │                         # api_conventions.yaml

@@ -34,7 +34,17 @@ def _llm(config: RunnableConfig):
     # `data_class` es keyword-only y sin default (ver ai/llm/factory.py).
     # Mientras la clasificación de fuentes no exista (LLM2) se declara `real`:
     # el valor conservador, el que NO autoriza a un proveedor de pruebas.
-    return get_llm("scrum", data_class="real")
+    #
+    # `job_id` también es keyword-only y sin default (GAS1): es la clave del
+    # freno por corrida. Se toma del `thread_id`, que el runner fija AL job_id
+    # para el checkpointer, así que es el mismo valor y no una segunda fuente que
+    # pueda desalinearse. Esta rama solo se recorre en runtime real —en tests el
+    # LLM llega inyectado por `config`—, donde el runner siempre lo pone.
+    return get_llm(
+        "scrum",
+        data_class="real",
+        job_id=(config or {}).get("configurable", {}).get("thread_id"),
+    )
 
 
 async def node_load_ef(state: ScrumState) -> dict:

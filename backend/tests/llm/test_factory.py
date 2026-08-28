@@ -59,7 +59,7 @@ def test_get_llm_exige_data_class():
 
 def test_get_llm_rechaza_una_data_class_inventada():
     with pytest.raises(ProviderConfigError, match="data_class inválida"):
-        get_llm("ef", data_class="publico")  # type: ignore[arg-type]
+        get_llm("ef", data_class="publico", job_id=None)  # type: ignore[arg-type]
 
 
 def test_get_llm_devuelve_un_llmclient_completo():
@@ -69,7 +69,7 @@ def test_get_llm_devuelve_un_llmclient_completo():
     recibía un ``ChatAnthropic`` —sin ``complete_json``— donde se esperaba un
     ``LLMClient``.
     """
-    llm = get_llm("inventory_doc", data_class="real")
+    llm = get_llm("inventory_doc", data_class="real", job_id=None)
     assert hasattr(llm, "complete_json")
     assert llm.provider == "anthropic"
     assert llm.data_class == "real"
@@ -79,7 +79,7 @@ def test_el_modelo_sale_del_proveedor_y_admite_override(monkeypatch):
     assert resolve_model("anthropic") == settings.CLAUDE_MODEL
     monkeypatch.setattr(settings, "LLM_MODEL_OVERRIDES", {"anthropic": "claude-otro"})
     assert resolve_model("anthropic") == "claude-otro"
-    assert get_llm("bd", data_class="real").model == "claude-otro"
+    assert get_llm("bd", data_class="real", job_id=None).model == "claude-otro"
 
 
 def test_el_registro_tiene_un_solo_proveedor_en_llm0():

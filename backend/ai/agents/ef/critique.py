@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-from ai.agents.base.structured import loads_json
+from ai.agents.base.structured import for_stage, loads_json
 from ai.knowledge import glossary_block
 
 from .prompts import build_system
@@ -110,8 +110,14 @@ async def _llm_pass(
     user = "MODELO CONSOLIDADO:\n" + json.dumps(
         {"consolidated": consolidated, "inferred": inferred}, ensure_ascii=False
     )
+    # Único llamador suelto de ``complete_json`` del árbol, y el que MÁS falta
+    # hace atribuir: recibe el modelo consolidado ENTERO, así que su entrada
+    # crece con el documento y no tiene techo (un documento de Procesos normal lo
+    # sitúa en 20 000-90 000 tokens de entrada en UNA llamada). Contra Claude es
+    # invisible; contra un modelo local es el límite que manda. Este bloque lo
+    # MIDE y lo frena; acotarlo es el canario de truncamiento de OLL2.
     try:
-        raw = await llm.complete_json(system=system, user=user)
+        raw = await for_stage(llm, "CRITIQUE").complete_json(system=system, user=user)
         return CritiqueExtract.model_validate(loads_json(raw)), None
     except (json.JSONDecodeError, ValidationError) as exc:
         return CritiqueExtract(), str(exc)[:200]

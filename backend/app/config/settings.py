@@ -192,6 +192,43 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 12  # 12 h
 
+    # --- Control de gasto: libro mayor de llamadas y freno duro ---
+    # Ver docs/diseno-control-de-gasto.md. Son TRES números y solo dos frenan
+    # (GAS-D6): un tope que solo se conoce cuando bloquea es un tope que se
+    # descubre la última semana del mes.
+    #   * el del JOB es el que más veces va a salvar el objetivo: un techo
+    #     mensual no impide que una sola corrida se coma el mes en una tarde;
+    #   * el del MES es el techo de seguridad que pidió el usuario;
+    #   * el OBJETIVO no bloquea nunca: se reporta, para que 25-30 USD/mes sea
+    #     gobernable y no una aspiración.
+    # NO hay una bandera para apagar el freno: una bandera para apagarlo es la
+    # bandera que alguien deja apagada. Lo que se configura es el número, y
+    # quien quiera trabajar sin freno pone un techo alto y queda escrito.
+    LLM_JOB_CAP_USD: float = 5.0
+    LLM_MONTHLY_CAP_USD: float = 100.0
+    LLM_MONTHLY_TARGET_USD: float = 30.0
+    # Mes de CALENDARIO en esta zona, no la del servidor (GAS-D8): un contenedor
+    # en UTC rueda de mes a las 19:00 de Lima y partiría el gasto de un día entre
+    # dos meses. Lector único: ai/llm/budget.py.
+    LLM_BUDGET_TZ: str = "America/Lima"
+    # Dimensionan el MARGEN con el que se comprueba el tope (GAS-D5), no un
+    # límite aplicado: con concurrencia hay varias llamadas en vuelo que leen
+    # "por debajo del tope" y lo cruzan juntas, así que se niega cuando
+    # `gastado + margen > tope`. Son SUPUESTOS declarados y auditables: hoy no
+    # existe ningún techo de entrada porque nada acota CRITIQUE (ese techo lo
+    # pone el canario de OLL2, no este bloque).
+    LLM_MAX_INPUT_TOKENS_ASSUMED: int = 100_000
+    LLM_MAX_OUTPUT_TOKENS_ASSUMED: int = 8192
+    LLM_BUDGET_HEADROOM_CALLS: int = 8  # margen del mes: dos jobs a 3 + holgura
+    LLM_JOB_HEADROOM_CALLS: int = 3  # margen del job: la concurrencia de un job
+    # Tarifas de caché relativas a la de entrada (GAS-D3). Hoy el caching no está
+    # activado en ninguna parte, así que los contadores vienen en 0 y la fórmula
+    # se reduce byte a byte a la de siempre. Se escriben igual: el día que
+    # alguien active `cache_control` para abaratar el CRITIQUE sin techo, el tope
+    # no puede empezar a mentir en silencio.
+    LLM_CACHE_READ_FACTOR: float = 0.10
+    LLM_CACHE_WRITE_FACTOR: float = 1.25
+
     # --- CORS (desarrollo: abierto) ---
     CORS_ORIGINS: list[str] = ["*"]
 

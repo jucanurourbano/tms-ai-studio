@@ -29,6 +29,7 @@ from app.models.agent import (
 from app.repositories.agent_job_repository import AgentJobRepository
 from app.services.ef_service import EFAnalysisService
 from app.services.scrum_service import ScrumPlanningService
+from app.services.spend_sink import preflight_mensual
 
 
 async def run_arquitectura_pipeline(
@@ -67,7 +68,7 @@ async def run_arquitectura_pipeline(
         # Mientras la clasificación de fuentes no exista (LLM2) se declara
         # `real`: el valor conservador, el que NO autoriza a un proveedor de
         # pruebas a ver este contenido.
-        llm=get_llm("arquitectura", data_class="real"),
+        llm=get_llm("arquitectura", data_class="real", job_id=job_id),
         initial_state=state,
     )
 
@@ -98,6 +99,12 @@ class ArquitecturaService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un diseño desde un plan Scrum **listo**. Falla rápido si no lo está."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         scrum_job = await self.repo.get_job(scrum_job_id)
         if scrum_job is None or scrum_job.agent_type != AgentType.SCRUM:
             raise IngestError(f"No existe un job Scrum con id {scrum_job_id}.")
@@ -288,6 +295,12 @@ class ArquitecturaService:
         actor_id: Optional[str] = None,
     ) -> AgentJob:
         """Crea un job hijo reinyectando las respuestas del Arquitecto como contexto."""
+        # Preflight del techo del mes (cortesía, no la garantía): sin esto el
+        # usuario ve un job que arranca, corre y muere. Va ANTES de crear el
+        # job para no dejar una fila PENDING que nunca va a correr. Quien
+        # GARANTIZA es el freno de MeteredLLMClient, que corre antes de cada
+        # llamada; un freno en el servicio es un freno que un nodo se salta.
+        await preflight_mensual()
         parent = await self.repo.get_job(parent_job_id)
         if parent is None or parent.agent_type != AgentType.ARQUITECTURA:
             raise IngestError(f"No existe un job Arquitectura con id {parent_job_id}.")
