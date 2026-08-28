@@ -50,6 +50,18 @@ con el que se demuestra un recorte— y la fracción de la cifra que es estimaci
 porque un tope que no se mira se conoce bloqueando. Ver §5.7 y
 `docs/diseno-control-de-gasto.md`.
 
+**📐 LOS CUATRO RECORTES, DIMENSIONADOS (2026-08-28).** El punto **1** (el
+documento duplicado) está **arreglado**; los puntos **2** (la cota de Scrum,
+`docs/diseno-cota-scrum.md`), **3** (el techo de entrada,
+`docs/diseno-techo-de-entrada.md`) y **4** (los lotes de QA) están **diseñados y
+sin implementar**. La cifra que sale de aplicarlos —§3.quater del diseño de gasto,
+instrumento `scripts/medir_los_cuatro_puntos.py`— es **20,86 → 11,55 USD
+estimados a 10 KB (−45%)** y **45,85 → 23,66 a 20 KB (−48%)**. Y la conclusión que
+no es la del recorte: **el techo de la cadena va de 1,1 a 2,0 KB**, así que **un
+requerimiento de 10 KB sigue sin pasar el freno** (28–36 USD reales con todo
+aplicado). `LLM_JOB_CAP_USD` = 5 está calibrado para el documento de juguete. Ver
+§5.7 *in fine*.
+
 **⏸️ CAMBIO DE PRIORIDAD (2026-08-27).** Los bloques restantes del Modo C
 (**QC1, QC2, QC6, QC7, QC8**) quedan **APLAZADOS, no cancelados**: pegar un link
 y sacar casos ya es producto de mercado (TestCollab, CoTester, CloudQA) y encima
@@ -1176,7 +1188,16 @@ real + doble calibrado contra el artefacto real, 0,00 USD):
   modo**, con un pre-flight determinista (bytes → chunks → llamadas → estimación)
   que hable de **la cadena** y no solo del EF.
 
-### El recorte del punto 2, DISEÑADO y sin implementar (`docs/diseno-recorte-qa-lotes.md`)
+### ⚠️ La numeración de los puntos cambió (2026-08-28)
+
+Los recortes se renumeraron al dimensionarlos todos: **1** el documento duplicado
+(✅ arreglado) · **2** la cota de Scrum · **3** el techo de entrada · **4** los
+lotes de QA. El antiguo «punto 3» (Scrum `ESTIMATE`+`PRIORITIZE` 62 → 2) sigue
+**APLAZADO** y ahora se le llama **el quinto**. Las secciones que siguen usan la
+numeración nueva; los apartados §3.bis del diseño de gasto conservan la vieja y lo
+dicen.
+
+### El punto 4 — los lotes de QA, DISEÑADO y sin implementar (`docs/diseno-recorte-qa-lotes.md`)
 
 Agrupar los *map* de QA en lotes. **Ningún bloque autorizado (REGLA R2).** Lo que
 hay que saber sin abrir el doc:
@@ -1228,8 +1249,140 @@ hay que saber sin abrir el doc:
   **LOT2** el lote en `run_structured_map` (todo el riesgo) · **LOT3** la corrida
   real del par, **se autoriza aparte**.
 
-**Punto 3 (Scrum `ESTIMATE`+`PRIORITIZE` 62 → 2): APLAZADO.** Vale 0,178 USD
-contra ~8x del punto 2. Se hace después o se pliega a otro bloque.
+### El punto 2 — la cota de Scrum, DISEÑADO y sin implementar (`docs/diseno-cota-scrum.md`)
+
+Scrum es el que más rápido crece: x11,6 de documento ⇒ **x28 de costo**. **Ningún
+bloque autorizado (REGLA R2).** Lo que hay que saber sin abrir el doc:
+
+- **El sujeto de la llamada es el 0,4% del mensaje en `STORIES` y el 1,5% en
+  `CRITERIA`** (a 20 KB, medido campo por campo con los constructores de
+  producción). Todo lo demás es contexto **idéntico byte a byte** en las N
+  llamadas: `business_rules` 62% en `STORIES`, `validations` 54% en `CRITERIA`. A
+  1,76 KB el que mandaba era el `system` (59% / 70%) — el diagnóstico depende del
+  tamaño, y todo lo mirado hasta §3.ter estaba en el extremo pequeño.
+- **El `[:20]` de QA-D8 NO es el mecanismo, es el respaldo del mecanismo.** El
+  payload de QA tiene tres capas: `CRITERION_MAP` resuelve las anclas por cita
+  (sin `[:20]`), `matching_entities` amplía por alcanzabilidad, y el `[:20]` recorta
+  **solo la nomenclatura** (`fields`/`entities`/`actors`), que no ancla nada. En
+  Scrum `business_rules` y `validations` **SON el universo de anclas**: un
+  `[:20]` ahí recortaría lo citable por orden de extracción. **La forma que aplica
+  es la de `CRITERION_MAP`, no la del `[:20]` — y Scrum no tiene ese nodo.**
+- **El recall retrospectivo decide, y da tres respuestas distintas** (ground truth
+  = lo que el modelo citó de verdad en el plan real; 0,00 USD, sin LLM):
+  `CRITERIA` con `rule_refs` **81/81 = 100%** (la cota que ya existe es exacta) ·
+  `STORIES` **71% co-localización, 80% con léxico** · `CRITERIA` sin `rule_refs`
+  **11%**. **La cota es segura solo donde hay ancla; donde no la hay es una
+  apuesta.**
+- **Y las que se pierden son las TRANSVERSALES**: `BR-010` (autorización),
+  `BR-005`/`BR-007` (estado global), `BR-013` (fuera de alcance). Una regla
+  transversal no está co-localizada con ningún requisito **por definición**, así
+  que no es un umbral mal calibrado: la señal no existe. Contraejemplo escrito:
+  `US-027` («exportar un reporte») cita 6 reglas y la localidad no alcanza ninguna.
+- **Por eso el instrumento es el LOTE, el mismo del punto 4 en un segundo agente.**
+  Topes derivados de la salida contra `CLAUDE_MAX_TOKENS`, igual que allí:
+  `STORIES` **10 RF** (2 018 tok est. ⇒ 4 842–6 255 reales) y `CRITERIA` **5
+  historias** (1 535 ⇒ 3 685–4 760). A 20 KB: 186 → 19 y 360 → 72 llamadas.
+- **Lo que el lote NO hace: no rompe el término cuadrático, lo divide por K.** A
+  40 KB vuelve. Lo único que lo haría lineal es **un enlace regla → requisito en
+  el contrato del EF**, que es donde vive la evidencia; fuera del alcance de un
+  recorte, escrito para que la decisión exista.
+- **🐛 Trampa de código que el bloque resuelve, no descubre:** `stories.py:137`
+  fuerza el RF de la pasada dentro de `requirement_refs`, y `criteria.py:82` mapea
+  por el ref de la llamada. Con lote **etiquetarían cada ítem con una unidad
+  arbitraria del lote**. Condición dura idéntica a la del punto 4: clave de vuelta
+  obligatoria (`requirement_ref`/`story_ref`) y Python la **busca en el lote y
+  rechaza lo que no esté**.
+- **Hallazgo del camino: `depends_on_requirements` pide lo que no se envía.** El
+  payload de `STORIES` no lleva **ningún** id de requisito salvo el propio, así que
+  el modelo solo puede rellenarlo **adivinando la convención `REQ-F-00N`** — y el
+  filtro `r in valid_req` no distingue inferencia de conjetura afortunada porque el
+  espacio de ids es secuencial. Cinco de 31 historias del plan real traen
+  dependencias así, y `SPRINT_PLAN` las respeta. Síntoma hermano: **ninguna
+  historia cita más de un requisito** (0 de 31).
+- **La cota por entidad (validaciones) queda con dueño, NO validada**: su recall
+  da 100% pero sobre 2 entidades y 6 validaciones el filtro no filtra. Su valor no
+  es dinero (0,05–0,21 USD tras el lote) sino **caber**: con lote de 10, `STORIES`
+  a 20 KB pesa ~9 300 tok —entra en el techo de 16K del proveedor local— y a 40 KB
+  ~17 800, que **no entra**.
+- **Bloques: SCR0** detector de reasignación (primero, como LOT0) · **SCR1**
+  empaquetado (aritmética) · **SCR2** el lote en `run_structured_map` (todo el
+  riesgo) · **SCR3** el índice de requisitos · **SCR4** el par real, **se autoriza
+  aparte** — y son **TRES corridas, no dos**: el «antes» dos veces, para tener el
+  suelo de varianza.
+
+### El punto 3 — el techo de entrada, DISEÑADO y sin implementar (`docs/diseno-techo-de-entrada.md`)
+
+**Ningún bloque autorizado (REGLA R2).** Lo que hay que saber sin abrir el doc:
+
+- **El chunker sin tope NO es un problema aparte: ES el problema, y el techo de
+  11,1 KB es su síntoma.** El chunker tiene **una** decisión de tamaño
+  (`SINGLE_SHOT_TOKEN_THRESHOLD` = 4 096) y **no es un presupuesto, es un desvío**:
+  elige por qué camino se trocea, no de qué tamaño sale. Después de elegir, lo que
+  acota un chunk es **la densidad de títulos del documento del cliente**.
+- **El umbral está 48% por encima del punto en que la salida trunca** (4 096 contra
+  2 769): entre 11,1 y 16,4 KB el chunker declara `single_shot` **justo donde no
+  cabe**. `EXTRACT` hace lo correcto (repara, cuarentena con observación); el techo
+  no es suyo.
+- **Tres síntomas, ninguna fila con un chunk razonable:** trunca (>2 769 tok, en
+  las dos formas) · no acota (40 KB planos = **un** chunk de 10 015 tok) · se
+  pulveriza (20 KB estructurados = 18 chunks de **322** tok ⇒ **71% del mensaje es
+  preámbulo**, 108 llamadas donde caben 18).
+- **El arreglo tiene dos mitades y las dos hacen falta**, igual que el punto 1:
+  (1) **el parser debe producir algo partible** —`TextToCIRAdapter` mete todo el
+  texto plano en UN `PARAGRAPH` aunque `parse_blocks` ya había encontrado los
+  párrafos, y un chunker con presupuesto no parte un elemento—; (2) **el chunker
+  gana presupuesto**: `CHUNK_MAX_TOKENS` = **2 000** (derivado de
+  `CLAUDE_MAX_TOKENS`/expansión **medida** 2,94–3,20 ⇒ pico ~6 000, 27% de holgura),
+  `CHUNK_MIN_TOKENS` = 1 000 para fundir, y `single_shot` pasa de umbral a
+  **resultado**. Al fundir, los títulos intermedios **se renderizan en el cuerpo**:
+  el invariante del punto 1 vincula el texto al elemento que **ABRE** el chunk.
+- **Cuesta dinero en texto plano (+2,6%) y lo ahorra en estructurado (−16%).** Lo
+  que compra es el techo, no un descuento — y que **las dos formas converjan**
+  (1,127 y 1,128 USD a 20 KB, contra 1,098 y 1,343 hoy): es la recomendación «no
+  distinguir por modo, distinguir por tamaño» conseguida **por construcción**.
+- **Residual: la densidad varía y un techo estático no la sigue.** Segunda línea:
+  si trunca, **partir ese chunk en dos y reintentar UNA vez**, con la misma
+  precondición dura que el punto 4 (un `BudgetExceededError` **no** entra por ahí).
+- **Bloques: TE0** la mitad 1 (sin efecto todavía, que es la prueba de que TE1 hace
+  falta) · **TE1** el presupuesto · **TE2** el reintento · **TE3** el máximo de
+  `content` · **TE4** la corrida real, **se autoriza aparte**.
+
+### El punto 3 antiguo, hoy **el quinto** (Scrum `ESTIMATE`+`PRIORITIZE` 62 → 2): APLAZADO, y hay que revisarlo
+
+Se aplazó por valer **0,178 USD** — cifra del documento de juguete. A escala vale
+**1,02 USD a 10 KB y 2,03 a 20 KB**, el **29–32% de lo que le queda a Scrum
+después del punto 2**. `ESTIMATE` es **73% `system`** y `PRIORITIZE` **93%**: los
+dos nodos con más preámbulo por unidad del proyecto. Trampa a resolver:
+`EstimateExtract` y `PrioritizeExtract` son esquemas **escalares por historia** y
+un lote exige que pasen a lista **con la clave de vuelta**.
+
+### El número, para el informe (`docs/diseno-control-de-gasto.md` §3.quater)
+
+Instrumento: `scripts/medir_los_cuatro_puntos.py` (0,00 USD, prompts y chunker de
+producción). USD **estimados**; el real es 2,4–3,1x.
+
+| cadena EF+Scrum+QA | 10 KB | 20 KB |
+|---|---:|---:|
+| **hoy** (punto 1 dentro) | **20,86** ⇒ 50–65 real | **45,85** ⇒ 110–142 real |
+| **con los CUATRO puntos** | **11,55** ⇒ **28–36 real** | **23,66** ⇒ **57–73 real** |
+| + el quinto | 10,54 | 21,62 |
+| **recorte** | **45%** | **48%** |
+
+- **Corrección declarada a §3.ter.2**: aquella tabla contaba entrada+salida en EF y
+  QA pero **solo entrada** en Scrum. La diferencia con los 19,54 / 43,23
+  publicados es exactamente la salida de Scrum (1,30 y 2,60 USD).
+- **QA sigue mandando** (64–70% antes, 66–68% después) y tras el punto 4 **sigue
+  costando más él solo que los otros dos juntos**.
+- **Techo de producto**: `EXTRACT` trunca hoy a **11,1 KB** y con el punto 3
+  **desaparece**. El techo del **freno** va de **1,1 KB a 2,0 KB** (y sigue siendo
+  de QA; Scrum 3,7 → 7,7 KB; el EF aguanta 28 KB y nunca fue el cuello de botella).
+- **La conclusión que no es la del recorte:** ni con los cuatro puntos ni con el
+  quinto pasa un documento de 10 KB, y **ningún recorte de prompt lo va a
+  conseguir** — 10 KB cuestan 28–36 USD reales con todo aplicado.
+  **`LLM_JOB_CAP_USD` = 5 está calibrado para el documento de juguete.** O se sube
+  el tope a conciencia (GAS-D11 existe para eso) o el costo marginal se va a cero
+  con el **proveedor local** (§5.6). Esta tabla es el argumento más fuerte que hay
+  para lo segundo.
 
 ---
 
@@ -1475,8 +1628,10 @@ tms-ai-studio/
 │   ├── setup-entorno.md
 │   ├── diseno-agente-{scrum,arquitectura,bd,api,qa}.md
 │   ├── diseno-qa-modo-c.md          # ⏸️ QC1/2/6/7/8 APLAZADOS (§0.bis)
-│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 ✅ (§5.7) · §3.bis/§3.ter
-│   ├── diseno-recorte-qa-lotes.md   # el punto 2: lotes en QA (diseñado, sin implementar)
+│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 ✅ (§5.7) · §3.bis/§3.ter/§3.quater
+│   ├── diseno-recorte-qa-lotes.md   # punto 4: lotes en QA (diseñado, sin implementar)
+│   ├── diseno-cota-scrum.md         # punto 2: la cota de Scrum (diseñado, sin implementar)
+│   ├── diseno-techo-de-entrada.md   # punto 3: el chunk sin cota (diseñado, sin implementar)
 │   ├── diseno-multiproveedor-llm.md # LLM0 ✅ LLM1 ✅ · LLM2 a reformar (§5.6)
 │   └── diseno-llm-local-ollama.md   # ⭐ PRIORIDAD ACTUAL (§5.6)
 ├── frontend/                 # Next.js (cliente puro de la API)
@@ -1504,6 +1659,7 @@ tms-ai-studio/
     ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
     ├── scripts/medir_linea_base.py # el «antes» de los recortes, reconstruido (0 USD)
     ├── scripts/medir_escala_por_tamano.py  # cómo escala la cadena con el documento
+    ├── scripts/medir_los_cuatro_puntos.py  # los cuatro recortes aplicados (0 USD)
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/

@@ -506,6 +506,138 @@ todavía:
 
 ---
 
+## 3.quater. El número: la cadena con los CUATRO PUNTOS aplicados
+
+§3.bis dio el «antes» de un requerimiento; §3.ter, cómo escala con el tamaño.
+Este apartado da lo que se pidió para el informe: **cuánto cuesta un requerimiento
+de 10 KB y uno de 20 KB con los cuatro puntos aplicados**, de dónde sale cada
+dólar y qué techo queda después.
+
+El instrumento es `backend/scripts/medir_los_cuatro_puntos.py`, tercero de la
+serie y con la misma disciplina: **prompts de producción**, chunker y parser
+**reales**, multiplicadores de la cadena real (documento → EF → plan, tres
+corridas de Claude que siguen en la base), 0,00 USD y menos de un minuto.
+
+Los cuatro puntos:
+
+| # | qué es | estado | dónde |
+|---|---|---|---|
+| **1** | el documento se enviaba dos veces | **✅ arreglado** (2026-08-28) | §3.ter.5 |
+| **2** | la cota de Scrum | diseñado, sin implementar | `diseno-cota-scrum.md` |
+| **3** | el techo de entrada (chunk sin cota) | diseñado, sin implementar | `diseno-techo-de-entrada.md` |
+| **4** | los lotes de QA | diseñado, sin implementar | `diseno-recorte-qa-lotes.md` |
+
+### 3.quater.1 La tabla
+
+USD **estimados**, entrada + salida. El real es 2,4–3,1x (§3).
+
+| agente / variante | 10 KB llam | 10 KB USD | 20 KB llam | 20 KB USD |
+|---|---:|---:|---:|---:|
+| EF · hoy (texto plano) | 7 | 0,557 | 7 | 1,098 ⚠ **trunca** |
+| EF · + punto 3 | 13 | 0,571 | 19 | 1,127 |
+| EF · hoy (estructurado) | 7 | 0,557 | 109 | 1,343 |
+| EF · + punto 3 (estructurado) | 13 | 0,571 | 19 | 1,128 |
+| Scrum · hoy | 634 | 5,632 | 1 267 | 15,450 |
+| **Scrum · + punto 2** | **407** | **3,154** | **812** | **6,908** |
+| Scrum · + el 5.º (`ESTIMATE`+`PRIORITIZE` en lote) | 65 | 2,138 | 128 | 4,875 |
+| QA · hoy | 1 279 | 14,673 | 2 555 | 29,306 |
+| **QA · + punto 4** | **211** | **7,828** | **420** | **15,622** |
+
+**La cadena EF + Scrum + QA:**
+
+| | 10 KB est. | 10 KB real (x2,4–x3,1) | 20 KB est. | 20 KB real |
+|---|---:|---:|---:|---:|
+| **hoy** (el punto 1 ya está dentro) | **20,86** | **50,07 – 64,67** | **45,85** | **110,05 – 142,15** |
+| **con los CUATRO puntos** | **11,55** | **27,73 – 35,82** | **23,66** | **56,78 – 73,34** |
+| + el 5.º (Scrum `ESTIMATE`+`PRIORITIZE`) | 10,54 | 25,29 – 32,67 | 21,62 | 51,90 – 67,04 |
+| **recorte** | **45%** | | **48%** | |
+
+> **Corrección declarada a §3.ter.2.** Aquella tabla contaba **entrada y salida**
+> en EF y QA pero **solo entrada** en Scrum. Aquí los tres van con las dos, así
+> que la columna «hoy» sale más alta que los 19,54 / 43,23 publicados: la
+> diferencia es exactamente la salida de Scrum (1,30 y 2,60 USD). El sentido de
+> §3.ter no cambia; el número sí, y el que vale es éste.
+
+### 3.quater.2 De dónde sale cada dólar
+
+- **QA sigue mandando**: es el 64–70% de la factura antes y el 66–68% después. El
+  punto 4 le quita la mitad y **aun así queda más caro él solo que los otros dos
+  juntos** (7,83 contra 3,73 a 10 KB; 15,62 contra 8,04 a 20 KB).
+- **Scrum es el que más se recorta** (−44% a 10 KB, **−55% a 20 KB**), porque su
+  desperdicio era el más extremo: a 20 KB el **sujeto** de cada llamada de `STORIES` es el **0,4%** del
+  mensaje y el de `CRITERIA` el **1,5%** (`diseno-cota-scrum.md` §1).
+- **El EF es ruido en la cuenta** (2,7% a 10 KB) y el punto 3 lo encarece un 2,6%
+  sobre texto plano. Lo que el punto 3 compra no es dinero: es que por encima de
+  11,1 KB el EF deje de perder una dimensión entera.
+- **El punto 1, con perspectiva**: valió 0,09 USD sobre 43. Fue la decisión
+  correcta y por los motivos correctos —techo de producto y llamadas que no
+  extraían nada—, y esta tabla dice por qué no se notó en la factura.
+
+### 3.quater.3 El techo de producto, antes y después
+
+Bytes máximos antes de que el freno del job mate la corrida (3,7314 USD
+utilizables, factor real x2,4):
+
+| agente | hoy | con los 4 puntos + el 5.º |
+|---|---:|---:|
+| EF | 29 112 B | 28 274 B |
+| Scrum | 3 675 B | 7 710 B |
+| **QA ⇐ el que manda** | **1 082 B** | **2 012 B** |
+
+Y el techo que no es de dinero: `EXTRACT` trunca hoy a **11,1 KB**; con el punto 3
+**desaparece** (chunk acotado a 2 000 tokens ⇒ pico de salida ~6 000, 27% de
+holgura).
+
+**La conclusión que hay que llevarse, y no es la del recorte:** los cuatro puntos
+parten la factura por la mitad y mueven el techo de la cadena de **1,1 a 2,0 KB**.
+Siguen sin dejar pasar un documento de 10 KB, y **ningún recorte de prompt lo va a
+conseguir**: 10 KB cuestan 28–36 USD reales con todo aplicado. `LLM_JOB_CAP_USD` =
+5 está calibrado para el documento de juguete con el que se hizo la historia del
+proyecto. Las dos salidas son subir el tope **a conciencia** —GAS-D11 existe para
+eso: el mensaje del freno dice cuánto llevaba gastado y cuánto pedía la llamada
+que lo cruzó— o llevar el costo marginal a cero con el **proveedor local** (§5.6
+de `CLAUDE.md`, `diseno-llm-local-ollama.md`). Esta tabla es el argumento más
+fuerte que hay para lo segundo.
+
+### 3.quater.4 El punto 3 aplazado se aplazó con el número de juguete
+
+El «punto 3» del plan original —`ESTIMATE` + `PRIORITIZE` de Scrum, 62 → 2
+llamadas— se aplazó porque valía **0,178 USD** contra ~8x del punto 2 (§3.bis.2).
+Ese número es de 1,76 KB. Medido a escala:
+
+| tamaño | valor del aplazado | y después del punto 2, qué fracción de Scrum es |
+|---:|---:|---:|
+| 1,76 KB | 0,178 USD | — |
+| 10 KB | **1,02 USD** | **32%** de lo que queda |
+| 20 KB | **2,03 USD** | **29%** de lo que queda |
+
+`ESTIMATE` es **73% `system`** y `PRIORITIZE` **93%**: son los dos nodos con más
+preámbulo por unidad de todo el proyecto, y su payload por historia (361 y 79
+tokens) permite lotes grandes sin acercarse al truncamiento. **La decisión de
+aplazarlo se tomó con la cifra del documento de juguete y hay que revisarla.**
+
+Trampa a resolver, no a descubrir: `EstimateExtract` y `PrioritizeExtract` son
+esquemas **escalares por historia** (`story_points`, `priority`, `value`,
+`effort`); un lote exige que pasen a lista **con la clave de vuelta a la
+historia**, con la misma condición dura que D4 de `diseno-cota-scrum.md`.
+
+### 3.quater.5 Lo que esta tabla NO dice
+
+- **No es una medición del `usage` real.** Sigue siendo estimación x2,4–3,1, con
+  el mismo mecanismo de §3. El libro mayor la convertirá en medición la primera
+  vez que se corra el par.
+- **No incluye Arquitectura, BD ni API.** Como en §3.ter, la suma es un **suelo**.
+- **No mide calidad.** El doble del LLM no puede: produce lo que se le programó.
+  Lo que sí se puede medir sin pagar es el **recall retrospectivo** —si la cota
+  habría quitado algo que el modelo de hecho usó— y ya está corrido
+  (`diseno-cota-scrum.md` §4). Lo demás exige **tres** corridas pagadas, no dos:
+  el «antes» dos veces, para tener el suelo de varianza.
+- **La cota de validaciones por entidad no está dentro.** Su recall retrospectivo
+  da 100%, pero sobre un EF de 2 entidades y 6 validaciones el filtro no filtra:
+  el número no prueba nada y no se contabiliza (`diseno-cota-scrum.md` D5).
+
+---
+
 ## 4. Decisiones
 
 ### GAS-D1 — El punto de medición es el CLIENTE, no el ensamblador
