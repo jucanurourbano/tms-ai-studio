@@ -1,8 +1,19 @@
 # Diseño — Agente QA, Modo C (exploración de una URL viva)
 
+> ## ⏸️ APLAZADO el 2026-08-27 — leer §0.bis antes que nada
+>
+> **`QC1`, `QC2`, `QC6`, `QC7` y `QC8` quedan APLAZADOS, no cancelados.** La
+> prioridad pasa a un **proveedor LLM local** que permita validar la cadena
+> ISDF con corridas reales (`docs/diseno-llm-local-ollama.md`). El motivo está
+> escrito en **§0.bis**, y está escrito para que dentro de seis meses se
+> entienda la decisión sin tener que reconstruirla.
+>
+> **Lo implementado —QC3, QC4, QC4.5, QC5— NO se toca.** No es infraestructura
+> del Modo C: es infraestructura del proyecto. Ver §0.bis *in fine*.
+
 > **Estado: DISEÑO APROBADO. QC0 (este documento), QC3 (el guard), QC4 (fixtures
-> y saneador) y QC4.5 (el extractor de anclas) están IMPLEMENTADOS —los tres
-> últimos sin una línea de Playwright—; el resto sigue en cero.** El inventario de §1
+> y saneador), QC4.5 (el extractor de anclas) y QC5 (el navegador y la capa 3 en
+> red) están IMPLEMENTADOS; el resto está APLAZADO (arriba).** El inventario de §1
 > se verificó en HEAD `9e1064a` (LLM1) y describe el punto de partida; lo que QC3
 > cambió está en §11 y en la tabla de bloques de la PARTE 3.
 >
@@ -36,6 +47,69 @@ Dejó abiertos siete asuntos que no son de plomería:
 6. El frontend está congelado y QA16 estaba descrito en una línea.
 7. El Modo C explora para **derivar** casos. La **ejecución** es del futuro Agente
    Testing, y nada impide hoy que el Modo C se deslice hacia allí.
+
+---
+
+## 0.bis Por qué esto se aplaza (2026-08-27)
+
+**Se aplaza por una razón de mercado, no porque el diseño falle.** El diseño se
+sostiene; lo que cambió es cuánto vale terminarlo ahora.
+
+### Lo que encontró la investigación de mercado
+
+Pegar un link y sacar casos de prueba **ya es producto**: **TestCollab QA
+Copilot**, **CoTester** y **CloudQA** —este último con tier gratuito—. Y los
+tres lo hacen con **modelos de visión sobre la pantalla**, no parseando el DOM.
+
+Es decir: el Modo C es **la parte más *commodity* de este proyecto**, se resuelve
+por un camino distinto del nuestro, y se le habían dedicado quince bloques.
+
+### Lo que no tiene competencia
+
+La cadena **EF → Scrum → Arquitectura → BD → API → QA**, con casos trazados a
+las `BR-`/`VAL-` de las especificaciones de **Procesos**, en español, con el
+glosario logístico y la gobernanza por fases del ISDF. **Eso no existe en el
+mercado**, es la ventaja real del proyecto — y llevaba semanas congelada por
+falta de saldo de API.
+
+### La decisión
+
+Construir un **proveedor LLM local** (Ollama) para validar la cadena con
+corridas reales, sin gastar y sin que ningún dato de Urbano salga de la máquina.
+Ver `docs/diseno-llm-local-ollama.md`.
+
+**Aplazado ≠ cancelado.** El Modo C se retoma cuando la cadena esté validada. Y
+cuando se retome, conviene reabrir una pregunta que hoy tiene respuesta
+implícita: los tres productos citados usan **visión**, y nosotros elegimos
+**DOM**. Esa elección se tomó cuando no se sabía qué hacía el mercado; merece
+volver a justificarse, no heredarse.
+
+### Lo construido no se toca, y esta es la razón
+
+Ninguna de las cuatro piezas cerradas es específica del Modo C:
+
+| Pieza | Por qué sobrevive al aplazamiento |
+|---|---|
+| **QC3** · el guard (5 capas) | El patrón fail-closed *alias → allowlist → enforcement → rechazo en la entrada* es el mismo de INV2, y **A7** (la credencial se rechaza, no se redacta) es doctrina del proyecto entero |
+| **QC4** · saneador y candado de fixtures | Sanear una captura antes de comitearla, y **verlo fallar introduciendo la violación**, sirve a cualquier fixture del repositorio |
+| **QC4.5** · extractor de anclas | Determinista, sin red ni LLM. El vocabulario cerrado *con su caso escrito al lado* es el patrón de `PIEZAS_DE_MENSAJE` |
+| **QC5** · capa 3 en red + `sin_navegador_real` | La **capa 5 del cortafuegos de tests** protege de un riesgo que la capa 4 no ve. Se queda en pie pase lo que pase con el Modo C |
+
+**El residual C4 abierto** (§14.6) sigue abierto y con el mismo dueño: la
+primera exploración autorizada contra un host real. El aplazamiento no lo cierra
+ni lo caduca.
+
+### Y una idea que se trae de la competencia
+
+De **TestCollab** se toma **una** cosa, anotada como **candidata de producto**
+(no de este plan) en `docs/diseno-llm-local-ollama.md` §4: una **bandeja de
+propuestas** con estados `pendiente`/`aceptado`/`rechazado` y edición en línea,
+donde **nada se crea hasta que un humano acepta**.
+
+**Lo que NO se copia es su entrada por URL libre.** Nuestra **allowlist de
+destinos preautorizados** (capas 1 y 2, §2 y §8) es estrictamente superior —una
+URL que pone el cliente es SSRF— y **se queda**: aplazada, intacta, y no
+sustituible por lo que hace el mercado.
 
 ---
 
@@ -558,19 +632,25 @@ commit+push por bloque, **aprobación explícita antes de empezar cada uno**.
 | Bloque | Contenido | Tests del bloque | Choca con |
 |---|---|---|---|
 | **QC0** | Este documento. QA-D19…QA-D25. | — | — |
-| **QC1** | Contrato **`QaArtifact v1.1.0`** completo (= **QA10** de la PARTE II, sin recortar a Modo C: el contrato no se toca dos veces). `mode`, `evidence_class`, `source` como unión discriminada, `AssetAnchor`/`SurfaceAnchor` + `selector_strategy`, `TraceRow` generalizado, `coverage.scope_statement`, ids `TC-OBS-`. | round-trip de un artefacto **v1.0.0 real** que sigue validando · observación sin ancla → `ValidationError` · `criterion_ref` en modo C → `ValidationError` · `exploration` + `type=authorization` → `ValidationError` · **candado de la lista negra de campos de ejecución** (QA-D25.2) | — |
-| **QC2** | Migración **`0011`** `agent_jobs.input_params` JSONB + repositorio + `clasificar()` de `data_class` + herencia en refine. Cierra de paso el `target_system_id` huérfano de INV. | `mode=exploration` ⇒ `real` · declararla → 422 · el hijo del refine hereda `real` · `input_params` sobrevive a un job que **falla** | **⚠️ LLM2** — §9.1 |
+| **QC1** ⏸️ | **[APLAZADO 2026-08-27 — §0.bis]** Contrato **`QaArtifact v1.1.0`** completo (= **QA10** de la PARTE II, sin recortar a Modo C: el contrato no se toca dos veces). `mode`, `evidence_class`, `source` como unión discriminada, `AssetAnchor`/`SurfaceAnchor` + `selector_strategy`, `TraceRow` generalizado, `coverage.scope_statement`, ids `TC-OBS-`. | round-trip de un artefacto **v1.0.0 real** que sigue validando · observación sin ancla → `ValidationError` · `criterion_ref` en modo C → `ValidationError` · `exploration` + `type=authorization` → `ValidationError` · **candado de la lista negra de campos de ejecución** (QA-D25.2) | — |
+| **QC2** ⏸️ | **[APLAZADO 2026-08-27 — §0.bis]** Migración **`0011`** `agent_jobs.input_params` JSONB + repositorio + `clasificar()` de `data_class` + herencia en refine. Cierra de paso el `target_system_id` huérfano de INV. | `mode=exploration` ⇒ `real` · declararla → 422 · el hijo del refine hereda `real` · `input_params` sobrevive a un job que **falla** | **⚠️ LLM2** — §9.1 |
 | **QC3** ✅ | **El guard, antes del navegador.** `QA_EXPLORE_*` en settings, alias con `readonly_verified`, allowlist, validación de esquema, revalidación por navegación, redacción, topes, política de pulsado (§3.2) evaluada sobre HTML, `ExploreSession` **con el driver inyectado**, `sin_navegador_real` autouse, candado AST (§3.3.3). **Sin una línea de Playwright.** | alias inexistente → error · allowlist vacía ⇒ nada autorizado · `302` fuera de host no se sigue y se registra · `file:`/`data:`/`javascript:` rechazados · `readonly_verified=false` → 409 · credencial ausente de artefacto, log y respuesta · `<button>` sin `type` en `<form>` **no** es pulsable · candado AST: cero `fill`/`type`/`screenshot` | — **IMPLEMENTADO** (§11) |
 | **QC4** ✅ | Fixtures y saneador (§6.3, §6.4): estructura, `manifest.json`, escenarios `trampas/`, `capture_explore_fixture.py`, candado de fixtures. | ninguna fixture con 8+ dígitos, host de producción ni atributo de valor con contenido · el saneador conserva los atributos de validación **y los rótulos de dentro del `<tbody>`** (A3), y vacía las celdas de datos | — **IMPLEMENTADO** (§12) |
 | **QC4.5** ✅ | **El extractor determinista de anclas**: vocabulario cerrado de atributos-ancla, `anchor_ref` canónico, cinco estrategias de selector con unicidad comprobada, `@enum`, y un lector de `.html` de disco para mirar la tabla con los ojos. Sin red, sin LLM, sin navegador, sin clic. | cada atributo del vocabulario produce su ancla y `value`/`disabled`/`placeholder` no · una etiqueta que no se escribe en CSS **no** ancla (fail-closed) · dos pasadas dan los mismos refs en el mismo orden · toda evidencia es subcadena exacta del HTML · **F2 fijada**: el enum se ve en crudo y no en la fixture saneada | — **IMPLEMENTADO** (§13) |
 | **QC5** ✅ | `EXPLORE` real (Playwright pinneado, `QA_EXPLORE_ENABLED=false`) + `SURFACE_MAP` + verificación verbatim contra DOM (§2.4.3), ejercidos **contra fixtures**. | `POST` interceptado se aborta · `add_init_script` neutraliza el submit · evidencia que no está en el DOM se descarta con `SkippedItem` · presupuesto agotado ⇒ `Observation` con las URLs pendientes · **C1 — tests de enum con HTML sintético, nunca contra fixtures** (allí hay cero enums: F2, §13.4) · **C2 — `radio`/`checkbox` entran en el vocabulario**, agrupados por `name` igual que `@enum` agrupa las `<option>` por prefijo de ruta · **C3 — el tope de A6, con huella**: por encima del tope se emite cardinalidad + hash del conjunto ordenado + primeros valores, **nunca** un conjunto recortado; un `<select>` de 1.874 opciones no mete el catálogo ni en el prompt ni en el artefacto y el ancla sigue en pie, y ninguna `evidence` supera los **32.767** caracteres de una celda de Excel · **C4 — enums falsos**: un `<select>` cuyos valores son ULIDs o nombres de persona **no** ancla como conjunto cerrado; QC5 **propone** el discriminador catálogo-de-dominio vs lista-de-datos (el mismo que bloquea F2) y no se decide antes · **C5 — anclas inestables**: ningún `anchor_ref` cambia entre corridas si no cambió la aplicación, así que un `aria-label` que interpola un id (`{storyId}`) no ancla — una suite de caracterización con refs inestables no caracteriza nada | **CERRADO** (§14). `libnspr4`/`libnss3` instalados; `playwright==1.62.0` (chromium **1234**, ya descargado). **Ninguna exploración real**, ni una vez |
-| **QC6** | `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. Usuario `qa.test@urbano.com.pe`. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está · **A7.1 — `getpass` y nada más**: la contraseña se teclea, y no hay `--password`, ni variable de entorno, ni entrada en `.env` (el argumento queda en el historial del shell y en `ps aux`; la variable se hereda al navegador; el `.env` se copia entre máquinas). Incluye cerrar la puerta abierta del otro extremo: **el validador rechaza una URL base con `userinfo`**, porque `redact_url` la tapa pero no la quita, y hoy `https://qa.test:Secreta123@host/` se acepta. **Desviación declarada de QA-D21 (c)**: lo que persiste es el `storage_state`, nunca la credencial · **A7.2 — el candado es de forma y de sitio**, un test de la suite y no un `.gitignore` (que se salta con `git add -f`), probado **introduciendo la violación**: (1) ningún fichero de `git ls-files` tiene la forma de un `storage_state` (JSON con `cookies`+`origins`) ni su nombre; (2) la ruta del estado se comprueba **fuera del árbol** y `600`, porque prohibir el sitio llega antes que el `git add`; (3) por AST, `getpass` es la única fuente de la contraseña y no se pasa a nada que registre, imprima o escriba. **No busca la palabra «password»**: no existe oráculo de contraseñas sobre texto y el repo tiene hoy `tms_dev_password` en `.env.example` y `"superseguro1"` en 12 ficheros de `tests/api/`, todos legítimos. Y el candado AST **extiende su recorrido a `scripts/`**, que hoy no vigila nadie, mirando a quién se llama y no solo el nombre del método (`textwrap.fill` en `anclas_de_html.py:109` es un falso positivo medido) | **entorno** (igual que QC5) |
-| **QC7** | Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
-| **QC8** | Frontend (§7): selector de modo, select de alias **sin campo de URL**, `evidence-class.ts`, ancla en la fila, `HubSection` "Exploración", `UI:` sin destino, columna del CSV. | Modo A renderiza idéntico · alias vacío ⇒ opción deshabilitada con motivo · `UI:` no abre panel | **⚠️ LLM5** — §9.3 |
+| **QC6** ⏸️ | **[APLAZADO 2026-08-27 — §0.bis]** `qa_explore_login.py` (CLI, el único sitio que teclea) + carga de `storage_state` + sondeo de sesión válida. Usuario `qa.test@urbano.com.pe`. | estado caducado ⇒ aborta **antes** de la primera llamada al LLM · el CLI está en `PERMITIDOS` del candado AST y nada más lo está · **A7.1 — `getpass` y nada más**: la contraseña se teclea, y no hay `--password`, ni variable de entorno, ni entrada en `.env` (el argumento queda en el historial del shell y en `ps aux`; la variable se hereda al navegador; el `.env` se copia entre máquinas). Incluye cerrar la puerta abierta del otro extremo: **el validador rechaza una URL base con `userinfo`**, porque `redact_url` la tapa pero no la quita, y hoy `https://qa.test:Secreta123@host/` se acepta. **Desviación declarada de QA-D21 (c)**: lo que persiste es el `storage_state`, nunca la credencial · **A7.2 — el candado es de forma y de sitio**, un test de la suite y no un `.gitignore` (que se salta con `git add -f`), probado **introduciendo la violación**: (1) ningún fichero de `git ls-files` tiene la forma de un `storage_state` (JSON con `cookies`+`origins`) ni su nombre; (2) la ruta del estado se comprueba **fuera del árbol** y `600`, porque prohibir el sitio llega antes que el `git add`; (3) por AST, `getpass` es la única fuente de la contraseña y no se pasa a nada que registre, imprima o escriba. **No busca la palabra «password»**: no existe oráculo de contraseñas sobre texto y el repo tiene hoy `tms_dev_password` en `.env.example` y `"superseguro1"` en 12 ficheros de `tests/api/`, todos legítimos. Y el candado AST **extiende su recorrido a `scripts/`**, que hoy no vigila nadie, mirando a quién se llama y no solo el nombre del método (`textwrap.fill` en `anclas_de_html.py:109` es un falso positivo medido) | **entorno** (igual que QC5) |
+| **QC7** ⏸️ | **[APLAZADO 2026-08-27 — §0.bis]** Cabecera de grafo C sobre la cola compartida + servicio + `POST /qa/jobs` con `mode` + `GET /qa/explore-targets` + semáforo C con su frase. | los 9 nodos de cola no se duplican · semáforo C exige ancla resoluble en todo caso · `budget_exhausted` ⇒ `ready` posible + `Risk` · `qa` FULL explora, `admin` registra | — |
+| **QC8** ⏸️ | **[APLAZADO 2026-08-27 — §0.bis]** Frontend (§7): selector de modo, select de alias **sin campo de URL**, `evidence-class.ts`, ancla en la fila, `HubSection` "Exploración", `UI:` sin destino, columna del CSV. | Modo A renderiza idéntico · alias vacío ⇒ opción deshabilitada con motivo · `UI:` no abre panel | **⚠️ LLM5** — §9.3 |
 | **Cierre** | Los modos disponibles sobre el mismo seed, con LLM y navegador falsos. | `scripts/seed_qa_demo.py` extendido | — |
 
 **El Modo B no está en este plan.** Está en cero (§1.2) y su plan es QA11–QA12 de la
 PARTE II. QC1 y QC2 le sirven a los dos, así que hacerlos ahora no lo estorba.
+
+> **⏸️ Los cinco bloques marcados están APLAZADOS desde el 2026-08-27** (§0.bis).
+> La tabla se conserva **entera y sin recortar**: cuando el Modo C se retome, el
+> plan tiene que estar donde se dejó, no reconstruido de memoria. Nótese que el
+> aplazamiento **desactiva la colisión §9.1** (`QC2 ⇄ LLM2`), que era la que
+> ordenaba los dos frentes.
 
 ## 8.bis Ajustes aprobados al aprobar cada bloque (A1–A7)
 
