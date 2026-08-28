@@ -90,7 +90,9 @@ async def test_el_freno_no_se_confunde_con_un_esquema_invalido(monkeypatch):
     llm = MeteredLLMClient(InternoQueSeFrena(0), agent_role="qa", job_id="J-1")
 
     with pytest.raises(budget.BudgetExceededError):
-        await complete_structured(llm, system="s", user="u", schema=Esquema)
+        await complete_structured(
+            llm, system="s", user="u", schema=Esquema, stage="PRUEBA"
+        )
 
 
 async def test_el_freno_tumba_el_map_en_vez_de_dejar_items_en_cuarentena(monkeypatch):

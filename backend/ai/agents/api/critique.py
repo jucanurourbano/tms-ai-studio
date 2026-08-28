@@ -282,7 +282,11 @@ async def run_critique(
     system = build_system("critique.md", knowledge_block(authoritative_context))
     user = build_critique_user(endpoints, schemas, findings, coverage)
     modelo, error = await complete_structured(
-        llm, system=system, user=user, schema=ApiRisksExtract
+        llm,
+        system=system,
+        user=user,
+        schema=ApiRisksExtract,
+        stage="critique",
     )
     tokens = {"input": estimate_tokens(system + user), "output": 0}
     skipped: list[dict] = []

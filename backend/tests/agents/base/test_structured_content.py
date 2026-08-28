@@ -118,7 +118,12 @@ async def test_complete_structured_valida_respuesta_en_bloques():
     """De punta a punta: bloques -> texto -> json.loads -> Pydantic válido."""
     llm = ClaudeLLMClient(client=_FakeChat(_BLOCK_CONTENT))
     model, error = await complete_structured(
-        llm, system="s", user="u", schema=RequirementsExtract, max_repairs=0
+        llm,
+        system="s",
+        user="u",
+        schema=RequirementsExtract,
+        stage="PRUEBA",
+        max_repairs=0,
     )
     assert error == ""
     assert model is not None
@@ -130,7 +135,12 @@ async def test_complete_structured_bloques_con_fence():
     content = [{"type": "text", "text": f"```json\n{_REQ_JSON}\n```"}]
     llm = ClaudeLLMClient(client=_FakeChat(content))
     model, error = await complete_structured(
-        llm, system="s", user="u", schema=RequirementsExtract, max_repairs=0
+        llm,
+        system="s",
+        user="u",
+        schema=RequirementsExtract,
+        stage="PRUEBA",
+        max_repairs=0,
     )
     assert error == "" and model is not None
     assert model.functional[0].source_ref == "el-0001"

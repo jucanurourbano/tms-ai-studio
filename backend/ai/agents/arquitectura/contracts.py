@@ -124,6 +124,7 @@ async def run_contracts(
         system=int_system,
         user=int_user,
         schema=IntegrationsExtract,
+        stage="CONTRACTS",
         max_repairs=max_repairs,
     )
     integrations: list[dict] = []
@@ -190,6 +191,7 @@ async def run_contracts(
         system=xc_system,
         user=xc_user,
         schema=CrossCuttingListExtract,
+        stage="CONTRACTS",
         max_repairs=max_repairs,
     )
     cross_cutting: list[dict] = []

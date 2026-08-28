@@ -1075,6 +1075,47 @@ peor forma de enterarse.
 - **Sin migración y sin tocar la matriz de permisos.** Es solo lectura: quien
   garantiza el tope sigue siendo `MeteredLLMClient`, antes de cada llamada.
 
+### La LÍNEA BASE del «antes» está fijada y es RECONSTRUIDA (§3.bis del diseño)
+
+Para demostrar un recorte hace falta el «antes», y **el «antes» medido no existe:
+ninguna corrida de la historia registró el `usage`** (`TokenMetrics.source` vale
+`"estimado"` en los seis agentes), así que todo lo anterior a GAS1 solo admite
+reconstrucción. Se reconstruye ejecutando **nuestro propio código** —determinista,
+re-medible, 0,00 USD— con `scripts/medir_linea_base.py` (pipeline real de QA +
+doble del LLM de la suite, sobre el plan Scrum real de 31 historias y **110
+criterios**, `01KY33JDAV21N40N326TCR3JSS`). Lo que hay que saber sin abrir el doc:
+
+- **QA modo A: 221 llamadas · 603 869 tok de entrada · 2,61 USD estimados.**
+  `TEST_DESIGN` 110 y `EDGE_CASES` 110, cada nodo con **una sola firma de
+  `system`**: 466 738 tokens de preámbulo reenviado = **1,40 USD por corrida, el
+  55% de la factura del agente**.
+- **El «110 → 1» no es alcanzable, y el límite está en la SALIDA** (~14 700 tok
+  estimados, 35–45 k reales, contra los 8 192 que el propio proyecto asume). El
+  recorte es **agrupar**: el punto 2 pasa a ser **110 → ~11** (lotes de 10, el
+  **91%** del desperdicio). Lotes de 20 añaden un 5% y duplican el riesgo de
+  truncar.
+- **ARREGLADO al medir: quince nodos LLM caían en `stage = NULL`** (§3.bis.4 del
+  diseño). La fila de `CRITIQUE` salió `(sin etiqueta)` y el agujero resultó ser
+  mucho mayor: GAS1 etiquetó en `run_structured_map`, que cubre los nodos *map* y
+  **deja fuera a los de una sola llamada** — el **Agente Arquitectura entero**
+  entre ellos. La etiqueta baja a `complete_structured` y `stage` pasa a ser
+  **keyword-only sin default** (como `data_class`/`job_id` en `get_llm`), con
+  candado en `tests/llm/test_atribucion_por_nodo.py`. El EF **no** estaba ciego:
+  sus dos nodos LLM ya se etiquetaban a mano.
+- **Scrum `ESTIMATE`+`PRIORITIZE`: 62 llamadas, 0,178 USD de ahorro** — el punto 2
+  vale ~8x el punto 3, así que **el punto 3 BAJA de prioridad** (se hace después o
+  se pliega a otro bloque). A cambio, el punto 3 sí se puede hacer entero (62 → 2).
+- **El tope del job frena esa corrida**: 3,73 USD utilizables (5,00 − margen)
+  contra 6,3–8,1 reales. La primera corrida real de QA hay que autorizarla
+  subiendo el tope a conciencia. Y **ese plan no pasa el gate**: cuatro `must` sin
+  sprint ⇒ `no_must_unassigned` falso ⇒ 409.
+- **Cuando haya saldo, el primer dólar es del EF, no de QA**: 0,107 estimados ⇒
+  **0,26–0,33 reales** sobre el documento que sigue en disco, y es el A/B
+  reproducible byte a byte que OLL-D5 ya reclama.
+- El «después» **no se compara contra esa tabla**: se corre el par antes/después
+  **seguido y con el mismo modelo**, y las dos corridas quedan en el libro mayor.
+  La tabla dice cuánto costará el par y qué esperar de él.
+
 ---
 
 ## 6. Autenticación y usuarios
@@ -1345,6 +1386,7 @@ tms-ai-studio/
     ├── scripts/capture_explore_fixture.py  # captura fixtures del Modo C (manual)
     ├── scripts/anclas_de_html.py   # imprime la tabla de anclas de un .html (manual)
     ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
+    ├── scripts/medir_linea_base.py # el «antes» de los recortes, reconstruido (0 USD)
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/

@@ -61,7 +61,12 @@ async def run_epics(
     tokens["input"] += estimate_tokens(system + user)
 
     model, err = await complete_structured(
-        llm, system=system, user=user, schema=EpicsExtract, max_repairs=max_repairs
+        llm,
+        system=system,
+        user=user,
+        schema=EpicsExtract,
+        stage="EPICS",
+        max_repairs=max_repairs,
     )
     if model is None:
         skipped.append(

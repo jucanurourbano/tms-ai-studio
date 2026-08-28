@@ -35,7 +35,7 @@ class DimLLM:
 async def test_complete_structured_repara():
     llm = ScriptedLLM(["{ roto", '{"name":"ok"}'])
     model, err = await complete_structured(
-        llm, system="s", user="u", schema=_Item, max_repairs=2
+        llm, system="s", user="u", schema=_Item, stage="PRUEBA", max_repairs=2
     )
     assert model is not None and model.name == "ok"
     assert err == ""
@@ -45,7 +45,7 @@ async def test_complete_structured_repara():
 async def test_complete_structured_irreparable():
     llm = ScriptedLLM(["x", "y", "z"])
     model, err = await complete_structured(
-        llm, system="s", user="u", schema=_Item, max_repairs=1
+        llm, system="s", user="u", schema=_Item, stage="PRUEBA", max_repairs=1
     )
     assert model is None
     assert err  # último error reportado

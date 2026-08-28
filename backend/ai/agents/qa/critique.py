@@ -204,7 +204,11 @@ async def llm_risks(
     system = build_system("critique.md", knowledge_block(authoritative_context))
     user = "PLAN CONSOLIDADO:\n" + json.dumps(payload, ensure_ascii=False, indent=2)
     modelo, _error = await complete_structured(
-        llm, system=system, user=user, schema=_RisksExtract
+        llm,
+        system=system,
+        user=user,
+        schema=_RisksExtract,
+        stage="CRITIQUE",
     )
     tokens = {"input": estimate_tokens(system + user), "output": 0}
     if modelo is None:

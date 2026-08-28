@@ -311,6 +311,7 @@ async def run_critique(
             system=system,
             user=user,
             schema=DbCritiqueExtract,
+            stage="CRITIQUE",
             max_repairs=max_repairs,
         )
         if model is not None:

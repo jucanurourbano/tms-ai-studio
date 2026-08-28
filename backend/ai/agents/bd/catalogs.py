@@ -444,7 +444,12 @@ async def run_catalogs(
     extracted: Optional[dict] = None
 
     model, err = await complete_structured(
-        llm, system=system, user=user, schema=CatalogsExtract, max_repairs=max_repairs
+        llm,
+        system=system,
+        user=user,
+        schema=CatalogsExtract,
+        stage="CATALOGS",
+        max_repairs=max_repairs,
     )
     if model is None:
         skipped.append(

@@ -17,7 +17,6 @@ from ai.agents.base.structured import (
     ClaudeLLMClient,
     LLMClient,
     complete_structured,
-    for_stage,
 )
 from ai.knowledge import glossary_block
 from ai.tools.chunker import estimate_tokens
@@ -83,6 +82,7 @@ async def extract_dimension(
         system=system,
         user=user,
         schema=dimension.schema,
+        stage="EXTRACT",
         max_repairs=max_repairs,
     )
     return model
@@ -115,10 +115,6 @@ async def run_extract(
     skipped: list[dict] = []
     tokens = {"input": 0, "output": 0}
     semaphore = asyncio.Semaphore(concurrency)
-    # EXTRACT tiene su propio *map* y no pasa por ``run_structured_map``, así que
-    # la etiqueta de GAS-D10 hay que ponerla aquí a mano: sin esto, el nodo que
-    # más llamadas hace de la cadena quedaría sin atribuir en el libro mayor.
-    etiquetado = for_stage(llm, "EXTRACT")
 
     async def worker(chunk: dict, dimension: Dimension) -> None:
         system = build_system(dimension.prompt_file, glossary_ctx)
@@ -128,10 +124,11 @@ async def run_extract(
             # para conservar el ERROR real y reportarlo en la cuarentena (antes
             # se descartaba, dejando "schema inválido" sin detalle en la BD).
             validated, error = await complete_structured(
-                etiquetado,
+                llm,
                 system=system,
                 user=user,
                 schema=dimension.schema,
+                stage="EXTRACT",
                 max_repairs=max_repairs,
             )
         # Estimación de tokens (real vía usage no disponible con mocks; ver CLAUDE.md).

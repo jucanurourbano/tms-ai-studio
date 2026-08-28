@@ -8,6 +8,9 @@
 > `EDGE_CASES` / `PRIORITIZE` / `ESTIMATE`, por decisión del usuario y porque —como
 > se argumenta en §8— este bloque es el **instrumento con el que se miden** esos
 > recortes. Sin él, "110 llamadas → 1" es una afirmación; con él, una medición.
+> **§3.bis fija la línea base del «antes»** —reconstruida y declarada como tal— y
+> de paso corrige el enunciado: el «110 → 1» topa con el máximo de SALIDA, así que
+> el recorte es agrupar en lotes, y con lotes de 10 se captura el 91%.
 
 ---
 
@@ -113,8 +116,11 @@ es una precaución hipotética, es un agujero medido de un cuarto del historial.
 
 ### H2 — `qa_nodes` nunca fija `started_at`, y la duración de QA es de 56 años
 
-Las dos corridas reales de QA reportan `duration = 1786990494.418` y
-`1786995586.803` segundos. La causa:
+Las dos corridas de QA que llegaron a persistir métricas reportan
+`duration = 1786990494.418` y `1786995586.803` segundos. Son las dos del seed
+(`scripts/seed_qa_demo.py`, que pasa `started_at: 0.0` explícito); las tres
+corridas de QA lanzadas contra la API real están en `FAILED` y sin métricas, que
+es H1. La causa es la misma para ambas, y por eso el seed la delató:
 
 ```python
 # ai/agents/qa/assemble.py:178  (idéntico en los otros cinco)
@@ -156,6 +162,183 @@ Las tres desaparecen leyendo el `usage`. Y la primera, además, **se convierte e
 una métrica**: con una fila de libro mayor por llamada, la tasa de reparación es
 `filas / ítems - 1`, que es exactamente el número que OLL-D1 declara como métrica
 principal del experimento local.
+
+---
+
+## 3.bis. La línea base del «antes»: RECONSTRUIDA, no medida
+
+`by_stage` (GAS2) es el instrumento con el que se demuestra un recorte, pero para
+decir «`EDGE_CASES` costaba X y ahora cuesta Y» hace falta la X. **La X medida no
+existe y no puede recuperarse:** ninguna corrida de la historia del proyecto
+registró el `usage` del proveedor —`TokenMetrics.source` vale `"estimado"` en los
+seis agentes, §1.1— así que el «antes» de todo lo anterior a GAS1 es forzosamente
+reconstruido. No es la opción barata frente a una corrida real: es la única clase
+de «antes» que existe para lo ya ocurrido.
+
+Lo que sí se puede medir hoy, con exactitud y sin gastar un centavo, es **lo que
+produce nuestro propio código**: cuántas llamadas hace cada nodo, con qué prompts
+y de qué tamaño. Eso es determinista —mismo plan ⇒ mismos prompts— y por tanto
+re-medible cuando se quiera. El instrumento es
+`backend/scripts/medir_linea_base.py`: corre el pipeline REAL de QA con el doble
+del LLM de la suite y replica los *map* de Scrum sobre las historias reales del
+plan. Cuesta 0,00 USD y la línea base de abajo es su salida, no una transcripción
+de prosa.
+
+**El plan que se mide es el único que sirve:** `01KY33JDAV21N40N326TCR3JSS`
+(2026-07-21) — 31 historias y **110 criterios**, el único del historial a la escala
+de un requerimiento de verdad. Los otros dos planes en verde son los del seed
+(once criterios) y medir contra ellos mediría la fixture.
+
+### 3.bis.1 QA modo A — el «antes» del punto 2
+
+| nodo | llamadas | firmas de `system` | entrada (tok est.) | salida (tok est.) | USD est. |
+|---|---:|---:|---:|---:|---:|
+| `TEST_DESIGN` | 110 | 1 | 307 280 | 33 862 | 1,4298 |
+| `EDGE_CASES` | 110 | 1 | 290 880 | 14 694 | 1,0931 |
+| `CRITIQUE` | 1 | 1 | 5 709 | 49 | 0,0179 |
+| **TOTAL** | **221** | | **603 869** | **48 605** | **2,5407** |
+
+(La fila de `CRITIQUE` sale con su nombre desde el arreglo de §3.bis.4; en la
+primera medición aparecía como `(sin etiqueta)`, que es lo que lo delató.)
+
+El desglose que explica el recorte: **una sola firma de `system` por nodo**, o sea
+el mismo preámbulo reenviado una vez por ítem. `EDGE_CASES` reenvía 227 700 tokens
+de `system` de los que **2 070 serían suficientes**; `TEST_DESIGN`, 243 320 de los
+que bastarían 2 212. **Desperdicio medido: 466 738 tokens de entrada = 1,40 USD
+estimados por corrida**, el 55% de la factura del agente.
+
+Dos cifras que corrigen el enunciado del plan:
+
+1. **«110 → 1» no es alcanzable, y el límite está en la SALIDA.** Consolidar los
+   110 criterios en una llamada exige ~14 700 tokens de salida estimados
+   (35 000–45 000 reales) en una sola respuesta: por encima de los 8 192 que el
+   propio proyecto asume como máximo (`LLM_MAX_OUTPUT_TOKENS_ASSUMED`). El
+   recorte realista es **agrupar**, y con lotes de 10 se captura casi todo:
+   110 → 11 llamadas ahorra 204 930 tokens en `EDGE_CASES` y 218 988 en
+   `TEST_DESIGN` (0,61 + 0,66 USD est.), el 91% del desperdicio. Los lotes de 20
+   añaden un 5% más y duplican el riesgo de una salida truncada. **El enunciado
+   del punto 2 queda corregido a «110 → ~11»**.
+2. **`CRITIQUE` salía sin etiqueta de nodo — y no era el único.** Ver §3.bis.4:
+   la fila apareció como `(sin etiqueta)` y al tirar del hilo resultó que el
+   agujero no era de QA ni de una línea.
+
+### 3.bis.2 Scrum `ESTIMATE` + `PRIORITIZE` — el «antes» del punto 3
+
+| nodo | llamadas | `system` (tok) | payload (tok) | entrada (tok est.) | USD est. | consolidado | ahorro |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `ESTIMATE` | 31 | 984 | 11 286 | 41 790 | 0,1254 | 12 270 | 29 520 |
+| `PRIORITIZE` | 31 | 997 | 2 574 | 33 481 | 0,1004 | 3 571 | 29 910 |
+
+Aquí **el 62 → 2 sí es alcanzable**: 31 estimaciones o 31 prioridades caben de
+sobra en una respuesta. El ahorro es 59 430 tokens = **0,178 USD estimados por
+corrida**, una octava parte del recorte de QA. Sirve para ordenar el trabajo: el
+punto 2 vale ~8x el punto 3, y el punto 3 es el que se puede hacer entero.
+
+### 3.bis.3 Qué sostiene esta línea base y qué NO
+
+**Sostiene** —porque es aritmética sobre nuestro propio código— el número de
+llamadas, el volumen de entrada, la proporción que es preámbulo repetido, el
+ahorro relativo de cada agrupación y el orden de prioridad entre los puntos 2 y 3.
+
+**No sostiene** una cifra en dólares del antes. Le falta el `usage`, y con él las
+tres causas del subconteo (§3). Dos consecuencias que hay que tener escritas:
+
+- **El sesgo es conservador en la dirección que importa.** De las tres causas, la
+  del loop de reparación crece con el **número de llamadas** —factura hasta 3
+  veces y se apunta 1—, así que un nodo de 110 llamadas está más subestimado que
+  uno de 1. La reconstrucción **subestima** el desperdicio: el recorte real será
+  mayor que el 1,40 USD que estas cifras prometen, nunca menor.
+- **El día del «después» no se compara contra esta tabla, se compara contra una
+  corrida gemela.** Cuando el punto 2 esté listo se corre el «antes» sobre el
+  commit anterior y el «después» sobre el nuevo, **seguidas y con el mismo
+  modelo**, y las dos quedan en el libro mayor. Esta línea base es lo que permite
+  saber de antemano cuánto va a costar ese par y qué se espera de él; no lo
+  sustituye. Correr el «antes» hoy y el «después» en semanas sería peor: mediría
+  también la deriva del proveedor entre ambas fechas.
+
+### 3.bis.4 El agujero que destapó la medición: quince nodos sin atribuir
+
+Medir tiene esta ventaja sobre razonar: la tabla de §3.bis.1 salió con una fila
+llamada `(sin etiqueta)`. Era `CRITIQUE`, y al tirar del hilo el agujero resultó
+ser mucho mayor que un nodo de QA.
+
+GAS1 puso la etiqueta de GAS-D10 en **`run_structured_map`**, con el argumento de
+que "cubre todos los nodos de tipo *map* del sistema con una sola edición". Es
+cierto y es exactamente el problema: **los nodos que hacen UNA sola llamada no
+pasan por ahí**. Recuento sobre el árbol:
+
+| agente | nodos LLM atribuidos (GAS1) | nodos LLM **sin atribuir** |
+|---|---|---|
+| EF | `EXTRACT`, `CRITIQUE` | — |
+| Scrum | `STORIES`, `CRITERIA`, `ESTIMATE`, `PRIORITIZE` | `EPICS`, `CRITIQUE` |
+| **Arquitectura** | — | **`COMPONENTS`, `STACK`, `ADRS`, `CONTRACTS` (×2), `CRITIQUE`** |
+| BD | `TABLES`, `CONSTRAINTS` | `RELATIONS`, `INDEXES`, `CATALOGS`, `CRITIQUE` |
+| API | `resources`, `endpoints`, `schemas`, `authorization` | `rule_mapping`, `critique` |
+| QA | `TEST_DESIGN`, `EDGE_CASES` | `CRITIQUE` |
+
+**Quince sitios**, y entre ellos el Agente Arquitectura **entero**: sus cinco
+nodos LLM son de una sola llamada, así que el 100% de su gasto habría caído en
+`stage = NULL`. Un `by_stage` que no sabe separar ningún nodo de un agente no
+sirve para demostrar ningún recorte en ese agente.
+
+El EF, en cambio, estaba bien: GAS1 sí etiquetó a mano sus dos nodos LLM
+(`run_extract` tiene su propio *map*, y el `complete_json` suelto de `critique`
+ya llamaba a `for_stage`). La afirmación "en el EF esa fila es enorme y nace
+ciega" era **falsa**: la llamada del EF es enorme —sigue siendo la única sin
+techo de la cadena— pero nunca estuvo ciega.
+
+**El arreglo mueve la etiqueta un nivel hacia abajo**, de `run_structured_map` a
+`complete_structured`, que es por donde pasan **las dos** clases de llamada. Y
+`stage` se declara **keyword-only y sin default**, igual que `data_class` y
+`job_id` en `get_llm`: un default es lo que convierte una etiqueta obligatoria en
+algo que se puede olvidar, y el recuento de arriba es la prueba de que se olvida.
+Ahora olvidarlo es un `TypeError`.
+
+Tres consecuencias que conviene tener escritas:
+
+- **No es "una línea".** Es una firma, dieciséis sitios de llamada y un candado
+  (`tests/llm/test_atribucion_por_nodo.py`) con las dos mitades de la regla:
+  nadie llama `complete_json` fuera de los dos etiquetadores, y nadie llama
+  `complete_structured` sin declarar su nodo. El candado **se ve fallar** (misma
+  regla que los de QC4) y comprueba además que la etiqueta *llega al cliente*, no
+  solo que la palabra este escrita.
+- **`for_stage` pasa a tener dos llamadores y nada más**: `complete_structured` y
+  el `complete_json` suelto del `CRITIQUE` del EF. Antes tenía tres y el tercero
+  —`run_extract`— era una copia a mano que había que acordarse de escribir.
+- **El casing sigue mezclado y se deja como está**: el Agente API etiqueta en
+  minúsculas (`resources`, `critique`) y los demás en mayúsculas (`TEST_DESIGN`,
+  `CRITIQUE`). `by_stage` agrupa por `(agent_role, stage)`, así que la mezcla no
+  junta ni parte ninguna fila; normalizarla sería churn sobre los mismos strings
+  que alimentan el `stage` de la cuarentena, que sí viaja al artefacto.
+
+### 3.bis.5 Y esa corrida gemela, hoy, la frena el tope del job
+
+Con los topes de hoy (`LLM_JOB_CAP_USD` = 5,00 y `LLM_JOB_HEADROOM_CALLS` = 3):
+el margen reserva 1,2686 USD (3 x 0,4229) y deja **3,7314 USD utilizables**. La
+corrida de QA sobre este plan está estimada en **2,6110 USD**, así que **el freno
+actúa en cuanto el factor real supera x1,43** — y el mecanismo del §3 lo sitúa
+entre x2,4 y x3,1. Traducido:
+
+- A x2,4 la corrida vale ~6,3 USD y muere al principio de `EDGE_CASES`.
+- A x3,1 vale ~8,1 USD y muere **dentro de `TEST_DESIGN`**, antes de que
+  `EDGE_CASES` haga su primera llamada.
+
+Es decir: **pagar hoy una corrida de QA para fijar la línea base compraría, con
+alta probabilidad, un job `FAILED` que no llega a medir el nodo que se quería
+medir.** Quedarían sus filas reales del libro mayor (§6.bis) y con ellas el factor
+de `TEST_DESIGN`, que es información valiosa —pero se compra mucho más barata
+donde el mismo dato ya está esperando: **una corrida del EF** sobre el documento
+que sigue en disco (`storage/bfc45b2b….txt`, 1 764 bytes) está estimada en 0,107
+USD ⇒ **0,26–0,33 USD reales**, un vigésimo del precio, y es además el A/B
+reproducible byte a byte que OLL-D5 ya reclama. Ése es el primer dólar que hay que
+gastar cuando haya saldo, no el de QA.
+
+Y hay un impedimento anterior al dinero: **este plan no pasa el gate de QA.**
+Cuatro historias `must` quedaron sin sprint (US-013, US-014, US-024, US-031), así
+que `no_must_unassigned` es falso y el semáforo compuesto del Scrum (D5) está en
+rojo — `qa_service` lo rechazaría con 409. Ponerlo en verde exige un refine del
+Scrum, que es otra corrida pagada **y** produciría un plan distinto del que esta
+tabla mide.
 
 ---
 
@@ -326,7 +509,8 @@ Datos reales (`agent_jobs`, consultado 2026-08-28, 28 filas):
 |---|---|---|
 | Job más caro de la historia (`scrum`, 107 181 in / 22 110 out) | \$0,653 | ~\$1,6–2,0 |
 | Corrida EF real típica (5 061 / 6 133) | \$0,107 | ~\$0,26–0,33 |
-| Corrida QA real (53 930 / 4 389) | \$0,228 | ~\$0,55–0,71 |
+| Corrida QA del **seed** (11 criterios; 53 930 / 4 389) | \$0,228 | ~\$0,55–0,71 |
+| Corrida QA sobre el **plan real** (110 criterios; reconstruida, §3.bis) | \$2,611 | ~\$6,3–8,1 |
 | **Todo el historial del proyecto, sumado** | **~\$1,8** | **~\$4,5–5,6** |
 
 Lo que esa última fila dice es incómodo y útil: **el objetivo de 25–30 USD/mes es
@@ -338,7 +522,13 @@ sin acotar y las 110 llamadas de `EDGE_CASES` tienen exactamente esa forma.
 
 - **`LLM_JOB_CAP_USD = 5.0`** — freno del job. ~2,5x el job más caro jamás
   observado. Cruzarlo hace fallar **ese** job con un motivo legible, no el mes.
-  Es el tope que más veces va a salvar el objetivo de 25–30.
+  Es el tope que más veces va a salvar el objetivo de 25–30. **Y la línea base de
+  §3.bis dice que la primera corrida de QA sobre un plan de verdad lo cruza:**
+  2,61 USD estimados ⇒ 6,3–8,1 reales contra 3,73 utilizables. No es un fallo del
+  número —el tope está haciendo exactamente lo que se le pidió, avisar de que una
+  sola corrida se come una cuarta parte del objetivo del mes—, pero significa que
+  la primera corrida real de QA hay que **autorizarla subiendo el tope a
+  conciencia**, que es para lo que GAS-D11 escribió el mensaje.
 - **`LLM_MONTHLY_CAP_USD = 100.0`** — el techo que pidió el usuario. Fail-closed.
 - **`LLM_MONTHLY_TARGET_USD = 30.0`** — **no bloquea**. Es el número que se
   reporta (§7.2) para que 25–30 sea gobernable y no una aspiración. Un objetivo
@@ -663,7 +853,7 @@ trabajar sin freno pone un techo alto y queda escrito en el `.env`.
 
 | Plan | Relación |
 |---|---|
-| **Puntos 2 y 3 del plan** (`EDGE_CASES` 110→1, `PRIORITIZE`+`ESTIMATE` 62→2) | `by_stage` **es** el antes/después que se pidió. Construir esto primero no retrasa esos bloques: los vuelve medibles en vez de argumentables. |
+| **Puntos 2 y 3 del plan** (`EDGE_CASES` 110→lotes, `PRIORITIZE`+`ESTIMATE` 62→2) | `by_stage` **es** el antes/después que se pidió. Construir esto primero no retrasa esos bloques: los vuelve medibles en vez de argumentables. La **línea base del «antes» está en §3.bis**, medida sin gastar: el punto 2 vale ~8x el punto 3, y el punto 3 es el que se puede hacer entero. |
 | **OLL0…OLL4** (proveedor local) | El libro mayor es su **instrumento**: tokens y duración por llamada dan los tok/s, y `filas / ítems − 1` da la **tasa de reparación**, que OLL-D1 declara métrica principal del experimento. El A/B de OLL-D5 se consulta, no se reconstruye. |
 | **LLM2** (`data_class` → `data_residency`) | **Sin colisión.** El libro mayor guarda `provider`; la residencia se deriva del registro (GAS-D10, §5). |
 | **LLM4** (procedencia, `estimate_cost` per-proveedor, muerte del shim) | **Colisión declarada y asignada.** LLM4 hereda la deuda de GAS-D9 (el artefacto) y debe **reutilizar** la tarifa de `MeteredLLMClient` en lugar de escribir una segunda. |

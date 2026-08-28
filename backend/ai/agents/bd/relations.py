@@ -326,6 +326,7 @@ async def run_relations(
             system=system,
             user=user,
             schema=RelationsExtract,
+            stage="RELATIONS",
             max_repairs=max_repairs,
         )
         if model is None:

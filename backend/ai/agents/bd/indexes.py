@@ -297,7 +297,12 @@ async def run_indexes(
     user = build_indexes_user(tables, sources)
     tokens["input"] = estimate_tokens(system + user)
     model, err = await complete_structured(
-        llm, system=system, user=user, schema=IndexesExtract, max_repairs=max_repairs
+        llm,
+        system=system,
+        user=user,
+        schema=IndexesExtract,
+        stage="INDEXES",
+        max_repairs=max_repairs,
     )
     if model is None:
         skipped.append(

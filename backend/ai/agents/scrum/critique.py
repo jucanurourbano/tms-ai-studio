@@ -104,7 +104,12 @@ async def _llm_risks(
     user = "PLAN CONSOLIDADO:\n" + json.dumps(payload, ensure_ascii=False)
     tokens = {"input": estimate_tokens(system + user), "output": 0, "total": 0}
     model, _err = await complete_structured(
-        llm, system=system, user=user, schema=CritiqueExtract, max_repairs=1
+        llm,
+        system=system,
+        user=user,
+        schema=CritiqueExtract,
+        stage="CRITIQUE",
+        max_repairs=1,
     )
     if model is None:
         tokens["total"] = tokens["input"]

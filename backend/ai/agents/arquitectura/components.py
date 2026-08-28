@@ -105,7 +105,12 @@ async def run_components(
     tokens["input"] += estimate_tokens(system + user)
 
     model, err = await complete_structured(
-        llm, system=system, user=user, schema=ComponentsExtract, max_repairs=max_repairs
+        llm,
+        system=system,
+        user=user,
+        schema=ComponentsExtract,
+        stage="COMPONENTS",
+        max_repairs=max_repairs,
     )
     if model is None:
         skipped.append(

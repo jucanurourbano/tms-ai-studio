@@ -134,7 +134,12 @@ async def run_adrs(
     style = build_style_decision(size_class)
 
     model, err = await complete_structured(
-        llm, system=system, user=user, schema=AdrsExtract, max_repairs=max_repairs
+        llm,
+        system=system,
+        user=user,
+        schema=AdrsExtract,
+        stage="ADRS",
+        max_repairs=max_repairs,
     )
     if model is None:
         skipped.append(

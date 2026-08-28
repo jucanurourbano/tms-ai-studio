@@ -308,7 +308,11 @@ async def run_rule_mapping(
         system = build_system("rule_mapping.md", knowledge_block(authoritative_context))
         user = build_rule_mapping_user(huerfanas, endpoints)
         modelo, error = await complete_structured(
-            llm, system=system, user=user, schema=RuleMappingsExtract
+            llm,
+            system=system,
+            user=user,
+            schema=RuleMappingsExtract,
+            stage="rule_mapping",
         )
         tokens["input"] = estimate_tokens(system + user)
         if modelo is None:

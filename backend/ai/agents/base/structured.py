@@ -103,17 +103,31 @@ async def complete_structured(
     system: str,
     user: str,
     schema: type[T],
+    stage: str,
     max_repairs: int = 2,
 ) -> tuple[Optional[T], str]:
     """Llama al LLM y valida contra ``schema``, reparando si falla.
 
     Devuelve ``(modelo, "")`` si valida, o ``(None, ultimo_error)`` si tras
     ``max_repairs`` reintentos sigue inválido (candidato a cuarentena).
+
+    ``stage`` es **keyword-only y sin default**, igual que ``data_class`` y
+    ``job_id`` en ``get_llm``: es el ÚNICO punto del árbol donde se etiqueta una
+    llamada estructurada (GAS-D10), así que un default lo convertiría en algo
+    que se puede olvidar. Doce nodos de una sola llamada —los cinco de
+    Arquitectura entre ellos— lo olvidaron mientras la etiqueta vivía en
+    ``run_structured_map``, y su gasto entero caía en ``stage = NULL``. Aquí no
+    se puede olvidar: se olvida y explota con ``TypeError``.
+
+    Etiquetar por llamada y no una vez por nodo no cuesta nada —``for_stage`` es
+    una etiqueta sobre el mismo cliente, no un cliente nuevo— y a cambio deja un
+    solo sitio que mantener.
     """
+    etiquetado = for_stage(llm, stage)
     last_error = ""
     for attempt in range(max_repairs + 1):
         prompt = user if attempt == 0 else user + repair_hint(last_error)
-        raw = await llm.complete_json(system=system, user=prompt)
+        raw = await etiquetado.complete_json(system=system, user=prompt)
         try:
             return schema.model_validate(loads_json(raw)), ""
         except (json.JSONDecodeError, ValidationError) as exc:
@@ -125,10 +139,15 @@ def for_stage(llm: Any, stage: str) -> Any:
     """Etiqueta el cliente con el nodo, si sabe hacerlo (GAS-D10).
 
     Para decir "``EDGE_CASES`` costaba X y ahora cuesta Y" la fila del libro
-    mayor necesita el nodo, y el cliente solo conoce el agente. ``stage`` ya
-    llegaba hasta aquí —se usaba para el motivo de la cuarentena—, así que
-    etiquetar en este punto cubre **todos** los nodos de tipo *map* del sistema
-    con una sola edición.
+    mayor necesita el nodo, y el cliente solo conoce el agente.
+
+    Tiene **dos llamadores y nada más**: ``complete_structured`` (toda llamada
+    estructurada del árbol, sea *map* o de una sola tirada) y el ``complete_json``
+    suelto de ``ef/critique``. Etiquetar en ``run_structured_map``, como se hizo
+    en GAS1, cubría los nodos *map* y dejaba fuera a los de una sola llamada —el
+    Agente Arquitectura entero entre ellos—; el candado de
+    ``tests/llm/test_atribucion_por_nodo.py`` fija que no vuelva a haber un
+    tercero.
 
     Se pide con ``getattr`` y se tolera su ausencia: los mocks de la suite no lo
     tienen y no deben tenerlo. Es una **etiqueta**, no dinero, así que tolerarla
@@ -165,17 +184,17 @@ async def run_structured_map(
     skipped: list[dict] = []
     tokens = {"input": 0, "output": 0}
     semaphore = asyncio.Semaphore(concurrency)
-    etiquetado = for_stage(llm, stage)
 
     async def worker(item: dict) -> None:
         system = build_system(item)
         user = build_user(item)
         async with semaphore:
             model, error = await complete_structured(
-                etiquetado,
+                llm,
                 system=system,
                 user=user,
                 schema=schema,
+                stage=stage,
                 max_repairs=max_repairs,
             )
         tokens["input"] += estimate_tokens(system + user)
