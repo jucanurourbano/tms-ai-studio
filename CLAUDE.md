@@ -1128,7 +1128,7 @@ real + doble calibrado contra el artefacto real, 0,00 USD):
   CRITERIOS POR KB.** Un documento de 10 KB produce ~639 criterios.
 - **Costo por corrida** (USD estimados; el real es 2,4–3,1x): a 1,76 KB
   EF 0,13 + Scrum 0,46 + QA 2,52 = **3,10**; a 10 KB = **19,54**; a 20 KB =
-  **43,32**. El objetivo de 25–30 USD/mes **no aguanta un solo requerimiento de
+  **43,23** (era 43,32 antes de arreglar el duplicado, ver más abajo). El objetivo de 25–30 USD/mes **no aguanta un solo requerimiento de
   10 KB**.
 - **QA domina y Scrum es el que más rápido crece.** `build_stories_user` y
   `build_criteria_user` meten TODO el contexto del EF en CADA llamada ⇒ x11,6 de
