@@ -1017,7 +1017,7 @@ trabajar sin freno pone un techo alto y queda escrito en el `.env`.
 
 | Plan | Relación |
 |---|---|
-| **Puntos 2 y 3 del plan** (`EDGE_CASES` 110→lotes, `PRIORITIZE`+`ESTIMATE` 62→2) | `by_stage` **es** el antes/después que se pidió. Construir esto primero no retrasa esos bloques: los vuelve medibles en vez de argumentables. La **línea base del «antes» está en §3.bis**, medida sin gastar: el punto 2 vale ~8x el punto 3, y el punto 3 es el que se puede hacer entero. |
+| **Punto 2** (`TEST_DESIGN`/`EDGE_CASES` → lotes, `docs/diseno-recorte-qa-lotes.md`) y **punto 3** (`PRIORITIZE`+`ESTIMATE` 62→2, aplazado) | `by_stage` **es** el antes/después que se pidió. Construir esto primero no retrasa esos bloques: los vuelve medibles en vez de argumentables. La **línea base del «antes» está en §3.bis**, medida sin gastar: el punto 2 vale ~8x el punto 3, y el punto 3 es el que se puede hacer entero. |
 | **OLL0…OLL4** (proveedor local) | El libro mayor es su **instrumento**: tokens y duración por llamada dan los tok/s, y `filas / ítems − 1` da la **tasa de reparación**, que OLL-D1 declara métrica principal del experimento. El A/B de OLL-D5 se consulta, no se reconstruye. |
 | **LLM2** (`data_class` → `data_residency`) | **Sin colisión.** El libro mayor guarda `provider`; la residencia se deriva del registro (GAS-D10, §5). |
 | **LLM4** (procedencia, `estimate_cost` per-proveedor, muerte del shim) | **Colisión declarada y asignada.** LLM4 hereda la deuda de GAS-D9 (el artefacto) y debe **reutilizar** la tarifa de `MeteredLLMClient` en lugar de escribir una segunda. |

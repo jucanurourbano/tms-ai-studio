@@ -1152,6 +1152,61 @@ real + doble calibrado contra el artefacto real, 0,00 USD):
   modo**, con un pre-flight determinista (bytes → chunks → llamadas → estimación)
   que hable de **la cadena** y no solo del EF.
 
+### El recorte del punto 2, DISEÑADO y sin implementar (`docs/diseno-recorte-qa-lotes.md`)
+
+Agrupar los *map* de QA en lotes. **Ningún bloque autorizado (REGLA R2).** Lo que
+hay que saber sin abrir el doc:
+
+- **El lote se arma con HISTORIAS ENTERAS empaquetadas** (mismo FFD que
+  `SPRINT_PLAN`), y **no por el ahorro**: el contexto de historia compartido vale
+  0,037 USD, el 1,5% del recorte, y los bloques arbitrarios empatan en dinero. Se
+  elige por coherencia del encargo y porque **partir una historia** es la forma
+  exacta del duplicado de D2. Medido: **110 → 12** lotes con tope 10 (no ~11).
+- **Tope POR NODO, no global** (D4): `EDGE_CASES` 10, `TEST_DESIGN` **5**. Su
+  salida por llamada es 2,3x (307 contra 133 tok est.), así que un lote de 10 le
+  da 7 368–9 517 tokens reales contra los **8 192** de `CLAUDE_MAX_TOKENS`.
+  **220 → 36 llamadas, 1,179 USD = 84% del desperdicio**, y los 6 puntos que se
+  dejan compran no vivir al borde del truncamiento. El tope es una constante: se
+  sube cuando el libro mayor diga que hay holgura.
+- **Si un lote trunca: se parte en dos, UNA vez.** No recursivo (converge al
+  costo de hoy) y sin distinguir truncamiento de esquema malo (no son
+  distinguibles desde fuera; la heurística que se equivoca cuesta llamadas).
+  **Precondición dura:** un `BudgetExceededError` NO puede entrar por ahí — misma
+  trampa que GAS1 cazó en §6.bis, o una corrida al filo duplica sus llamadas.
+- **D2: el lote NO resuelve el duplicado entre criterios, y el orden importa.**
+  El detector reporta **0** grupos y **no puede reportar otra cosa**:
+  `criterion_ref` está en la clave (es aritmética, no estadística). Quedan 12
+  lotes, así que los duplicados entre lotes siguen invisibles — y el lote **empuja
+  el riesgo en la dirección mala** (diez criterios juntos invitan a diez casos con
+  la misma plantilla). Por eso el arreglo del detector va **antes o con** el
+  agrupamiento: si no, el antes/después del bloque no se puede leer.
+  El arreglo **no** es quitar `criterion_ref` a secas —faltaría `expected_result`
+  y un par de borde se reportaría como duplicado—: la clave pasa a ser
+  `(type, steps, test_data, expected_result)`. Y **no se borra nada**: un
+  duplicado entre criterios dice que **dos criterios piden lo mismo**, que es un
+  hallazgo sobre el plan.
+- **D3, el trade-off:** se pierde atención por criterio (real, y **es la única de
+  las cuatro preguntas que exige una corrida pagada** — el doble no tiene nada que
+  degradar), la cuarentena se vuelve gruesa y `by_stage` pierde granularidad que
+  nadie usaba. **Se GANA el proveedor local**: menos llamadas y más largas es
+  exactamente lo que prefiere un modelo a 10 tok/s con `max_concurrency=1`, así
+  que el agrupamiento **hace más viable a OLL**, no compite con él.
+  **Lo que NO se toca es el ancla**: `CRITERION_MAP` sigue fijando qué pares
+  existen. Condición de implementación: con lote, el modelo devuelve a qué
+  criterio pertenece cada caso y Python lo **busca en el lote y rechaza lo que no
+  esté** — si se olvida, el lote es la puerta por la que el modelo reasigna casos,
+  que es el peor error posible del agente.
+- **🐛 Trampa de código que el bloque resuelve, no descubre:**
+  `MAX_CASES_PER_CALL = 4` es hoy *por llamada* = por criterio; con un lote de 5
+  recortaría a 4 los 20 casos esperados. Pasa a ser **por criterio dentro del
+  lote**, y lo mismo `not_testable`.
+- **Bloques: LOT0** detector · **LOT1** empaquetado (aritmética, sin LLM) ·
+  **LOT2** el lote en `run_structured_map` (todo el riesgo) · **LOT3** la corrida
+  real del par, **se autoriza aparte**.
+
+**Punto 3 (Scrum `ESTIMATE`+`PRIORITIZE` 62 → 2): APLAZADO.** Vale 0,178 USD
+contra ~8x del punto 2. Se hace después o se pliega a otro bloque.
+
 ---
 
 ## 6. Autenticación y usuarios
@@ -1396,7 +1451,8 @@ tms-ai-studio/
 │   ├── setup-entorno.md
 │   ├── diseno-agente-{scrum,arquitectura,bd,api,qa}.md
 │   ├── diseno-qa-modo-c.md          # ⏸️ QC1/2/6/7/8 APLAZADOS (§0.bis)
-│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 ✅ (§5.7)
+│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 ✅ (§5.7) · §3.bis/§3.ter
+│   ├── diseno-recorte-qa-lotes.md   # el punto 2: lotes en QA (diseñado, sin implementar)
 │   ├── diseno-multiproveedor-llm.md # LLM0 ✅ LLM1 ✅ · LLM2 a reformar (§5.6)
 │   └── diseno-llm-local-ollama.md   # ⭐ PRIORIDAD ACTUAL (§5.6)
 ├── frontend/                 # Next.js (cliente puro de la API)
