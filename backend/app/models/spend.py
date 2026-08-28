@@ -46,6 +46,27 @@ from .base import Base, IdMixin, TimestampMixin
 #: fracción es estimada.
 USAGE_SOURCES: tuple[str, ...] = ("real", "estimado")
 
+#: Vocabulario del ``usage_source`` de un TOTAL (un job, un mes), que no es el
+#: de una fila: sumar filas de las dos clases produce un agregado que no es ni
+#: una cosa ni la otra, y quien lee la cifra tiene que saberlo en el mismo sitio
+#: donde la lee (GAS2, criterio 2).
+TOTAL_USAGE_SOURCES: tuple[str, ...] = ("real", "mixto", "estimado", "sin_datos")
+
+
+def fuente_del_total(llamadas: int, estimadas: int) -> str:
+    """Qué clase de dato es un total: ``real`` | ``mixto`` | ``estimado`` | ``sin_datos``.
+
+    ``sin_datos`` no es un adorno. Un mes con cero llamadas devolvería ``real``
+    por la aritmética (cero estimadas de cero), y eso afirmaría calidad de
+    medición sobre nada — la misma forma que GAS-D4 prohíbe cuando dice que la
+    ausencia de un dato no es el valor 0 de ese dato.
+    """
+    if llamadas <= 0:
+        return "sin_datos"
+    if estimadas <= 0:
+        return "real"
+    return "estimado" if estimadas >= llamadas else "mixto"
+
 
 class LlmSpend(Base, IdMixin, TimestampMixin):
     """Una llamada al LLM: qué la pidió, qué consumió y cuánto costó."""

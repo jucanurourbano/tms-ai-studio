@@ -18,7 +18,7 @@ from sqlalchemy import Integer, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai.llm.budget import SpendRow, Totales
-from app.models.spend import LlmSpend
+from app.models.spend import LlmSpend, fuente_del_total
 
 CERO = Decimal("0")
 
@@ -132,9 +132,129 @@ class LlmSpendRepository:
             "estimated_calls": estimadas_n,
             # `usage_source` del job: "real" solo si TODAS lo son. Una sola fila
             # estimada hace que el total del job sea aproximado, y eso tiene que
-            # verse en el mismo sitio donde se lee la cifra.
-            "usage_source": "real" if estimadas_n == 0 else "mixto",
+            # verse en el mismo sitio donde se lee la cifra. Si TODAS son
+            # estimadas es "estimado", no "mixto": decir mixto afirmaria que algo
+            # se midio.
+            "usage_source": fuente_del_total(llamadas, estimadas_n),
             "cache_read_tokens": int(fila[5] or 0),
             "cache_write_tokens": int(fila[6] or 0),
             "reasoning_tokens": int(fila[7] or 0),
         }
+
+    # -----------------------------------------------------------------------
+    # La consulta del mes (GAS2): lo que se mira para no conocer el tope
+    # bloqueando
+    # -----------------------------------------------------------------------
+
+    async def resumen_del_mes(self, *, desde: datetime, hasta: datetime) -> dict:
+        """Totales del mes con desglose por agente, por nodo y por job.
+
+        Cuatro consultas y no una: agrupar por tres criterios distintos en una
+        sola exigiría ``GROUPING SETS`` —que SQLite, el motor de la suite, no
+        tiene— o traerse el libro mayor entero a Python. Es una pantalla que se
+        mira a mano, no el freno: aquí manda la claridad, no el milisegundo.
+
+        Los importes salen con los **seis decimales** de la columna y no
+        redondeados a céntimos: una fila de ``by_stage`` puede valer 0,003 USD y
+        a dos decimales se leería 0,00 — y ``by_stage`` es justamente la fila que
+        tiene que enseñar el antes/después de recortar un nodo. Redondear es cosa
+        de la vista.
+        """
+        en_el_mes = and_(LlmSpend.created_at >= desde, LlmSpend.created_at < hasta)
+        estimadas = case((LlmSpend.usage_source == "estimado", 1), else_=0)
+        costo_estimado = case(
+            (LlmSpend.usage_source == "estimado", LlmSpend.cost_usd), else_=0
+        )
+
+        totales = (
+            await self.session.execute(
+                select(
+                    func.count(LlmSpend.id),
+                    func.coalesce(func.sum(LlmSpend.cost_usd), 0),
+                    func.coalesce(func.sum(estimadas), 0).cast(Integer),
+                    func.coalesce(func.sum(costo_estimado), 0),
+                    func.coalesce(func.sum(LlmSpend.input_tokens), 0),
+                    func.coalesce(func.sum(LlmSpend.output_tokens), 0),
+                ).where(en_el_mes)
+            )
+        ).one()
+
+        return {
+            "calls": int(totales[0] or 0),
+            "spent_usd": _a_decimal(totales[1]),
+            "estimated_calls": int(totales[2] or 0),
+            "estimated_cost_usd": _a_decimal(totales[3]),
+            "input_tokens": int(totales[4] or 0),
+            "output_tokens": int(totales[5] or 0),
+            "by_agent": await self._agrupado(en_el_mes, LlmSpend.agent_role),
+            "by_stage": await self._agrupado(
+                en_el_mes, LlmSpend.agent_role, LlmSpend.stage
+            ),
+            "top_jobs": await self._top_jobs(en_el_mes),
+        }
+
+    async def _agrupado(self, filtro, *columnas) -> list[dict]:
+        """Suma agrupada por las columnas dadas, de más caro a más barato.
+
+        Un ``stage`` en ``NULL`` **sale como una fila más** con su costo y su
+        ``stage: null`` (GAS-D10): el gasto que no está atribuido a un nodo es un
+        hueco que hay que ver, no un cero que se pueda confundir con "ese nodo no
+        gasta".
+        """
+        estimadas = case((LlmSpend.usage_source == "estimado", 1), else_=0)
+        consulta = (
+            select(
+                *columnas,
+                func.coalesce(func.sum(LlmSpend.cost_usd), 0),
+                func.count(LlmSpend.id),
+                func.coalesce(func.sum(estimadas), 0).cast(Integer),
+            )
+            .where(filtro)
+            .group_by(*columnas)
+            .order_by(func.sum(LlmSpend.cost_usd).desc())
+        )
+        nombres = [c.key for c in columnas]
+        return [
+            {
+                **dict(zip(nombres, fila[: len(columnas)])),
+                "cost_usd": _a_decimal(fila[len(columnas)]),
+                "calls": int(fila[len(columnas) + 1] or 0),
+                "estimated_calls": int(fila[len(columnas) + 2] or 0),
+            }
+            for fila in (await self.session.execute(consulta)).all()
+        ]
+
+    async def _top_jobs(self, filtro, limite: int = 10) -> list[dict]:
+        """Los jobs más caros del mes.
+
+        Se excluyen las filas sin ``job_id`` —la ingesta de documentos del
+        inventario y las de un job borrado (``ON DELETE SET NULL``)— porque no
+        son *un* job: agruparlas todas juntas inventaría un job gigante que no
+        existe. Su gasto sigue contando en el total y en ``by_agent``, que es
+        donde se ve.
+
+        El agente sale de la propia fila y no de un ``JOIN`` con ``agent_jobs``:
+        la fila lo conserva aunque el job se borre, y así esta consulta no
+        depende de una tabla que puede haber perdido el registro.
+        """
+        consulta = (
+            select(
+                LlmSpend.job_id,
+                func.max(LlmSpend.agent_role),
+                func.coalesce(func.sum(LlmSpend.cost_usd), 0),
+                func.count(LlmSpend.id),
+            )
+            .where(and_(filtro, LlmSpend.job_id.isnot(None)))
+            .group_by(LlmSpend.job_id)
+            .order_by(func.sum(LlmSpend.cost_usd).desc())
+            .limit(limite)
+        )
+        return [
+            {
+                "job_id": fila[0],
+                "agent_role": fila[1],
+                "cost_usd": _a_decimal(fila[2]),
+                "calls": int(fila[3] or 0),
+            }
+            for fila in (await self.session.execute(consulta)).all()
+        ]

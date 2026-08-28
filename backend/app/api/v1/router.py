@@ -11,6 +11,7 @@ from app.api.v1 import (
     auth,
     bd,
     ef,
+    gasto,
     health,
     inventario,
     qa,
@@ -27,3 +28,4 @@ api_router.include_router(bd.router)
 api_router.include_router(apis.router)
 api_router.include_router(qa.router)
 api_router.include_router(inventario.router)
+api_router.include_router(gasto.router)

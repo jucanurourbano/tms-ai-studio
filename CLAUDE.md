@@ -38,13 +38,17 @@ Playwright pinneado); **ninguna exploración real todavía**, la suite entera co
 contra HTML de fixtures y sintético. El resto sigue **diseñado y sin implementar**: ver §5.5 *in fine*, la
 PARTE II de `docs/diseno-agente-qa.md` y `docs/diseno-qa-modo-c.md`.
 
-**💰 CONTROL DE GASTO (GAS1) implementado (2026-08-28).** Toda llamada al modelo
-pasa ahora por un libro mayor (`llm_spend`, migración `0011`) y un **freno duro**
-que comprueba el tope **antes** de gastar; sin libro mayor legible **no se
+**💰 CONTROL DE GASTO (GAS1+GAS2) implementado (2026-08-28).** Toda llamada al
+modelo pasa ahora por un libro mayor (`llm_spend`, migración `0011`) y un **freno
+duro** que comprueba el tope **antes** de gastar; sin libro mayor legible **no se
 llama**. Es el instrumento con el que se van a medir el proveedor local y los
 recortes de nodos, y de paso cierra dos agujeros medidos: los jobs `FAILED`
 reportaban \$0 habiendo gastado (un cuarto del historial) y QA reportaba
-duraciones de **56 años**. Ver §5.7 y `docs/diseno-control-de-gasto.md`.
+duraciones de **56 años**. **GAS2** le pone la ventana:
+`GET /api/v1/gasto/mensual` con desglose **por nodo del grafo** —el antes/después
+con el que se demuestra un recorte— y la fracción de la cifra que es estimación,
+porque un tope que no se mira se conoce bloqueando. Ver §5.7 y
+`docs/diseno-control-de-gasto.md`.
 
 **⏸️ CAMBIO DE PRIORIDAD (2026-08-27).** Los bloques restantes del Modo C
 (**QC1, QC2, QC6, QC7, QC8**) quedan **APLAZADOS, no cancelados**: pegar un link
@@ -953,12 +957,11 @@ preautorizados es superior (una URL del cliente es SSRF) y se queda.
 
 ---
 
-## 5.7 CONTROL DE GASTO — libro mayor y freno duro (GAS1 implementado)
+## 5.7 CONTROL DE GASTO — libro mayor, freno duro y la ventana (GAS1+GAS2)
 
-> Diseño completo en **`docs/diseno-control-de-gasto.md`**. **GAS1 cerrado**;
-> **GAS2 sin autorizar** (REGLA R2). Va **antes** que OLL0…OLL4 porque es el
-> **instrumento con el que se miden**: sin él, "110 llamadas → 1" es una
-> afirmación; con él, una medición.
+> Diseño completo en **`docs/diseno-control-de-gasto.md`**. **GAS1 y GAS2
+> cerrados**. Va **antes** que OLL0…OLL4 porque es el **instrumento con el que se
+> miden**: sin él, "110 llamadas → 1" es una afirmación; con él, una medición.
 
 **Lo que cambia en runtime, y hay que saberlo antes de tocar nada:** desde GAS1
 **toda** llamada al modelo pasa por `MeteredLLMClient` —lo aplica `get_llm`, no
@@ -1025,8 +1028,52 @@ en el `lifespan` deja de funcionar en vez de gastar sin medir.
   reanuda, toma el `0012`.
 
 **Lo que GAS1 NO hace:** no acota `CRITIQUE` (lo **mide y lo frena**; el techo de
-entrada es el canario de OLL2), no arregla el número del artefacto (LLM4), no
-toca la matriz de permisos y no expone todavía `GET /gasto/mensual` (GAS2).
+entrada es el canario de OLL2), no arregla el número del artefacto (LLM4) y no
+toca la matriz de permisos.
+
+### GAS2 — la ventana (implementado 2026-08-28)
+
+**`GET /api/v1/gasto/mensual`** (`app/api/v1/gasto.py` → `spend_report_service`
+→ `LlmSpendRepository.resumen_del_mes`), **`config` READ**, y la vista
+*Configuración → Control de gasto*. Un tope que no se mira se conoce
+bloqueando, y enterarse del techo porque un job murió a mitad de corrida es la
+peor forma de enterarse.
+
+- **`by_stage` es la razón de ser del bloque**: el gasto por nodo del grafo
+  (GAS-D10) es el antes/después con el que se demuestra un recorte —"`EDGE_CASES`
+  costaba X y ahora cuesta Y"—, y sin él esa frase no se puede sostener. El gasto
+  que **ningún nodo reclama** sale como una fila con `stage: null` y su importe:
+  un hueco que se ve, no un cero que se confunde con "ese nodo no gasta".
+- **La honestidad de GAS-D4 llega hasta arriba, en tres campos que no se repiten:**
+  `estimated_calls`, `estimated_cost_usd` y `usage_source`. La `estimated_fraction`
+  es del **DINERO y no de las llamadas** —desviación declarada del ejemplo de §7.2
+  del diseño—: la de llamadas ya es derivable de los dos contadores, y **una sola
+  llamada cara estimada mueve la cifra mucho más que cien baratas**.
+- **`usage_source` de un TOTAL tiene cuatro valores, no dos** (`fuente_del_total`
+  en `app/models/spend.py`, un solo sitio para el job y para el mes): `real` ·
+  `mixto` · `estimado` · **`sin_datos`**. Dos correcciones al vocabulario de GAS1,
+  y las dos son la misma regla del proyecto —la ausencia de un dato no es el valor
+  0 de ese dato—: un job con **todas** las llamadas estimadas decía `mixto`, que
+  afirma que algo se midió; y un mes con **cero** llamadas daría `real` por
+  aritmética, presumiendo de medición sobre nada.
+- **Los importes viajan con los seis decimales de la columna**, no redondeados a
+  céntimos (desviación declarada): una fila de `by_stage` puede valer 0,003 USD y
+  a dos decimales se leería 0,00 — justo la fila que tiene que enseñar el recorte.
+  Redondear es cosa de la vista, y la vista usa dos precisiones a propósito
+  (`lib/gasto.ts`, con test).
+- **`top_jobs` excluye las filas sin `job_id`** —la ingesta del inventario y las
+  de un job borrado (`ON DELETE SET NULL`)—: agruparlas inventaría un job gigante
+  que no existe. Su gasto sigue contando en el total y en `by_agent`, que es donde
+  se ve. El agente sale de la propia fila y **no de un `JOIN`** con `agent_jobs`:
+  la fila lo conserva aunque el job se borre.
+- **Un tope en 0 reporta `null`, no 0%.** Es una configuración legítima, y ahí el
+  porcentaje no existe: `0%` diría "no has empezado" justo cuando cualquier gasto
+  ya lo ha cruzado.
+- **El objetivo se publica aunque no frene** (GAS-D6). Un número que solo se
+  manifiesta cuando el freno actúa se cumple por accidente; en la vista tiene su
+  propia barra, al lado del techo duro.
+- **Sin migración y sin tocar la matriz de permisos.** Es solo lectura: quien
+  garantiza el tope sigue siendo `MeteredLLMClient`, antes de cada llamada.
 
 ---
 
@@ -1272,7 +1319,7 @@ tms-ai-studio/
 │   ├── setup-entorno.md
 │   ├── diseno-agente-{scrum,arquitectura,bd,api,qa}.md
 │   ├── diseno-qa-modo-c.md          # ⏸️ QC1/2/6/7/8 APLAZADOS (§0.bis)
-│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 sin autorizar (§5.7)
+│   ├── diseno-control-de-gasto.md   # 💰 GAS1 ✅ · GAS2 ✅ (§5.7)
 │   ├── diseno-multiproveedor-llm.md # LLM0 ✅ LLM1 ✅ · LLM2 a reformar (§5.6)
 │   └── diseno-llm-local-ollama.md   # ⭐ PRIORIDAD ACTUAL (§5.6)
 ├── frontend/                 # Next.js (cliente puro de la API)
@@ -1286,10 +1333,12 @@ tms-ai-studio/
     │   ├── core/{logger,security}.py    # security: hashing bcrypt + JWT
     │   ├── core/permissions.py   # MATRIZ rol → módulo/nivel (fuente única)
     │   ├── errors.py             # errores de app (auth/permisos → ApiResponse)
-    │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura,bd,apis,qa}.py
+    │   ├── api/v1/{router,health,auth,ef,scrum,arquitectura,bd,apis,qa,
+    │   │           gasto}.py
     │   ├── dependencies/         # current_user (401) + permissions (403)
     │   ├── middlewares/  models/    # models: agent, user (+ grants), spend
     │   ├── services/spend_sink.py # libro mayor real + preflight del mes (GAS1)
+    │   ├── services/spend_report_service.py  # el mes que se mira (GAS2)
     │   ├── repositories/         # + story_assignment, llm_spend (libro mayor)
     │   ├── services/  schemas/  utils/
     ├── scripts/create_admin.py    # bootstrap del primer admin (CLI)

@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Users,
+  Wallet,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -169,10 +170,14 @@ interface ConfigSectionProps {
   onNavigate?: () => void;
 }
 
-/** Sección "Configuración" con el enlace al panel de usuarios (solo admin). */
+/** Enlaces de la sección "Configuración": módulo `config`, hoy solo admin. */
+const CONFIG_LINKS = [
+  { href: "/configuracion/usuarios", label: "Usuarios", icon: Users },
+  { href: "/configuracion/gasto", label: "Control de gasto", icon: Wallet },
+];
+
+/** Sección "Configuración" (visible con acceso al módulo `config`). */
 function ConfigSection({ collapsed, pathname, onNavigate }: ConfigSectionProps) {
-  const href = "/configuracion/usuarios";
-  const active = pathname.startsWith("/configuracion");
   return (
     <div className="mt-1 border-t border-sidebar-border/60 pt-2">
       {!collapsed && (
@@ -180,22 +185,30 @@ function ConfigSection({ collapsed, pathname, onNavigate }: ConfigSectionProps) 
           Configuración
         </div>
       )}
-      <Link
-        href={href}
-        onClick={onNavigate}
-        title={collapsed ? "Usuarios" : undefined}
-        aria-current={active ? "page" : undefined}
-        className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-          collapsed && "justify-center px-0",
-          active
-            ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Users className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
-        {!collapsed && <span className="flex-1">Usuarios</span>}
-      </Link>
+      {CONFIG_LINKS.map(({ href, label, icon: Icon }) => {
+        // Coincidencia por ruta exacta y no por prefijo de `/configuracion`:
+        // con dos enlaces, el prefijo marcaría los dos como activos a la vez.
+        const active = pathname === href || pathname.startsWith(`${href}/`);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={onNavigate}
+            title={collapsed ? label : undefined}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+              collapsed && "justify-center px-0",
+              active
+                ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+            )}
+          >
+            <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
+            {!collapsed && <span className="flex-1">{label}</span>}
+          </Link>
+        );
+      })}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 # Control de gasto — libro mayor de llamadas y tope duro mensual
 
-> **Estado:** **GAS1 IMPLEMENTADO** (libro mayor + freno + H2). GAS2 diseñado,
-> **sin autorizar** (REGLA R2). Los añadidos A y B que pidió el usuario al
+> **Estado:** **GAS1 IMPLEMENTADO** (libro mayor + freno + H2) y **GAS2
+> IMPLEMENTADO** (el endpoint del mes, la vista y la documentación; desviaciones
+> declaradas al final de §10). Los añadidos A y B que pidió el usuario al
 > aprobar están resueltos en §4.11 (GAS-D11) y §6.bis.
 > **Prioridad:** primera. Va **antes** de OLL0…OLL4 y antes de los recortes de
 > `EDGE_CASES` / `PRIORITIZE` / `ESTIMATE`, por decisión del usuario y porque —como
@@ -811,7 +812,7 @@ Contenido:
    sumidero sigue roto.
 
 
-### GAS2 — Lo que se ve
+### GAS2 — Lo que se ve ✅ IMPLEMENTADO
 
 - `AgentJobRepository.update_job_metrics` funde `metrics.real` desde el libro
   mayor (GAS-D9) — un sitio, seis agentes, más la ruta de `FAILED`.
@@ -829,6 +830,53 @@ Contenido:
 - `estimated_fraction` refleja las filas estimadas.
 - `by_stage` agrupa y `stage = NULL` aparece como no atribuido, no como 0
   (GAS-D10).
+
+#### Lo que GAS2 hizo distinto de lo escrito arriba (desviaciones declaradas)
+
+1. **`metrics.real` ya estaba** (desviación 2 de GAS1). GAS2 se quedó con el
+   endpoint, la vista y la documentación, como allí se anunció.
+
+2. **`estimated_fraction` es fracción del DINERO, no de las llamadas.** El
+   ejemplo de §7.2 la pone junto a `estimated_calls`, lo que sugiere
+   `estimadas / total`; pero eso ya es derivable de los dos contadores que van al
+   lado, así que el campo no añadiría nada. Se calcula sobre el importe, que sí es
+   información nueva y es la que decide: **una sola llamada cara estimada mueve la
+   cifra mucho más que cien baratas**. Se publica también `estimated_cost_usd`
+   para que sea auditable.
+
+3. **Cuatro valores de `usage_source` para un total, no dos.** `fuente_del_total`
+   (`app/models/spend.py`) es ahora el único sitio donde se decide, y lo usan el
+   job y el mes. Corrige dos casos en los que GAS1 afirmaba de más: **todas las
+   llamadas estimadas** decía `mixto` —que afirma que algo se midió— y ahora dice
+   `estimado`; y **cero llamadas** daría `real` por aritmética, presumiendo de
+   medición sobre nada, así que dice `sin_datos`. Es la regla de GAS-D4 aplicada al
+   agregado: la ausencia de un dato no es el valor 0 de ese dato.
+
+4. **Los importes salen con los seis decimales de la columna**, no redondeados a
+   céntimos como en el ejemplo. Una fila de `by_stage` puede valer 0,003 USD y a
+   dos decimales se leería 0,00 — y `by_stage` es justamente la fila que tiene que
+   enseñar el antes/después de un recorte. Redondear es cosa de la vista, que usa
+   dos precisiones a propósito (`lib/gasto.ts`, con test).
+
+5. **`top_jobs` lleva `agent_role` y no `agent_type`, y sale de la propia fila.**
+   Un `JOIN` con `agent_jobs` daría el tipo "oficial" pero perdería el job borrado
+   (`ON DELETE SET NULL`); la fila del libro mayor conserva su `agent_role` pase lo
+   que pase, y es el mismo vocabulario que `by_agent`. Las filas **sin** `job_id` se
+   excluyen: agruparlas inventaría un job gigante que no existe. Su gasto sigue en
+   el total y en `by_agent`.
+
+6. **Un tope en 0 reporta `null`, no 0%.** No estaba decidido. Es una
+   configuración legítima —quien no quiere gastar nada la usa— y ahí el porcentaje
+   no existe: `0%` diría "no has empezado" justo cuando cualquier gasto ya lo cruzó.
+
+7. **Cuatro consultas y no una.** Agrupar por tres criterios en una sola exigiría
+   `GROUPING SETS`, que SQLite —el motor de la suite— no tiene, o traerse el libro
+   mayor entero a Python. Es una pantalla que se mira a mano, no el freno: aquí
+   manda la claridad.
+
+8. **`.env.example` no gana ningún ajuste** (GAS2 no introduce configuración) pero
+   sí un puntero al endpoint: quien lee los topes tiene que saber dónde se mira lo
+   que están conteniendo.
 
 ---
 
