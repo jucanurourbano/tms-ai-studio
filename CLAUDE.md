@@ -1116,6 +1116,42 @@ criterios**, `01KY33JDAV21N40N326TCR3JSS`). Lo que hay que saber sin abrir el do
   **seguido y con el mismo modelo**, y las dos corridas quedan en el libro mayor.
   La tabla dice cuánto costará el par y qué esperar de él.
 
+### Y ese requerimiento era de JUGUETE: la escala por tamaño (§3.ter del diseño)
+
+Las cinco corridas del historial salieron de textos de ~1,7 KB. Un documento de
+Procesos real trae 10–20 KB, así que la línea base está en el extremo pequeño de
+la escala. `scripts/medir_escala_por_tamano.py` lo mide (mismo método: pipeline
+real + doble calibrado contra el artefacto real, 0,00 USD):
+
+- **La cadena real, medida de punta a punta** (documento real → EF real → plan
+  real): **9,07 RF/KB · 1,94 historias/RF · 3,55 criterios/historia ⇒ 62,4
+  CRITERIOS POR KB.** Un documento de 10 KB produce ~639 criterios.
+- **Costo por corrida** (USD estimados; el real es 2,4–3,1x): a 1,76 KB
+  EF 0,13 + Scrum 0,46 + QA 2,52 = **3,10**; a 10 KB = **19,54**; a 20 KB =
+  **43,32**. El objetivo de 25–30 USD/mes **no aguanta un solo requerimiento de
+  10 KB**.
+- **QA domina y Scrum es el que más rápido crece.** `build_stories_user` y
+  `build_criteria_user` meten TODO el contexto del EF en CADA llamada ⇒ x11,6 de
+  documento da **x28** de costo. QA no lo sufre porque su payload por criterio
+  está **acotado** (`[:20]`, QA-D8).
+- **A qué tamaño mata el freno: 1,1 KB, y no es del EF sino de QA** (a x2,4;
+  Scrum 4,9 KB; EF 26,8 KB). El EF ni se acerca a ser el cuello de botella.
+- **Antes del freno hay otro techo, y es la SALIDA: 11,1 KB.** Por encima, la
+  dimensión mayor de `EXTRACT` pasa de `CLAUDE_MAX_TOKENS`=8 192 y **se trunca**
+  → cuarentena con observación (ruidoso, no silencioso) pero el EF **pierde esa
+  dimensión entera**. Es el límite real de lo que el sistema procesa completo.
+- **🐛 El documento se envía DOS VECES** por encima de ~16,4 KB en modo texto: el
+  `SECTION` único del `TextToCIRAdapter` acaba en `context` **y** en `text` del
+  chunk (`_context_for` de una `SECTION` añade su texto al breadcrumb), y
+  `build_user` manda los dos. 2,00x medido, seis veces por corrida. **El recorte
+  más barato que hay y sin dueño asignado.** De paso: el chunker **no tiene tope
+  de tamaño** — 40 KB planos son UN chunk de 10 000 tokens.
+- **Los dos modos de entrada son idénticos tras `PARSE`**, pero el modo texto
+  **no tiene máximo** (`content` solo declara `min_length=100`; la ruta de fichero
+  sí pasa por `MAX_UPLOAD_MB`). Recomendación: distinguir **por tamaño, no por
+  modo**, con un pre-flight determinista (bytes → chunks → llamadas → estimación)
+  que hable de **la cadena** y no solo del EF.
+
 ---
 
 ## 6. Autenticación y usuarios
@@ -1387,6 +1423,7 @@ tms-ai-studio/
     ├── scripts/anclas_de_html.py   # imprime la tabla de anclas de un .html (manual)
     ├── scripts/seed_qa_demo.py     # cadena EF→…→QA sembrada, sin gastar tokens
     ├── scripts/medir_linea_base.py # el «antes» de los recortes, reconstruido (0 USD)
+    ├── scripts/medir_escala_por_tamano.py  # cómo escala la cadena con el documento
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/

@@ -342,6 +342,170 @@ tabla mide.
 
 ---
 
+## 3.ter. Y el requerimiento medido era de JUGUETE: cómo escala con el tamaño
+
+§3.bis mide **un** requerimiento. Este apartado responde a la objeción que lo
+invalida: el documento que lo originó tiene **1 764 bytes** y es un *prompt*
+escrito a mano. Un documento de Procesos de verdad trae 10–20 KB, y las cinco
+corridas del historial salieron todas de textos de ~1,7 KB — o sea que **todo lo
+medido hasta aquí está en el extremo pequeño de la escala**.
+
+El instrumento es `backend/scripts/medir_escala_por_tamano.py`, hermano del de
+§3.bis y con la misma disciplina: pipeline real, doble del LLM **calibrado
+contra el artefacto real**, 0,00 USD. Se corre entero en menos de un minuto.
+
+### 3.ter.1 La cadena real, de punta a punta, MEDIDA
+
+El documento de 1 764 bytes sigue en disco, el EF que Claude produjo de él sigue
+en `agent_artifacts` y el plan Scrum que salió de ese EF también. Los tres
+eslabones son corridas reales, así que estos multiplicadores **no son supuestos**:
+
+| multiplicador | valor medido |
+|---|---:|
+| requisitos funcionales por KB de documento | **9,07** |
+| historias por requisito funcional | **1,94** |
+| criterios por historia | **3,55** |
+| **criterios por KB de documento** | **62,36** |
+| ítems del EF por KB de documento | 43,1 |
+
+De ahí sale el número que ordena todo lo demás: **un documento de 10 KB produce
+~639 criterios de aceptación y uno de 20 KB, ~1 277.**
+
+### 3.ter.2 El costo por corrida en los tres tamaños
+
+| agente | 1,76 KB (el real) | 10 KB | 20 KB | cómo escala |
+|---|---:|---:|---:|---|
+| **EF** | 0,125 | 0,563 | 1,191 | lineal-ish; `CRITIQUE` sin techo |
+| **Scrum** | 0,456 | **4,325** | **12,841** | **super-lineal (~N^1,6)** |
+| **QA** | **2,523** | **14,655** | **29,287** | lineal, con constante enorme |
+| **suma de los tres** | **3,10** | **19,54** | **43,32** | |
+
+USD **estimados**; el real es 2,4–3,1x (§3). Arquitectura, BD y API no están en
+la tabla: son seis llamadas fijas y dos *maps* sobre tablas/recursos (dos
+entidades en el EF real), así que su aporte es pequeño — pero la suma es por eso
+un **suelo**, no un total.
+
+Traducido al objetivo de 25–30 USD/mes: **un solo requerimiento de 10 KB
+recorrido hasta QA cuesta 19,5 USD estimados ⇒ 47–61 USD reales.** No es que el
+objetivo no aguante «un requerimiento de verdad»: es que **no aguanta uno solo**.
+
+Tres cosas que la tabla enseña y que conviene no perder:
+
+1. **QA domina, y ya dominaba en el caso de juguete.** El documento de 1 764
+   bytes —que todo el mundo llamaría un *prompt*— ya produce una corrida de QA de
+   2,52 USD estimados, cinco veces el EF y el Scrum juntos.
+2. **Scrum crece más deprisa que nadie.** `build_stories_user` mete **todo** el
+   contexto del EF (procesos, reglas, actores, épicas) en **cada una** de sus N
+   llamadas, y `build_criteria_user` mete **todas** las validaciones en cada una
+   de las suyas. Con N creciendo con el documento, el término es N x contexto(N).
+   Medido: x11,6 de documento ⇒ **x28 de costo** en Scrum, contra x11,6 en QA.
+   QA no tiene ese problema porque su payload por criterio está **acotado**
+   (`[:20]` en campos, entidades y actores): la cota es de QA-D8 y aquí se cobra.
+3. **El EF es el barato**, incluso con su `CRITIQUE` sin techo. Confirma que el
+   primer dólar que hay que gastar es suyo (§3.bis.5).
+
+### 3.ter.3 A qué tamaño mata el freno cada corrida
+
+El tope es **por job** y cada agente es un job, así que el documento máximo
+procesable es el del **primer** agente que lo cruza. Con 3,7314 USD utilizables:
+
+| agente | si el real = estimado (x1,0) | a x2,4 | a x3,1 |
+|---|---:|---:|---:|
+| EF | >60 KB (fuera de rango) | 26,8 KB | 20,5 KB |
+| Scrum | 9,3 KB | 4,9 KB | 4,0 KB |
+| **QA** | **2,6 KB** | **1,1 KB** | **0,8 KB** |
+
+**El número que se pedía es 1,1 KB, y no es del EF: es de QA.** Con los topes de
+hoy, el documento más grande que atraviesa la cadena entera sin que el freno mate
+una corrida pesa **poco más de un kilobyte** — menos que el *prompt* de juguete
+con el que se hizo toda la historia del proyecto. El EF ni se acerca a ser el
+cuello de botella: aguanta 20 KB largos.
+
+### 3.ter.4 El techo que NO es de dinero: la SALIDA, a 11 KB
+
+Antes de que el freno actúe sobre el EF hay otro límite, y es el mismo que hace
+inalcanzable el «110 → 1» de §3.bis: **`CLAUDE_MAX_TOKENS` = 8 192**.
+
+Medido: con un texto plano de más de **11,1 KB**, la dimensión más grande de
+`EXTRACT` necesita más de 8 192 tokens de salida. Ahí la llamada **no se frena,
+se trunca**; el JSON llega partido, `complete_structured` repara dos veces y el
+ítem cae en **cuarentena con su observación** —o sea que falla ruidosamente, la
+regla del proyecto se cumple— pero **el EF pierde esa dimensión entera**. Es
+exactamente el fallo que ya obligó a subir el default de 4 096 a 8 192
+(`settings.py:39`), reapareciendo un orden de magnitud más arriba.
+
+**11,1 KB es, hoy, el límite real de lo que el Agente EF procesa completo.** Un
+documento de Procesos de 20 KB no da error: da un EF al que le falta una
+dimensión.
+
+### 3.ter.5 El documento se envía DOS VECES (hallazgo del camino)
+
+La tabla de §2 del instrumento salió con un escalón: entre 16,3 KB y 16,9 KB la
+entrada de `EXTRACT` **se duplica** con un 3% más de documento. No es una
+no-linealidad, es una duplicación, y se comprueba en cuatro líneas sin LLM:
+
+| documento | `single_shot` | `context` | `text` | se envía |
+|---:|:---:|---:|---:|---:|
+| 3 018 B | sí | 10 B | 3 018 B | **1,00x** |
+| 16 318 B | sí | 10 B | 16 318 B | **1,00x** |
+| 17 010 B | no | 17 010 B | 17 010 B | **2,00x** |
+| 40 054 B | no | 40 054 B | 40 054 B | **2,00x** |
+
+La cadena de causas: `TextToCIRAdapter` mete **todo** el texto plano en un único
+elemento `SECTION`. Por debajo del umbral el chunker toma el camino
+`single_shot` y el `context` del chunk es el título. Por encima toma el camino
+por títulos, y ahí `_context_for(section)` devuelve el breadcrumb **más el texto
+del elemento** — que en texto plano es el documento entero. El chunk sale con el
+documento en `context` **y otra vez** en `text`, y `build_user` manda los dos.
+
+Consecuencia: por encima de ~16,4 KB el modo *prompt* paga **2x** su entrada de
+`EXTRACT`, seis veces (una por dimensión). Es el recorte más barato que ha
+aparecido en todo este trabajo: no cambia un prompt, ni una decisión del agente,
+ni un contrato. **Sin dueño asignado todavía.**
+
+De paso, el mismo cuadro enseña otra cosa: **el chunker no tiene tope de
+tamaño**. `token_threshold` solo decide `single_shot` vs. corte por título; un
+texto plano de 40 KB es **un** chunk de 10 000 tokens. Lo que acota un chunk no
+es un presupuesto, es la densidad de títulos del documento.
+
+### 3.ter.6 Los dos modos de entrada, en el código
+
+`POST /ef/analyze` acepta JSON `{content, title}` o *multipart* con `file`. La
+diferencia termina en `PARSE`: `TextToCIRAdapter` para uno, `DocxParser`/
+`PdfParser` para el otro, y de ahí en adelante el pipeline es **idéntico**. Pero
+hay dos asimetrías que sí importan:
+
+- **El modo texto no tiene tope de tamaño.** `AnalyzeTextRequest.content` declara
+  `min_length=100` y **ningún máximo**; la ruta de fichero sí pasa por
+  `MAX_UPLOAD_MB`. El camino que un usuario recorre pegando texto en un formulario
+  es, hoy, el **único sin límite** de los dos.
+- **La forma del CIR decide el chunking, y no la decide el modo.** Un texto plano
+  produce un chunk de cualquier tamaño; un `.docx` con títulos cada 500 palabras
+  produce diecinueve. Medido a 20 KB: texto plano = 1 chunk y 6 llamadas de
+  `EXTRACT`; el mismo contenido con títulos = 19 chunks y **114** llamadas. Las
+  dos formas cuestan parecido en total (1,19 contra 1,48 USD estimados), pero por
+  motivos opuestos: la primera concentra y **trunca**, la segunda reparte y
+  **reenvía el preámbulo 114 veces** — que es el mismo desperdicio de §3.bis, en
+  el EF.
+
+**Recomendación: no distinguir por modo, distinguir por TAMAÑO, y avisar antes de
+lanzar.** El modo es mal indicador —un *prompt* de 20 KB y un `.docx` de 20 KB
+cuestan casi lo mismo—, y lo que sí es un indicador es el número de bytes, que se
+conoce **antes de gastar un token**. Todo lo que hace falta para el aviso ya está
+medido y es determinista: bytes → *chunks* (el chunker real, sin LLM) → llamadas
+de `EXTRACT` → estimación. Tres consecuencias concretas, ninguna autorizada
+todavía:
+
+1. Un máximo para `content`, para que las dos puertas tengan tope.
+2. Un **pre-flight**: la estimación en la respuesta de `/analyze` (o antes), con
+   el aviso cuando el tamaño cruce el punto en que `EXTRACT` va a truncar
+   (~11 KB) o en que el freno va a actuar en algún agente de la cadena.
+3. Que ese pre-flight hable de **la cadena**, no del EF: quien pega 10 KB no está
+   pidiendo un EF de 0,56 USD, está pidiendo —si sigue hasta QA— 19,5 USD
+   estimados. Hoy no hay forma de que lo sepa antes de que un job muera.
+
+---
+
 ## 4. Decisiones
 
 ### GAS-D1 — El punto de medición es el CLIENTE, no el ensamblador
