@@ -1135,17 +1135,41 @@ real + doble calibrado contra el artefacto real, 0,00 USD):
   documento da **x28** de costo. QA no lo sufre porque su payload por criterio
   está **acotado** (`[:20]`, QA-D8).
 - **A qué tamaño mata el freno: 1,1 KB, y no es del EF sino de QA** (a x2,4;
-  Scrum 4,9 KB; EF 26,8 KB). El EF ni se acerca a ser el cuello de botella.
+  Scrum 4,9 KB; EF **28,6 KB** tras el arreglo del duplicado, antes 26,8). El EF
+  ni se acerca a ser el cuello de botella.
 - **Antes del freno hay otro techo, y es la SALIDA: 11,1 KB.** Por encima, la
   dimensión mayor de `EXTRACT` pasa de `CLAUDE_MAX_TOKENS`=8 192 y **se trunca**
   → cuarentena con observación (ruidoso, no silencioso) pero el EF **pierde esa
   dimensión entera**. Es el límite real de lo que el sistema procesa completo.
-- **🐛 El documento se envía DOS VECES** por encima de ~16,4 KB en modo texto: el
-  `SECTION` único del `TextToCIRAdapter` acaba en `context` **y** en `text` del
-  chunk (`_context_for` de una `SECTION` añade su texto al breadcrumb), y
-  `build_user` manda los dos. 2,00x medido, seis veces por corrida. **El recorte
-  más barato que hay y sin dueño asignado.** De paso: el chunker **no tiene tope
-  de tamaño** — 40 KB planos son UN chunk de 10 000 tokens.
+- **✅ El documento se enviaba DOS VECES — ARREGLADO (2026-08-28).** Por encima
+  de ~16,4 KB en modo texto el `SECTION` único del `TextToCIRAdapter` acababa en
+  `context` **y** en `text` del chunk, y `build_user` manda los dos en el MISMO
+  mensaje: **2,00x medido, seis veces por corrida**. Hoy 1,00x. El arreglo tiene
+  **dos mitades y las dos hacen falta**:
+  1. **El texto de una `SECTION` es un RÓTULO, nunca el cuerpo.** Era el único
+     `add_section` del repositorio que pasaba contenido —los otros tres ya pasaban
+     un título—, así que el arreglo *restaura* un invariante que el resto del
+     código ya asumía (`CIRBuilder` apila ese texto como ancestro del breadcrumb:
+     apilar 40 KB era la señal). El cuerpo pasa a un `PARAGRAPH`.
+  2. **El elemento que ABRE un chunk aporta su texto al contexto O al cuerpo,
+     nunca a los dos.** Sin esto, (1) sería una regla que alguien tiene que
+     recordar en el próximo parser; con esto la duplicación es imposible por
+     construcción. Un heading ya se duplicaba así, solo que barato.
+  **De propina, de (2): un grupo sin cuerpo ya no gasta un chunk.** Un título
+  seguido de su subtítulo producía un `FRAGMENTO` con solo el título — 6 llamadas
+  por dimensión que no podían extraer nada. Medido en un documento con esa forma:
+  **25 → 12 chunks**; a 20 KB estructurado, **114 → 108 llamadas**. Su
+  `element_id` se arrastra al chunk siguiente: la partición sigue cubriendo el CIR
+  entero y la provenance no cambia.
+  **Medido (20,5 KB plano):** `EXTRACT` 66 363 → 35 615 tok de entrada; el EF
+  1,19 → 1,10 USD estimados (≈0,22–0,29 reales por corrida). Siete candados, los
+  siete **vistos fallar** contra el código anterior. **Efectos secundarios
+  declarados:** en `single_shot` el rótulo "Documento" suma ~18 tok por corrida
+  —el precio de que el CIR de texto plano tenga la misma forma que el de los demás
+  parsers—, y un documento **vacío** no gana rótulo (si no, el nombre del fichero
+  se leería como contenido y sería citable como `source_ref`; lo cazó un test del
+  inventario). **Sigue abierto:** el chunker **no tiene tope de tamaño** — 40 KB
+  planos son UN chunk de 10 000 tokens (ver el techo de salida, punto 3).
 - **Los dos modos de entrada son idénticos tras `PARSE`**, pero el modo texto
   **no tiene máximo** (`content` solo declara `min_length=100`; la ruta de fichero
   sí pasa por `MAX_UPLOAD_MB`). Recomendación: distinguir **por tamaño, no por

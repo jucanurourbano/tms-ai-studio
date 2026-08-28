@@ -22,8 +22,22 @@ class TextToCIRAdapter:
         builder = CIRBuilder(source_type="text", fidelity="full", title=title)
 
         if not has_structure(blocks):
-            # Texto plano: un solo section con todo el contenido.
-            builder.add_section(text.strip(), level=0)
+            # Texto plano: la sección raíz lleva el RÓTULO y el contenido va en
+            # un párrafo. El texto de una SECTION es un título, nunca el cuerpo:
+            # ``CIRBuilder`` lo apila como ancestro del breadcrumb y el chunker
+            # lo usa como contexto, así que poner aquí el documento entero lo
+            # mandaba DOS VECES al modelo (2,00x medido por encima del umbral de
+            # single_shot). Era el único ``add_section`` del repositorio que
+            # pasaba contenido en vez de un rótulo.
+            cuerpo = text.strip()
+            if not cuerpo:
+                # Documento vacío: ni rótulo ni cuerpo. Un rótulo suelto (el
+                # nombre del fichero, p. ej.) se leería después como contenido
+                # del documento y sería citable como ``source_ref``.
+                builder.add_section("", level=0)
+                return builder.build()
+            builder.add_section(title or "Documento", level=0)
+            builder.add_paragraph(cuerpo)
             return builder.build()
 
         # Estructurado: sección raíz + elementos.

@@ -28,12 +28,50 @@ def test_texto_estructurado():
     ]
 
 
-def test_texto_plano_un_solo_section():
+def test_texto_plano_seccion_es_rotulo_y_cuerpo_va_en_parrafo():
+    """El texto de una SECTION es un RÓTULO, nunca el cuerpo del documento.
+
+    ``CIRBuilder.add_section`` apila ese texto como ancestro del breadcrumb y el
+    chunker lo usa como contexto del chunk, así que una sección que llevara el
+    documento entero lo mandaría dos veces al modelo (2,00x medido). Es el
+    invariante que el resto de parsers ya cumplía: todos los demás
+    ``add_section`` del repositorio pasan un título.
+    """
     texto = "solo una linea de texto plano sin estructura alguna aqui"
     cir = TextToCIRAdapter.adapt(texto)
-    assert len(cir.elements) == 1
-    assert cir.elements[0].type is ElementType.SECTION
     assert cir.source_type == "text"
+
+    seccion, parrafo = cir.elements
+    assert seccion.type is ElementType.SECTION
+    assert seccion.text == "Documento"  # rótulo, no contenido
+    assert parrafo.type is ElementType.PARAGRAPH
+    assert parrafo.text == texto  # el contenido se conserva íntegro
+
+
+def test_texto_plano_usa_el_titulo_dado_como_rotulo():
+    cir = TextToCIRAdapter.adapt("texto plano cualquiera sin estructura", title="Guías")
+    assert cir.elements[0].text == "Guías"
+
+
+def test_documento_vacio_no_gana_un_rotulo_con_el_nombre_del_fichero():
+    """Sin cuerpo no hay rótulo: se leería como contenido y sería citable."""
+    cir = TextToCIRAdapter.adapt("   ", title="modernizacion.md")
+    assert [e.text for e in cir.elements] == [""]
+
+
+def test_ningun_parser_mete_el_cuerpo_en_una_seccion():
+    """Candado: ninguna SECTION/HEADING lleva el documento como texto.
+
+    Se comprueba sobre la propiedad, no sobre una longitud: el texto del
+    elemento que abre un chunk NO puede ser el contenido del documento.
+    """
+    cuerpo = "El transportista registra la guia y actualiza el checkpoint. " * 400
+    for texto in (cuerpo, "# Titulo\n\n" + cuerpo):
+        cir = TextToCIRAdapter.adapt(texto)
+        for el in cir.elements:
+            if el.type in (ElementType.SECTION, ElementType.HEADING):
+                assert el.text is not None
+                assert cuerpo.strip() not in el.text
 
 
 def test_breadcrumb_traza_headings():
