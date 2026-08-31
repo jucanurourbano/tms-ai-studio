@@ -123,9 +123,15 @@ def informe_matriz(api: dict, indice: dict[str, dict]) -> dict:
     sin_evidencia: list[dict] = []
     suben: list[dict] = []
 
+    sin_base: list[dict] = []
     for regla in allow:
         bases = [indice[ref] for ref in regla.get("source_refs", []) if ref in indice]
-        if bases and not any(b["evidence"] for b in bases):
+        if not bases:
+            # Ni evidenciada ni no evidenciada: no hay con qué responder. Contarla
+            # como buena la escondería y contarla como falsa afirmaría algo que no
+            # se ha medido — la ausencia de un dato no es el valor 0 de ese dato.
+            sin_base.append(regla)
+        elif not any(b["evidence"] for b in bases):
             sin_evidencia.append(regla)
         confianzas = [
             b["confidence"] for b in bases if isinstance(b["confidence"], (int, float))
@@ -142,6 +148,7 @@ def informe_matriz(api: dict, indice: dict[str, dict]) -> dict:
         "matriz": matriz,
         "allow": allow,
         "sin_evidencia": sin_evidencia,
+        "sin_base_resoluble": sin_base,
         "anchas_sin_evidencia": anchas,
         "suben": suben,
     }
@@ -214,10 +221,109 @@ async def cargar(
         return artefactos, ids, procedencia
 
 
+async def jobs_de_api() -> list[str]:
+    """Todos los jobs de API con artefacto, del más reciente al más antiguo."""
+    async with session_scope() as session:
+        filas = await session.execute(
+            select(AgentJob)
+            .where(AgentJob.agent_type == AgentType.API)
+            .order_by(AgentJob.created_at.desc())
+        )
+        return [job.id for job in filas.scalars().all()]
+
+
+async def censo() -> None:
+    """CUÁNTAS CELDAS FALSAS HAY YA EN LA BASE (capa 4 de AUT-D3).
+
+    Qué cuenta como falsa, dicho con precisión porque de esto depende que la
+    cifra signifique algo: una fila que **concede** acceso (``allow``) y cuya
+    base **no cita evidencia**. Falsa no quiere decir que el acceso sea
+    incorrecto —puede acertar por casualidad— sino que la fila **afirma un
+    respaldo que no existe**: dice apoyarse en una celda CRUD del EF que el EF
+    derivó sin citar el documento. Es la afirmación la que es falsa.
+
+    Las tres capas anteriores impiden que se escriban nuevas; esta mide las que
+    ya están guardadas, que ninguna regla futura va a tocar.
+    """
+    ids = await jobs_de_api()
+    if not ids:
+        raise SystemExit("No hay ningún job de API en la base.")
+
+    print(RAYA)
+    print("CENSO DE LA BASE — celdas que conceden sin evidencia detrás (0,00 USD)")
+    print(RAYA)
+    print(f"\n  jobs de API en la base .......... {len(ids)}")
+
+    total = dict(matriz=0, allow=0, falsas=0, anchas=0, suben=0, sin_base=0)
+    con_artefacto = 0
+    for job_id in ids:
+        artefactos, detalles, procedencia = await cargar(job_id)
+        if "api" not in artefactos:
+            print(f"\n  {job_id}  (sin artefacto: el job no llegó a PERSIST)")
+            continue
+        con_artefacto += 1
+        indice: dict[str, dict] = {}
+        for nombre, artefacto in artefactos.items():
+            indexar(nombre, artefacto, indice)
+        m = informe_matriz(artefactos["api"], indice)
+
+        total["matriz"] += len(m["matriz"])
+        total["allow"] += len(m["allow"])
+        total["falsas"] += len(m["sin_evidencia"])
+        total["anchas"] += len(m["anchas_sin_evidencia"])
+        total["suben"] += len(m["suben"])
+        total["sin_base"] += len(m["sin_base_resoluble"])
+
+        eslabones = "→".join(
+            k for k in ("ef", "scrum", "arquitectura", "bd", "api") if k in artefactos
+        )
+        marca = f"  [{procedencia.get('block')}]" if procedencia else ""
+        print(f"\n  {detalles['api']}{marca}")
+        print(f"    cadena resuelta hacia atrás: {eslabones}")
+        print(
+            f"    filas {len(m['matriz']):3}   allow {len(m['allow']):3}   "
+            f"FALSAS {len(m['sin_evidencia']):3}   "
+            f"de ellas anchas (scope=all) {len(m['anchas_sin_evidencia']):3}   "
+            f"suben conf. {len(m['suben']):3}"
+        )
+        if m["sin_base_resoluble"]:
+            print(
+                f"    ⚠ {len(m['sin_base_resoluble'])} allow cuya base no resuelve "
+                "en esta cadena: no medidas (ni buenas ni falsas)."
+            )
+
+    print(f"\n{RAYA}\n  TOTAL EN LA BASE ({con_artefacto} artefactos de API)\n{RAYA}")
+    print(f"  filas de autorización .................... {total['matriz']}")
+    print(f"  conceden acceso (allow) ................. {total['allow']}")
+    print(f"  ...FALSAS (sin evidencia en su base) .... {total['falsas']}")
+    print(f"  ...de ellas anchas (allow + scope=all) .. {total['anchas']}")
+    print(f"  ...con confianza por encima de su base .. {total['suben']}")
+    print(f"  no medidas (base sin resolver) .......... {total['sin_base']}")
+    if total["allow"]:
+        print(
+            f"\n  fracción falsa sobre lo que concede ..... "
+            f"{total['falsas'] / total['allow']:.2f}"
+        )
+    print(
+        "\n  Estas filas ya están guardadas: AUT1 y AUT2 impiden escribir nuevas,\n"
+        "  no reescriben estas. Se corrigen regenerando el artefacto."
+    )
+    print(RAYA)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job", help="id del job de API a medir")
+    parser.add_argument(
+        "--censo",
+        action="store_true",
+        help="barre TODOS los artefactos de API de la base y cuenta las celdas falsas",
+    )
     args = parser.parse_args()
+
+    if args.censo:
+        await censo()
+        return
 
     artefactos, ids, procedencia = await cargar(args.job)
     if "api" not in artefactos:
