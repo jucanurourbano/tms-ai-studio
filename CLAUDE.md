@@ -62,6 +62,17 @@ requerimiento de 10 KB sigue sin pasar el freno** (28–36 USD reales con todo
 aplicado). `LLM_JOB_CAP_USD` = 5 está calibrado para el documento de juguete. Ver
 §5.7 *in fine*.
 
+**🔗 LA CADENA, CORRIDA SOBRE ENTRADA REAL (CMP0, 2026-08-31).** Arq → BD → API
+se ejercieron por primera vez sobre el EF y el plan Scrum **reales** de julio y no
+sobre sus `examples.py` (dobles de la suite, **0,00 USD**). Destapó cuatro puntos:
+el **1** (DDL inválido, `fk_type_mismatch`) está **arreglado** y dejó **tres
+señales generalizables** sobre por qué un defecto vive meses con los tests en verde
+(§8); el **2** —la **autorización ancha**: 8 de 9 concesiones son `allow`+`scope:all`
+apoyadas en `evidence: null`, y la fracción es **1,00 por construcción**— está
+**diseñado y sin implementar** (`docs/diseno-autorizacion-ancha.md`); quedan el
+**3** (el motor sale SQL Server con PostgreSQL 16 validada) y el **4** (`pii` mal
+marcado). Ver §5.3 *in fine*.
+
 **⏸️ CAMBIO DE PRIORIDAD (2026-08-27).** Los bloques restantes del Modo C
 (**QC1, QC2, QC6, QC7, QC8**) quedan **APLAZADOS, no cancelados**: pegar un link
 y sacar casos ya es producto de mercado (TestCollab, CoTester, CloudQA) y encima
@@ -461,6 +472,99 @@ LOAD_SOURCES → RESOURCE_MAP → RESOURCES → ENDPOINTS → SCHEMAS
 - Sin migraciones de BD. Permisos sin tocar: `developer` FULL `api`; las preguntas
   se dirigen a **`questions_for_tech_lead`** (quien puede responderlas). El
   arquitecto participa por **grant**, no por excepción a la matriz.
+
+### CMP0 — la cadena real, y los cuatro puntos que destapó
+
+`scripts/cmp0_cadena_real.py` corre **Arq → BD → API** sobre el EF
+(`01KY2V9HKCF0BSSPE7JQDBWX3V`) y el plan Scrum (`01KY33JDAV21N40N326TCR3JSS`)
+**reales** de julio, con los dobles de la suite (**0,00 USD**). Hasta entonces los
+tres agentes solo se habían ejercido contra sus `examples.py` —3 tablas, 2
+historias, artefactos escritos para encajar—, y una cadena que solo se ha visto
+pasar sobre sus propias semillas es indistinguible de una que no funciona. Marcado
+con `[DOBLE·CMP0]` en el título, `metrics.provenance` legible por máquina y la
+ausencia de `metrics.real` (señal débil a propósito).
+
+Nota de escala, para no sobreleer las cifras: ese EF tiene **16 RF pero solo 2
+entidades y 4 actores**, y el doble de Arquitectura devuelve tres componentes fijos
+pase lo que pase. Lo que CMP0 mide es la **maquinaria determinista**, no la calidad
+del modelo ni la escala.
+
+- **Punto 1 — ✅ ARREGLADO** (`298fb96`): la FK que el EF ya declaraba no se
+  retipaba ⇒ `fk_type_mismatch`, DDL que no arranca. Era el único error del
+  artefacto de BD. Lo que vale más que el arreglo son **las tres señales** de por
+  qué llevaba desde BD3 sin verse: están en §8, generalizadas.
+- **Punto 2 — DISEÑADO, sin implementar**: la **autorización ancha**
+  (`docs/diseno-autorizacion-ancha.md`, ver abajo).
+- **Punto 3** — el motor acaba siendo **SQL Server** pese a que
+  `database_relational` está VALIDADA como PostgreSQL 16.
+- **Punto 4** — el BD marca `pii` el **nombre de un catálogo de estados** (falso
+  positivo) y no marca nada en `trabajadores`.
+
+### El punto 2 — la autorización ancha, DISEÑADO y sin implementar (`docs/diseno-autorizacion-ancha.md`)
+
+**Ningún bloque autorizado (REGLA R2).** Instrumento del número:
+`scripts/medir_propagacion_de_confianza.py` (lee artefactos persistidos, no corre
+agentes, 0,00 USD). Lo que hay que saber sin abrir el doc:
+
+- **La matriz del CMP0: 8 de 9 filas son `allow` + `scope:all` + `confidence 0.9`
+  apoyadas en algo con `evidence: null` y `confidence 0.5`.** Traducido: cualquier
+  trabajador puede listar, leer, crear y modificar la ficha de cualquier otro. Y
+  los **tres actores con evidencia verbatim** (Jefe directo, RRHH, planillas) no
+  aparecen en la matriz: su pregunta (`Q-004`) **no es bloqueante**.
+- **La fracción NO depende del documento: es 1,00 por construcción.**
+  `ef/infer.py:104-120` fabrica la matriz CRUD con un `for` sobre entidades y
+  `actors[0]`, siempre `confidence 0.5`, siempre `evidence: null`, siempre
+  `delete: False` (por eso **no hay un solo `DELETE`** en la especificación: la
+  forma de la superficie la fija un literal). **No existe camino en el código por
+  el que una celda CRUD lleve evidencia.** Y `basis="crud_matrix"` se lee como
+  «lo dice el EF».
+- **Tres asimetrías invertidas.** (1) La confianza **sube** al propagarse: 0.5 →
+  0.9, y `api/endpoints.py:241` premia con **0.9 la base menos evidenciada**.
+  (2) `scope: all` es el valor que se escribe **por silencio** —cuarta aparición de
+  *la ausencia de un dato no es el valor 0 de ese dato*— y el propio `AuthScope`
+  confiesa que **el alcance más ancho es el único que no tiene que justificarse**.
+  (3) Bloquea el hueco estrecho (1 endpoint sin autorizar) y pasa la concesión
+  ancha; peor, la rama honesta **ya está escrita** («inventarles un dueño habría
+  sido peor») y el EF se lo inventa **antes**, así que nunca se alcanza.
+- **EL NÚMERO, que decide la forma:** una pregunta por celda ⇒ **2 → 10
+  bloqueantes** (y 80 con veinte entidades, en **toda** corrida) ⇒ **rechazada por
+  su propio número**. Agrupada por clase de vacío ⇒ **2 → 2**: la pregunta ya
+  existe y ya está agrupada, `Q-002` solo pasa de «(1 sin autorizar)» a «(9 sin
+  autorizar)». Y el semáforo **no cambia de color** —`endpoints_unauthorized` ya
+  vale 1—: rojo → rojo, solo deja de mentir. El coste humano del arreglo es **una
+  respuesta más en una pregunta que ya había que responder**.
+- **La confianza se calcula, no se escribe, y se impone en CUATRO capas** porque
+  ninguna basta sola: `_rule()` **pierde el parámetro** `confidence` (no hay dónde
+  escribir el literal, mismo mecanismo que `alcance_para_prompt()`) · el contrato
+  lo **valida** con `basis_confidence`/`basis_evidenced` **en la propia fila** (un
+  validador no puede resolver `CRUD-001` contra el EF; se duplica un dato y a
+  cambio el artefacto **se audita solo**) · candado AST sobre literales · auditor
+  sobre lo ya persistido.
+- **Una celda sin evidencia DENIEGA, no concede provisionalmente**: es la dirección
+  que el propio nodo ya había elegido («el modelo solo puede restringir… viendo de
+  menos, nunca de más»). Un `allow` provisional sobrevive a que alguien construya
+  ignorando el semáforo.
+- **El guard de pii no cubre el caso ancho**: `_check_pii` mira `ambiguous`, y
+  `allow/all` no es ambigua. Se amplía — pero **el CMP0 no lo ejerce** (la única
+  columna `pii` es el nombre de un catálogo y su endpoint es el único `deny`), así
+  que se escribe con fixture propia y esta corrida **no es evidencia** de que
+  funcione.
+- **La mitad que hace ACERTAR (AUT-D7) es del EF y es la única que gasta**:
+  extraer la matriz CRUD con **cita verbatim obligatoria**, ~0,01 USD estimados
+  por proceso (payload medido: 460 tok). Se **rechaza** derivarla léxicamente de `processes` («Revisión por
+  jefe directo (aprobar o rechazar)» → *update* es conjetura con aspecto de
+  derivación: el mismo error, movido de sitio). Hallazgo lateral que obliga:
+  `processes[].actor_refs` guarda **nombres, no ids**.
+- **Residual declarado:** ~20 constantes de confianza más fuera de los esquemas
+  (`bd.tables.columns` sube en **11 de 12**, y ahí la confianza **sí** se lee). El
+  invariante se impone **solo** en la matriz de autorización, donde es portante. Y
+  el 39% transversal (53/137) es un **techo, no una cuenta de defectos**: no todo
+  ref es un apoyo —`FLD-001` cita a `ENT-001` y la entidad se derivó **del** campo—.
+  La cifra defendible es **8 de 8**.
+- **Bloques: AUT0** auditor + candado AST (sin tocar producción) · **AUT1** la
+  confianza calculada + contrato v1.1.0 · **AUT2** la celda que no concede + la
+  pregunta con candidatos (todo el riesgo) · **AUT3** la evidencia en el EF ·
+  **AUT4** el par antes/después con dobles; con modelo real **se autoriza aparte**.
 
 ## 5.4 Módulo INVENTARIO DE SISTEMAS + fase RECONCILE (implementado)
 
@@ -1571,6 +1675,38 @@ devuelve `GET /auth/me` (`lib/permissions.ts` solo interpreta ese mapa).
   + comprobación de que el símbolo sigue existiendo donde dice su dueño). La
   desviación de §7.1 del diseño multiproveedor —la capa 1 envuelve `build_client`
   de cada `ProviderSpec` en vez de sustituir `get_llm`— tiene esta misma raíz.
+- **LAS TRES SEÑALES de un defecto que la suite no puede ver.** No son la
+  anécdota de un bug: son las tres cosas que hay que buscar **a propósito** en
+  cualquier revisión, porque cada una explica por qué un defecto vivió meses con
+  los tests en verde. Las tres salieron juntas del punto 1 del CMP0 (la FK que no
+  se retipaba, `bd/relations.py`, viva desde BD3).
+  1. **Un comentario que enuncia la ENTRADA de la rama y no su POSTCONDICIÓN.**
+     `# La columna solo se añade si no existe ya` plantea la decisión como
+     «¿duplico o reutilizo?» cuando la pregunta era «¿sirve como clave foránea?».
+     Un comentario así delata el modelo mental, y el código suele hacer
+     exactamente lo que el comentario dice y nada más.
+     **Qué buscar:** dos ramas que producen el mismo objeto con **asimetría de
+     campos** — la que construye rellena ocho, la que adopta tocaba **uno**
+     (`nullable = False`). Comparar las dos ramas contra el mismo invariante es
+     mecánico y cuesta un minuto.
+  2. **Un test ciego por elegir el dato que se salva.** El único test de la rama
+     declaraba el campo `entero`, y `(integer, bigint)` es el **único** par de
+     `_COMPATIBLES` en L1: el caso ejercía el código y no el invariante.
+     **Qué buscar:** toda comprobación con un **conjunto de exenciones** o un
+     **umbral** exige un caso que caiga **FUERA**. Si el fixture cae dentro, el
+     test no puede fallar aunque el defecto exista. Son constantes enumerables
+     (≈6 conjuntos tipo `_COMPATIBLES`/`ROLES_PERMITIDOS`/`_SINONIMOS` y ≈13
+     umbrales tipo `NAME_MATCH_THRESHOLD`), así que **esta señal sí es
+     candadeable**: cada exención se trata como el vocabulario cerrado de
+     `PIEZAS_DE_MENSAJE`/`Descarte` — una entrada, su caso **y su contra-caso**.
+  3. **La forma correcta viviendo en otro sitio.** El invariante ya estaba escrito
+     —en el hermano que construye la columna (`_fk_column`) y en el validador que
+     lo comprueba (`fk_type_mismatch` de L1)— pero **no en el camino que tenía que
+     cumplirlo**. Un check en el validador sin nadie que lo garantice del lado que
+     produce no es un invariante: es un cable trampa.
+     **Qué buscar:** por cada comprobación de validación, ¿quién la garantiza
+     aguas arriba? Y por cada par de caminos que desembocan en la misma
+     estructura, ¿dejan el mismo estado?
 - **Glosario logístico** en `backend/ai/knowledge/`, inyectado en
   `EXTRACT` / `INTERPRET` / `CRITIQUE` (y en EPICS/STORIES/CRITERIA del Scrum):
   - `checkpoint` = estado
@@ -1632,6 +1768,7 @@ tms-ai-studio/
 │   ├── diseno-recorte-qa-lotes.md   # punto 4: lotes en QA (diseñado, sin implementar)
 │   ├── diseno-cota-scrum.md         # punto 2: la cota de Scrum (diseñado, sin implementar)
 │   ├── diseno-techo-de-entrada.md   # punto 3: el chunk sin cota (diseñado, sin implementar)
+│   ├── diseno-autorizacion-ancha.md # punto 2 del CMP0 (diseñado, sin implementar)
 │   ├── diseno-multiproveedor-llm.md # LLM0 ✅ LLM1 ✅ · LLM2 a reformar (§5.6)
 │   └── diseno-llm-local-ollama.md   # ⭐ PRIORIDAD ACTUAL (§5.6)
 ├── frontend/                 # Next.js (cliente puro de la API)
@@ -1660,6 +1797,8 @@ tms-ai-studio/
     ├── scripts/medir_linea_base.py # el «antes» de los recortes, reconstruido (0 USD)
     ├── scripts/medir_escala_por_tamano.py  # cómo escala la cadena con el documento
     ├── scripts/medir_los_cuatro_puntos.py  # los cuatro recortes aplicados (0 USD)
+    ├── scripts/cmp0_cadena_real.py  # Arq→BD→API sobre el EF real (dobles, 0 USD)
+    ├── scripts/medir_propagacion_de_confianza.py  # qué sostiene cada concesión
     ├── scripts/reset_password.py  # recuperación de acceso (CLI, sin eco)
     ├── shared/responses/api_response.py
     └── ai/
