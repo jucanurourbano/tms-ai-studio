@@ -33,6 +33,8 @@ storage/
 
 # === Logs ===
 *.log
+# Volcados de las corridas locales (p. ej. scripts/cmp0_cadena_real.py).
+.logs/
 
 # === Sesiones locales de Claude Code ===
 .claude/
