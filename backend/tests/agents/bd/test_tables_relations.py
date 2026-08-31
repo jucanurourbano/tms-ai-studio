@@ -11,6 +11,7 @@ import pytest
 from ai.agents.arquitectura.schemas.examples import (
     example_artifact as arquitectura_example,
 )
+from ai.agents.bd.ddl.validate import check_structure
 from ai.agents.bd.load_sources import extract_sources
 from ai.agents.bd.model_map import build_model_map
 from ai.agents.bd.relations import apply_relations, run_relations
@@ -284,25 +285,65 @@ def test_cascade_con_regla_citada_si_se_acepta():
     assert notas == []
 
 
-async def test_columna_de_FK_ya_declarada_en_el_EF_no_se_duplica():
-    """Si el EF ya trae el campo de la FK, se reutiliza y se fuerza NOT NULL."""
+def _sources_con_fk_declarada(data_type: str, required: bool = False):
+    """EF de ejemplo + el campo de la FK declarado a mano por el analista."""
     sources = _sources()
     sources["ef"]["fields"] = sources["ef"]["fields"] + [
         {
             "id": "FLD-050",
             "name": "guia_id",
             "entity_ref": "ENT-001",
-            "data_type": "entero",
-            "required": False,
+            "data_type": data_type,
+            "required": required,
         }
     ]
-    tables, _, _, _ = await _corre_relations(sources)
+    return sources
+
+
+async def test_columna_de_FK_ya_declarada_en_el_EF_no_se_duplica():
+    """Si el EF ya trae el campo de la FK, se reutiliza y se fuerza NOT NULL."""
+    tables, observations, _, _ = await _corre_relations(
+        _sources_con_fk_declarada("entero")
+    )
     siniestros = next(t for t in tables if t["name"] == "siniestros")
     columnas = [c["name"] for c in siniestros["columns"]]
     assert columnas.count("guia_id") == 1
     # La FK exige obligatoriedad aunque el EF dijera que el campo era opcional.
     guia_id = next(c for c in siniestros["columns"] if c["name"] == "guia_id")
     assert guia_id["nullable"] is False
+    # Y no en silencio: contradecir al EF deja observación.
+    assert any("NOT NULL" in o["description"] for o in observations)
+    # La columna pasa a responder también ante la relación que la usa.
+    assert "REL-001" in guia_id["source_refs"]
+
+
+async def test_columna_de_FK_declarada_con_otro_tipo_se_retipa_y_el_DDL_sale_valido():
+    """El defecto que destapó el EF real: el analista nombra su propia FK.
+
+    Reutilizar la columna sin retiparla producía ``fk_type_mismatch`` y un DDL que
+    no arranca. El caso pasaba desapercibido porque el único test que tocaba esta
+    rama declaraba ``entero``, y ``(integer, bigint)`` está en la lista de tipos
+    compatibles de L1: el defecto existía y la comprobación no podía verlo.
+    """
+    tables, observations, _, _ = await _corre_relations(
+        _sources_con_fk_declarada("texto", required=True)
+    )
+    siniestros = next(t for t in tables if t["name"] == "siniestros")
+    guia_id = next(c for c in siniestros["columns"] if c["name"] == "guia_id")
+
+    assert guia_id["logical_type"] == LogicalType.BIGINT.value
+    # Los parámetros del tipo viajan con él: un `bigint` no arrastra la longitud
+    # que traía el `string`.
+    assert guia_id["length"] is None
+    # El tipo lo fija la relación, así que ya no hay nada que preguntar al DBA.
+    assert guia_id["type_ambiguous"] is False
+    assert any(
+        "guia_id" in o["description"] and "retipó" in o["description"]
+        for o in observations
+    ), "retipar no puede ser silencioso"
+
+    errores = {e["code"] for e in check_structure(tables, [], ENGINE)["errors"]}
+    assert "fk_type_mismatch" not in errores
 
 
 async def test_relacion_1_a_1_usa_el_lado_que_decide_el_LLM():

@@ -107,6 +107,85 @@ def _fk_column(plan: dict, source_refs: list[str]) -> dict:
     }
 
 
+def _adoptar_como_fk(
+    column: dict,
+    plan: dict,
+    by_name: dict,
+    source_refs: list[str],
+    notas: list[dict],
+) -> None:
+    """Adapta una columna que el EF ya declaraba para que sirva de clave foránea.
+
+    Reutilizarla —en vez de añadir una segunda— es correcto, pero **no basta**: una
+    columna solo es clave foránea si tipa igual que la columna a la que apunta. El
+    EF real declara ``trabajador_id`` como ``reference`` y el destino es el
+    ``bigint`` de la PK subrogada, así que el DDL salía inválido
+    (``fk_type_mismatch``) en cuanto el analista nombra él mismo sus claves, que es
+    lo habitual. Manda la columna **referenciada**, porque es la identidad; la del
+    hijo solo la apunta.
+
+    Ninguno de los dos ajustes es silencioso: los dos dejan observación, porque
+    los dos contradicen algo que el EF (o el modelo) había dicho.
+    """
+    destino = by_name.get(plan["references_table"]) or {}
+    referenciada = next(
+        (
+            c
+            for c in destino.get("columns", [])
+            if c["name"] == plan.get("references_column")
+        ),
+        None,
+    )
+    tipo = (
+        (referenciada or {}).get("logical_type")
+        or plan.get("logical_type")
+        or LogicalType.BIGINT.value
+    )
+
+    if column.get("logical_type") != tipo:
+        notas.append(
+            {
+                "description": (
+                    f"Se retipó «{plan['table']}.{column['name']}» a {tipo} "
+                    f"(venía como {column.get('logical_type')})."
+                ),
+                "reason": (
+                    f"El EF ya declaraba el campo, pero la columna es la clave "
+                    f"foránea de {plan.get('relationship_ref')} y debe tipar igual "
+                    f"que {plan['references_table']}.{plan.get('references_column')}."
+                ),
+            }
+        )
+        column["logical_type"] = tipo
+        # Los parámetros del tipo viajan con él: una longitud heredada de un
+        # `string` no significa nada sobre un `bigint`.
+        column["length"] = (referenciada or {}).get("length")
+        column["precision"] = (referenciada or {}).get("precision")
+        column["scale"] = (referenciada or {}).get("scale")
+        # El tipo deja de depender de cómo estuviera redactado el campo: lo fija
+        # la relación. Preguntar al DBA por él sería preguntar por algo resuelto.
+        column["type_ambiguous"] = False
+
+    if column.get("nullable", True):
+        notas.append(
+            {
+                "description": (
+                    f"Se forzó NOT NULL en «{plan['table']}.{column['name']}»."
+                ),
+                "reason": (
+                    f"El EF declaraba el campo opcional, pero {plan.get('relationship_ref')} "
+                    "lo usa como clave foránea del lado N de una relación obligatoria."
+                ),
+            }
+        )
+        column["nullable"] = False
+
+    existentes = column.setdefault("source_refs", [])
+    for ref in source_refs:
+        if ref and ref not in existentes:
+            existentes.append(ref)
+
+
 def _resolve_action(
     decision: Optional[dict], rules: set[str], notas: list[dict], plan: dict
 ) -> tuple[str, str, list[str]]:
@@ -174,7 +253,7 @@ def apply_relations(
         )
         source_refs = [plan["relationship_ref"], *refs]
         # La columna solo se añade si no existe ya (el EF puede haber declarado el
-        # campo de la FK explícitamente, p. ej. `numero_guia`).
+        # campo de la FK explícitamente, p. ej. `trabajador_id`).
         if plan["column"] not in {c["name"] for c in table["columns"]}:
             column = _fk_column(plan, source_refs)
             column["ordinal"] = len(table["columns"]) + 1
@@ -182,7 +261,7 @@ def apply_relations(
         else:
             for column in table["columns"]:
                 if column["name"] == plan["column"]:
-                    column["nullable"] = False
+                    _adoptar_como_fk(column, plan, by_name, source_refs, notas)
         table["foreign_keys"].append(
             _fk_entry(plan, engine, action, rationale, source_refs)
         )
